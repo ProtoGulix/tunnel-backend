@@ -1,12 +1,12 @@
 # API Manifest
 
-Last updated: 2026-01-24
+Last updated: 2026-01-25
 
 ## Endpoints
 
 ### Health
 
-- `GET /health` - Check API health with database and Directus status (Public)
+- `GET /health` - Check API health with database and authentication service status (Public)
 
 ### Auth
 
@@ -15,10 +15,21 @@ Last updated: 2026-01-24
 
 ### Interventions
 
-- `GET /interventions` - List interventions with pagination (default 100, max 1000) and stats (Auth: Optional if AUTH_DISABLED)
-  - Query params: `skip` (default 0), `limit` (default 100, max 1000)
+- `GET /interventions` - List interventions with filters, sort, pagination and stats (Auth: Optional if AUTH_DISABLED)
+  - Query params:
+    - `skip` (default 0), `limit` (default 100, max 1000)
+    - `equipement_id` (uuid) - Filter by intervention.machine_id
+    - `status` (csv) - Filter by status codes (ex: ouvert,ferme,en_cours) - case insensitive
+    - `priority` (csv) - Filter by priorities from PRIORITY_TYPES (faible,normale,important,urgent)
+    - `sort` (csv) - Sort fields with - prefix for DESC (ex: -priority,-reported_date)
+    - `include` (csv) - Include optional data (stats). Stats included by default if omitted
 - `GET /interventions/{id}` - Get intervention by ID with actions and stats (Auth: Optional if AUTH_DISABLED)
 - `GET /interventions/{id}/actions` - Get actions for specific intervention (Auth: Optional if AUTH_DISABLED)
+
+### Intervention Status
+
+- `GET /intervention_status` - List all available intervention statuses from database (Auth: Optional if AUTH_DISABLED)
+  - Returns: id, code, label, color, value for each status
 
 ### Intervention Actions
 
@@ -38,12 +49,15 @@ Last updated: 2026-01-24
 
 ### Equipements
 
-- `GET /equipements` - List all equipements (simple) (Auth: Optional if AUTH_DISABLED)
-- `GET /equipements/list` - List all equipements with intervention statistics for park overview (Auth: Optional if AUTH_DISABLED)
-- `GET /equipements/{id}` - Get specific equipement by ID (simple) (Auth: Optional if AUTH_DISABLED)
-- `GET /equipements/{id}/detail` - Get equipement with decisional interventions and period statistics (Auth: Optional if AUTH_DISABLED)
-  - Query params: `period_days` (default 30) - Period in days for decisional interventions and time spent
-- `GET /equipements/{id}/sous_equipements` - Get sub-equipements for a specific equipement (Auth: Optional if AUTH_DISABLED)
+- `GET /equipements` - List all equipements with health (lightweight, cacheable) (Auth: Optional if AUTH_DISABLED)
+  - Returns: id, code, name, health (level + reason), parent_id
+- `GET /equipements/{id}` - Get specific equipement with health and children (Auth: Optional if AUTH_DISABLED)
+  - Returns: id, code, name, health (level + reason + rules_triggered), parent_id, children_ids
+- `GET /equipements/{id}/stats` - Get detailed statistics for equipement (opt-in) (Auth: Optional if AUTH_DISABLED)
+  - Query params: `start_date` (YYYY-MM-DD, optional, default NULL = all), `end_date` (YYYY-MM-DD, optional, default NOW)
+  - Returns: interventions (open, closed, by_status, by_priority)
+- `GET /equipements/{id}/health` - Get health only (ultra-lightweight, polling-friendly) (Auth: Optional if AUTH_DISABLED)
+  - Returns: level, reason
 
 ### Stats
 
@@ -117,6 +131,18 @@ Last updated: 2026-01-24
 }
 ```
 
+### InterventionStatus
+
+```json
+{
+  "id": "string",
+  "code": "string",
+  "label": "string|null",
+  "color": "string|null",
+  "value": "string|null"
+}
+```
+
 Note: `GET /interventions` retourne `actions: []` (vide), `GET /interventions/{id}` retourne les actions complètes.
 
 ### ActionCategoryOut
@@ -141,106 +167,85 @@ Note: `GET /interventions` retourne `actions: []` (vide), `GET /interventions/{i
 }
 ```
 
-### EquipementOut
+### EquipementHealth
 
 ```json
 {
-  "id": "uuid",
-  "code": "string|null",
-  "name": "string",
-  "no_machine": "int|null",
-  "affectation": "string|null",
-  "marque": "string|null",
-  "model": "string|null",
-  "no_serie": "string|null",
-  "equipement_mere": "uuid|null",
-  "is_mere": "boolean",
-  "type_equipement": "string|null",
-  "fabricant": "string|null",
-  "numero_serie": "string|null",
-  "date_mise_service": "date|null",
-  "notes": "string|null"
+  "level": "ok|maintenance|warning|critical",
+  "reason": "string",
+  "rules_triggered": ["string"] // Optional, for debug/audit
 }
 ```
 
-### EquipementListItem
+### EquipementListItem (GET /equipements)
 
 ```json
 {
   "id": "uuid",
   "code": "string|null",
   "name": "string",
-  "status": "ok|maintenance|warning|critical",
-  "status_color": "green|blue|orange|red",
-  "open_interventions_count": "int",
-  "interventions_by_type": {
-    "CUR": "int",
-    "PRE": "int"
+  "health": {
+    "level": "ok|maintenance|warning|critical",
+    "reason": "string"
   },
-  "parent": {
-    "id": "uuid",
-    "code": "string|null",
-    "name": "string"
-  },
-  "equipement_mere": "uuid|null",
-  "is_mere": "boolean"
+  "parent_id": "uuid|null"
 }
 ```
 
-Note: Equipements sorted by open interventions count (desc), then name (asc). Status calculated: urgent → critical, ≥3 open → warning, >0 open → maintenance, else ok.
+Note: Sorted by urgent count (desc), then open count (desc), then name (asc). Health rules: urgent >= 1 → critical, open > 5 → warning, open > 0 → maintenance, else ok.
 
-### EquipementDetail
+### EquipementDetail (GET /equipements/{id})
 
 ```json
 {
   "id": "uuid",
   "code": "string|null",
   "name": "string",
-  "status": "ok|maintenance|warning|critical",
-  "status_color": "green|blue|orange|red",
-  "parent": {
-    "id": "uuid",
-    "code": "string|null",
-    "name": "string"
+  "health": {
+    "level": "ok|maintenance|warning|critical",
+    "reason": "string",
+    "rules_triggered": ["URGENT_OPEN >= 1", "OPEN_TOTAL > 5"]
   },
-  "interventions": [
-    {
-      "id": "uuid",
-      "code": "string",
-      "title": "string",
-      "status": "open|in_progress|closed",
-      "priority": "normal|urgent",
-      "reported_date": "date",
-      "type_inter": "CUR|PRE",
-      "closed_date": "datetime|null"
+  "parent_id": "uuid|null",
+  "children_ids": ["uuid"]
+}
+```
+
+### EquipementStats (GET /equipements/{id}/stats)
+
+Query params:
+
+- `start_date` (YYYY-MM-DD, optional, default NULL = all history)
+- `end_date` (YYYY-MM-DD, optional, default NOW)
+
+```json
+{
+  "interventions": {
+    "open": "int",
+    "closed": "int",
+    "by_status": {
+      "1": "int",
+      "2": "int",
+      "3": "int"
+    },
+    "by_priority": {
+      "faible": "int",
+      "normale": "int",
+      "important": "int",
+      "urgent": "int"
     }
-  ],
-  "actions": [
-    {
-      "id": "uuid",
-      "intervention_id": "uuid",
-      "time_spent": "float|null",
-      "created_at": "datetime|null"
-    }
-  ],
-  "time_spent_period_hours": "float",
-  "period_days": "int",
-  "equipement_mere": "uuid|null",
-  "is_mere": "boolean",
-  "no_machine": "int|null",
-  "affectation": "string|null",
-  "marque": "string|null",
-  "model": "string|null",
-  "no_serie": "string|null",
-  "type_equipement": "string|null",
-  "fabricant": "string|null",
-  "numero_serie": "string|null",
-  "date_mise_service": "date|null",
-  "notes": "string|null"
+  }
 }
 ```
 
-Note: Interventions = open + in_progress + closed within period_days. Sorted by urgency (urgent first), then status (open, in_progress, closed), then reported_date desc.
+### EquipementHealthOnly (GET /equipements/{id}/health)
+
+```json
+{
+  "level": "ok|maintenance|warning|critical",
+  "reason": "string"
+}
+```
 
 ### ServiceStatusResponse
 
@@ -321,4 +326,4 @@ Note: Interventions = open + in_progress + closed within period_days. Sorted by 
 
 - **AUTH_DISABLED**: Set to `true` in `.env` to skip JWT validation for testing
 - **DATABASE_URL**: PostgreSQL connection string
-- **DIRECTUS_URL**: Directus instance URL for auth
+- **DIRECTUS_URL**: Authentication service URL

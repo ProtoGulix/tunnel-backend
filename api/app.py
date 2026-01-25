@@ -6,6 +6,7 @@ from api.auth.middleware import JWTMiddleware
 from api.auth.routes import router as auth_router
 from api.interventions.routes import router as intervention_router
 from api.intervention_actions.routes import router as intervention_action_router
+from api.intervention_status.routes import router as intervention_status_router
 from api.action_categories.routes import router as action_category_router
 from api.action_subcategories.routes import router as action_subcategory_router
 from api.equipements.routes import router as equipement_router
@@ -43,6 +44,7 @@ app.add_middleware(
 # Inclusion des routes métier (PostgreSQL)
 app.include_router(intervention_router)
 app.include_router(intervention_action_router)
+app.include_router(intervention_status_router)
 app.include_router(action_category_router)
 app.include_router(action_subcategory_router)
 app.include_router(equipement_router)

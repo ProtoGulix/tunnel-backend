@@ -1,5 +1,13 @@
 """Constantes et configurations de l'API"""
 
+# Type de priorité des interventions
+PRIORITY_TYPES = [
+    {'id': 'faible', 'title': 'Faible', 'color': 'green'},
+    {'id': 'normal', 'title': 'Normale', 'color': 'amber'},
+    {'id': 'important', 'title': 'Important', 'color': 'red'},
+    {'id': 'urgent', 'title': 'Urgent', 'color': 'purple'},
+]
+
 # Types d'intervention avec leurs propriétés visuelles
 INTERVENTION_TYPES = [
     {'id': 'CUR', 'title': 'Curatif', 'color': 'red'},
@@ -17,3 +25,10 @@ INTERVENTION_TYPES_MAP = {t['id']: t for t in INTERVENTION_TYPES}
 
 # IDs uniquement pour validation
 INTERVENTION_TYPE_IDS = [t['id'] for t in INTERVENTION_TYPES]
+
+
+def get_active_status_ids():
+    """Récupère dynamiquement les IDs des statuts actifs depuis la DB"""
+    from api.intervention_status.repo import InterventionStatusRepository
+    repo = InterventionStatusRepository()
+    return repo.get_active_status_ids()

@@ -1,5 +1,9 @@
 # GitHub Copilot Instructions
 
+## Instruction Loading
+
+Always read this file **and** .github/tunnel-backend.instructions.md before applying any change. Both are mandatory.
+
 ## Core Principles (Reusable)
 
 ### 1. YAGNI - You Aren't Gonna Need It
@@ -30,17 +34,22 @@ Keep wording and manifests provider-agnostic. Treat the repo as the sole source 
 
 Update README.md when implementing features or significant changes. Keep it agnostic: no business details, no technical implementation. Focus on project purpose and general capabilities only.
 
+### 8. No Backward Compatibility Hacks
+
+Never keep legacy code "for compatibility". This is DEV, not production. If a spec says field X goes in `stats`, it goes ONLY in `stats`, nowhere else. If it breaks client code, it breaks and gets fixed. No compromises, no "just in case" fields.
+
 ---
 
 ## What NOT To Do (Reusable)
 
-| ❌ Never                                  | ✅ Do Instead             |
-| ----------------------------------------- | ------------------------- |
-| Create run-dev.ps1, run-dev.bat, Makefile | One script only           |
-| Add complex logging_config.py             | Use logging.basicConfig() |
-| Create docs without being asked           | Write clear code comments |
-| Test scripts that don't run               | Don't create if untested  |
-| 7+ files for 1 feature                    | Max 2 files per feature   |
+| ❌ Never                                  | ✅ Do Instead                               |
+| ----------------------------------------- | ------------------------------------------- |
+| Create run-dev.ps1, run-dev.bat, Makefile | One script only                             |
+| Add complex logging_config.py             | Use logging.basicConfig()                   |
+| Create docs without being asked           | Write clear code comments                   |
+| Test scripts that don't run               | Don't create if untested                    |
+| 7+ files for 1 feature                    | Max 2 files per feature                     |
+| Keep fields "for compatibility"           | Follow spec exactly, fix breaks immediately |
 
 ---
 

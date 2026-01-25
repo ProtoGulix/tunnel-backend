@@ -7,7 +7,7 @@ class HealthCheckResponse(BaseModel):
     """Réponse du health check"""
     status: str
     database: str
-    directus: str
+    auth_service: str
 
 
 def check_database_connection() -> str:
@@ -21,10 +21,10 @@ def check_database_connection() -> str:
         return f"error: {error_type} - {str(e)[:100]}"
 
 
-def check_directus_connection() -> str:
-    """Vérifie la connexion à Directus"""
+def check_auth_service_connection() -> str:
+    """Vérifie la connexion au service d'authentification"""
     try:
-        # /server/info est un endpoint public Directus qui ne nécessite pas d'auth
+        # /server/info est un endpoint public qui ne nécessite pas d'auth
         response = httpx.get(
             f"{settings.DIRECTUS_URL}/server/info",
             timeout=5.0
@@ -44,12 +44,12 @@ def check_directus_connection() -> str:
 async def health_check() -> HealthCheckResponse:
     """Vérification complète de santé de l'API"""
     db_status = check_database_connection()
-    directus_status = check_directus_connection()
+    auth_status = check_auth_service_connection()
 
-    overall_status = "ok" if db_status == "connected" and directus_status == "connected" else "degraded"
+    overall_status = "ok" if db_status == "connected" and auth_status == "connected" else "degraded"
 
     return HealthCheckResponse(
         status=overall_status,
         database=db_status,
-        directus=directus_status
+        auth_service=auth_status
     )

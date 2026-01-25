@@ -36,6 +36,12 @@ If logic appears 2+ times, extract it. Applies to calculations, validation, data
 - List every endpoint (method/path/description/auth).
 - Document schemas with full JSON structure, mark optional fields with `|null`, match actual responses.
 
+### Temporal Filters (Project)
+
+- Périodes: `start_date` optionnelle (défaut = NULL → toute l’historique), `end_date` optionnelle (défaut = NOW()).
+- Si `start_date` absente, ne pas appliquer de borne basse.
+- Respecter ces règles dans code et manifest; aucune autre convention de dates.
+
 ## Architecture (Project)
 
 - Data: PostgreSQL as source of truth

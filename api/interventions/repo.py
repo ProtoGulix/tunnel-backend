@@ -1,4 +1,5 @@
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
+from datetime import datetime
 
 from api.settings import settings
 from api.errors.exceptions import DatabaseError, NotFoundError
@@ -37,31 +38,92 @@ class InterventionRepository:
             }
         else:
             row_dict['equipements'] = None
-        
+
         # Crée l'objet stats
         row_dict['stats'] = {
             'action_count': row_dict.get('action_count', 0),
             'total_time': row_dict.get('total_time', 0),
             'avg_complexity': row_dict.get('avg_complexity')
         }
-        
+
         # Nettoie les colonnes intermédiaires
         for key in list(row_dict.keys()):
             if key.startswith('m_') or key in ['action_count', 'total_time', 'avg_complexity']:
                 row_dict.pop(key, None)
-        
+
         return row_dict
 
-    def get_all(self, limit: int = 100, offset: int = 0) -> List[Dict[str, Any]]:
-        """Récupère interventions avec stats calculées en SQL (sans charger les actions)"""
+    def get_all(
+        self,
+        limit: int = 100,
+        offset: int = 0,
+        equipement_id: str | None = None,
+        statuses: List[str] | None = None,
+        priorities: List[str] | None = None,
+        sort: str | None = None,
+        include_stats: bool = True,
+    ) -> List[Dict[str, Any]]:
+        """Récupère interventions avec filtres/sort et stats calculées en SQL (sans actions)"""
         # Garde-fou: limit max 1000
         limit = min(limit, 1000)
-        
+
+        # Valider priorités via PRIORITY_TYPES (source de vérité unique)
+        priorities_norm = None
+        if priorities:
+            allowed_ids = {p['id'] for p in PRIORITY_TYPES}
+            priorities_norm = [p for p in priorities if p in allowed_ids]
+
+        # Construire SQL
+        where_clauses = []
+        params: List[Any] = []
+        joins = []
+
+        if equipement_id:
+            where_clauses.append("i.machine_id = %s")
+            params.append(equipement_id)
+
+        if statuses and len(statuses) > 0:
+            placeholders = ",".join(["%s"] * len(statuses))
+            where_clauses.append(f"LOWER(i.status_actual) IN ({placeholders})")
+            params.extend([s.lower() for s in statuses])
+
+        if priorities_norm and len(priorities_norm) > 0:
+            placeholders = ",".join(["%s"] * len(priorities_norm))
+            where_clauses.append(f"i.priority IN ({placeholders})")
+            params.extend(priorities_norm)
+
+        where_sql = ("WHERE " + " AND ".join(where_clauses)
+                     ) if where_clauses else ""
+
+        # Tri
+        order_sql_parts = []
+        if sort:
+            for item in [s.strip() for s in sort.split(',') if s.strip()]:
+                desc = item.startswith('-')
+                key = item[1:] if desc else item
+                if key == 'reported_date':
+                    order_sql_parts.append(
+                        f"i.reported_date {'DESC' if desc else 'ASC'}")
+                elif key == 'priority':
+                    # Tri de sévérité: urgent > important > normale > faible
+                    case_expr = (
+                        "CASE i.priority "
+                        "WHEN 'urgent' THEN 0 "
+                        "WHEN 'important' THEN 1 "
+                        "WHEN 'normale' THEN 2 "
+                        "WHEN 'faible' THEN 3 "
+                        "ELSE 4 END"
+                    )
+                    order_sql_parts.append(
+                        f"{case_expr} {'ASC' if desc else 'DESC'}")
+        if not order_sql_parts:
+            order_sql_parts.append("i.reported_date DESC")
+        order_sql = " ORDER BY " + ", ".join(order_sql_parts)
+
         conn = self._get_connection()
         try:
             cur = conn.cursor()
-            cur.execute(
-                """
+            query = f"""
                 SELECT 
                     i.*,
                     m.code as m_code, m.name as m_name, m.no_machine as m_no_machine,
@@ -76,21 +138,26 @@ class InterventionRepository:
                 FROM intervention i
                 LEFT JOIN machine m ON i.machine_id = m.id
                 LEFT JOIN intervention_action ia ON i.id = ia.intervention_id
+                {" ".join(joins)}
+                {where_sql}
                 GROUP BY i.id, m.id
-                ORDER BY i.reported_date DESC
+                {order_sql}
                 LIMIT %s OFFSET %s
-                """,
-                (limit, offset)
-            )
+            """
+            cur.execute(query, (*params, limit, offset))
             rows = cur.fetchall()
             cols = [desc[0] for desc in cur.description]
-            
+
             result = []
             for row in rows:
                 row_dict = dict(zip(cols, row))
-                row_dict['actions'] = []  # Vide, les stats sont déjà calculées
-                result.append(self._map_equipement(row_dict))
-            
+                row_dict['actions'] = []  # Vide
+                mapped = self._map_equipement(row_dict)
+                if not include_stats:
+                    # Retirer l'objet stats si non demandé
+                    mapped.pop('stats', None)
+                result.append(mapped)
+
             return result
         except Exception as e:
             raise DatabaseError(f"Erreur base de données: {str(e)}")

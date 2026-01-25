@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 
 from api.settings import settings
 from api.errors.exceptions import DatabaseError, NotFoundError
-from api.constants import INTERVENTION_TYPE_IDS
+from api.constants import INTERVENTION_TYPE_IDS, get_active_status_ids, PRIORITY_TYPES
 
 
 class EquipementRepository:
@@ -18,8 +18,55 @@ class EquipementRepository:
                 f"Erreur de connexion base de données: {str(e)}")
 
     def get_all(self) -> List[Dict[str, Any]]:
-        """Récupère tous les équipements avec statistiques interventions"""
-        return self.get_all_with_stats()
+        """Récupère tous les équipements - liste légère avec health"""
+        conn = self._get_connection()
+        try:
+            cur = conn.cursor()
+
+            # Récupérer le statut 'ferme' (seul statut fermé)
+            cur.execute(
+                "SELECT id FROM intervention_status_ref WHERE id = 'ferme' LIMIT 1")
+            ferme_row = cur.fetchone()
+            ferme_id = ferme_row[0] if ferme_row else None
+
+            query = f"""
+                SELECT
+                    m.id,
+                    m.code,
+                    m.name,
+                    m.equipement_mere,
+                    COUNT(CASE WHEN i.status_actual != '{ferme_id}' THEN i.id END) as open_interventions_count,
+                    COUNT(CASE WHEN i.status_actual != '{ferme_id}' AND i.priority = 'urgent' THEN i.id END) as urgent_count
+                FROM machine m
+                LEFT JOIN intervention i ON i.machine_id = m.id
+                GROUP BY m.id
+                ORDER BY urgent_count DESC, open_interventions_count DESC, m.name ASC
+            """
+
+            cur.execute(query)
+            rows = cur.fetchall()
+            cols = [desc[0] for desc in cur.description]
+            equipements = [dict(zip(cols, row)) for row in rows]
+
+            # Enrichir avec health
+            for equipement in equipements:
+                open_count = equipement.pop('open_interventions_count', 0) or 0
+                urgent_count = equipement.pop('urgent_count', 0) or 0
+
+                health = self._calculate_health(open_count, urgent_count)
+                equipement['health'] = {
+                    'level': health['level'],
+                    'reason': health['reason']
+                }
+                equipement['parent_id'] = equipement.pop(
+                    'equipement_mere', None)
+
+            return equipements
+
+        except Exception as e:
+            raise DatabaseError(f"Erreur base de données: {str(e)}")
+        finally:
+            conn.close()
 
     def get_all_with_stats(self) -> List[Dict[str, Any]]:
         """Récupère tous les équipements avec statistiques interventions"""
@@ -27,18 +74,31 @@ class EquipementRepository:
         try:
             cur = conn.cursor()
 
-            # Générer dynamiquement les colonnes pour tous les types
-            type_columns = []
-            for t_id in INTERVENTION_TYPE_IDS:
-                t_lower = t_id.lower()
-                type_columns.extend([
-                    f"COUNT(CASE WHEN i.status_actual IN ('open', 'in_progress') AND i.type_inter = '{t_id}' THEN i.id END) as {t_lower}_total",
-                    f"COUNT(CASE WHEN i.status_actual = 'open' AND i.type_inter = '{t_id}' THEN i.id END) as {t_lower}_open",
-                    f"COUNT(CASE WHEN i.status_actual = 'in_progress' AND i.type_inter = '{t_id}' THEN i.id END) as {t_lower}_in_progress"
-                ])
+            # Récupérer le statut 'ferme' (seul statut fermé)
+            ferme_status = "(SELECT id FROM intervention_status_ref WHERE code = 'ferme' LIMIT 1)"
+
+            # Générer dynamiquement les colonnes par statut via IDs (sans distinguer le type d'intervention)
+            cur.execute("SELECT id, code FROM intervention_status_ref")
+            all_status = [(row[0], row[1]) for row in cur.fetchall()]
+            ferme_id = next(
+                (sid for sid, scode in all_status if scode == 'ferme'), None)
+
+            status_columns = []
+            for status_id, _ in all_status:
+                status_columns.append(
+                    f"COUNT(CASE WHEN i.status_actual = '{status_id}' THEN i.id END) as status_{status_id}"
+                )
+
+            # Générer dynamiquement les colonnes par priorité via IDs
+            priority_columns = []
+            for p in PRIORITY_TYPES:
+                pid = p.get('id')
+                priority_columns.append(
+                    f"COUNT(CASE WHEN i.priority = '{pid}' THEN i.id END) as priority_{pid}"
+                )
 
             query = f"""
-                SELECT 
+                SELECT
                     m.id,
                     m.code,
                     m.name,
@@ -47,9 +107,10 @@ class EquipementRepository:
                     parent.id as parent_id,
                     parent.code as parent_code,
                     parent.name as parent_name,
-                    COUNT(CASE WHEN i.status_actual IN ('open', 'in_progress') THEN i.id END) as open_interventions_count,
-                    {', '.join(type_columns)},
-                    COUNT(CASE WHEN i.status_actual IN ('open', 'in_progress') AND i.priority = 'urgent' THEN i.id END) as urgent_count
+                    COUNT(CASE WHEN i.status_actual != '{ferme_id}' THEN i.id END) as open_interventions_count,
+                    {', '.join(status_columns)},
+                    {', '.join(priority_columns)},
+                    COUNT(CASE WHEN i.status_actual != '{ferme_id}' AND i.priority = 'urgent' THEN i.id END) as urgent_count
                 FROM machine m
                 LEFT JOIN machine parent ON m.equipement_mere = parent.id
                 LEFT JOIN intervention i ON i.machine_id = m.id
@@ -65,9 +126,12 @@ class EquipementRepository:
 
             # Enrichir avec statut calculé
             for equipement in equipements:
+                open_count = equipement.get('open_interventions_count', 0) or 0
+                urgent_count = equipement.get('urgent_count', 0) or 0
+
                 equipement['status'] = self._calculate_status(
-                    equipement['open_interventions_count'],
-                    equipement['urgent_count']
+                    open_count,
+                    urgent_count
                 )
                 equipement['status_color'] = self._get_status_color(
                     equipement['status'])
@@ -82,23 +146,31 @@ class EquipementRepository:
                 else:
                     equipement['parent'] = None
 
-                # Formater stats interventions par type
-                interventions_stats = {}
-                for t_id in INTERVENTION_TYPE_IDS:
-                    t_lower = t_id.lower()
-                    interventions_stats[t_id] = {
-                        'total': equipement.pop(f'{t_lower}_total', 0) or 0,
-                        'open': equipement.pop(f'{t_lower}_open', 0) or 0,
-                        'in_progress': equipement.pop(f'{t_lower}_in_progress', 0) or 0
-                    }
+                # Formater stats par statut (clé = ID, comptage basé sur ID)
+                by_status = {}
+                for status_id, status_code in all_status:
+                    by_status[str(status_id)] = equipement.pop(
+                        f'status_{status_id}', 0) or 0
 
-                equipement['stats'] = {'interventions': interventions_stats}
+                # Formater stats par priorité (clé = ID de priorité)
+                by_priority = {}
+                for p in PRIORITY_TYPES:
+                    pid = p.get('id')
+                    by_priority[pid] = equipement.pop(
+                        f'priority_{pid}', 0) or 0
+
+                equipement['stats'] = {
+                    'by_status': by_status,
+                    'by_priority': by_priority,
+                    'open_interventions_count': open_count
+                }
 
                 # Nettoyage champs internes
                 equipement.pop('parent_id', None)
                 equipement.pop('parent_code', None)
                 equipement.pop('parent_name', None)
                 equipement.pop('urgent_count', None)
+                equipement.pop('open_interventions_count', None)
 
             return equipements
 
@@ -108,20 +180,16 @@ class EquipementRepository:
             conn.close()
 
     def get_by_id(self, equipement_id: str) -> Dict[str, Any]:
-        """Récupère un équipement par ID avec statistiques interventions"""
+        """Récupère un équipement par ID avec health et children_ids"""
         conn = self._get_connection()
         try:
             cur = conn.cursor()
 
-            # Générer dynamiquement les colonnes pour tous les types
-            type_columns = []
-            for t_id in INTERVENTION_TYPE_IDS:
-                t_lower = t_id.lower()
-                type_columns.extend([
-                    f"COUNT(CASE WHEN i.status_actual IN ('open', 'in_progress') AND i.type_inter = '{t_id}' THEN i.id END) as {t_lower}_total",
-                    f"COUNT(CASE WHEN i.status_actual = 'open' AND i.type_inter = '{t_id}' THEN i.id END) as {t_lower}_open",
-                    f"COUNT(CASE WHEN i.status_actual = 'in_progress' AND i.type_inter = '{t_id}' THEN i.id END) as {t_lower}_in_progress"
-                ])
+            # Récupérer le statut 'ferme'
+            cur.execute(
+                "SELECT id FROM intervention_status_ref WHERE code = 'ferme' LIMIT 1")
+            ferme_row = cur.fetchone()
+            ferme_id = ferme_row[0] if ferme_row else None
 
             query = f"""
                 SELECT 
@@ -129,22 +197,15 @@ class EquipementRepository:
                     m.code,
                     m.name,
                     m.equipement_mere,
-                    m.is_mere,
-                    parent.id as parent_id,
-                    parent.code as parent_code,
-                    parent.name as parent_name,
-                    COUNT(CASE WHEN i.status_actual IN ('open', 'in_progress') THEN i.id END) as open_interventions_count,
-                    {', '.join(type_columns)},
-                    COUNT(CASE WHEN i.status_actual IN ('open', 'in_progress') AND i.priority = 'urgent' THEN i.id END) as urgent_count
+                    COUNT(CASE WHEN i.status_actual != '{ferme_id}' THEN i.id END) as open_interventions_count,
+                    COUNT(CASE WHEN i.status_actual != '{ferme_id}' AND i.priority = 'urgent' THEN i.id END) as urgent_count
                 FROM machine m
-                LEFT JOIN machine parent ON m.equipement_mere = parent.id
                 LEFT JOIN intervention i ON i.machine_id = m.id
                 WHERE m.id = %s
-                GROUP BY m.id, parent.id
+                GROUP BY m.id
             """
 
             cur.execute(query, (equipement_id,))
-
             row = cur.fetchone()
             if not row:
                 raise NotFoundError(f"Équipement {equipement_id} non trouvé")
@@ -152,41 +213,19 @@ class EquipementRepository:
             cols = [desc[0] for desc in cur.description]
             equipement = dict(zip(cols, row))
 
-            # Enrichir avec statut calculé
-            equipement['status'] = self._calculate_status(
-                equipement['open_interventions_count'],
-                equipement['urgent_count']
-            )
-            equipement['status_color'] = self._get_status_color(
-                equipement['status'])
+            # Health calculation
+            open_count = equipement.pop('open_interventions_count', 0) or 0
+            urgent_count = equipement.pop('urgent_count', 0) or 0
+            health = self._calculate_health(open_count, urgent_count)
 
-            # Formater parent
-            if equipement.get('parent_id'):
-                equipement['parent'] = {
-                    'id': equipement['parent_id'],
-                    'code': equipement['parent_code'],
-                    'name': equipement['parent_name']
-                }
-            else:
-                equipement['parent'] = None
+            equipement['health'] = health
+            equipement['parent_id'] = equipement.pop('equipement_mere', None)
 
-            # Formater stats interventions par type
-            interventions_stats = {}
-            for t_id in INTERVENTION_TYPE_IDS:
-                t_lower = t_id.lower()
-                interventions_stats[t_id] = {
-                    'total': equipement.pop(f'{t_lower}_total', 0) or 0,
-                    'open': equipement.pop(f'{t_lower}_open', 0) or 0,
-                    'in_progress': equipement.pop(f'{t_lower}_in_progress', 0) or 0
-                }
-
-            equipement['stats'] = {'interventions': interventions_stats}
-
-            # Nettoyage champs internes
-            equipement.pop('parent_id', None)
-            equipement.pop('parent_code', None)
-            equipement.pop('parent_name', None)
-            equipement.pop('urgent_count', None)
+            # Get children_ids
+            cur.execute(
+                "SELECT id FROM machine WHERE equipement_mere = %s", (equipement_id,))
+            children = cur.fetchall()
+            equipement['children_ids'] = [str(child[0]) for child in children]
 
             return equipement
         except NotFoundError:
@@ -201,6 +240,18 @@ class EquipementRepository:
         conn = self._get_connection()
         try:
             cur = conn.cursor()
+
+            # Récupérer l'ID du statut 'ferme' (seul statut fermé)
+            cur.execute(
+                """
+                SELECT id
+                FROM intervention_status_ref
+                WHERE code = 'ferme'
+                LIMIT 1
+                """
+            )
+            ferme_row = cur.fetchone()
+            ferme_status_id = ferme_row[0] if ferme_row else None
 
             # Une seule requête pour tout
             cur.execute(
@@ -230,9 +281,8 @@ class EquipementRepository:
                 ORDER BY 
                     i.id,
                     CASE WHEN i.priority = 'urgent' THEN 0 ELSE 1 END,
-                    CASE WHEN i.status_actual = 'open' THEN 0 
-                         WHEN i.status_actual = 'in_progress' THEN 1 
-                         ELSE 2 END,
+                    CASE WHEN i.status_actual = (SELECT id FROM intervention_status_ref WHERE code = 'ferme' LIMIT 1) THEN 2 
+                         ELSE 0 END,
                     i.reported_date DESC,
                     ia.created_at DESC
                 """,
@@ -303,10 +353,12 @@ class EquipementRepository:
 
             # Statut equipement
             urgent_count = sum(
-                1 for i in interventions if i.get('priority') == 'urgent')
+                1 for i in interventions
+                if i.get('priority') == 'urgent' and i.get('status') != ferme_status_id
+            )
             open_count = sum(
                 1 for i in interventions
-                if i.get('status') in ('open', 'in_progress')
+                if i.get('status') != ferme_status_id
             )
 
             equipement['status'] = self._calculate_status(
@@ -328,20 +380,16 @@ class EquipementRepository:
             conn.close()
 
     def get_by_equipement_mere(self, equipement_mere_id: str) -> List[Dict[str, Any]]:
-        """Récupère les sous-équipements d'un équipement parent avec statistiques interventions"""
+        """Récupère les sous-équipements d'un équipement parent avec health"""
         conn = self._get_connection()
         try:
             cur = conn.cursor()
 
-            # Générer dynamiquement les colonnes pour tous les types
-            type_columns = []
-            for t_id in INTERVENTION_TYPE_IDS:
-                t_lower = t_id.lower()
-                type_columns.extend([
-                    f"COUNT(CASE WHEN i.status_actual IN ('open', 'in_progress') AND i.type_inter = '{t_id}' THEN i.id END) as {t_lower}_total",
-                    f"COUNT(CASE WHEN i.status_actual = 'open' AND i.type_inter = '{t_id}' THEN i.id END) as {t_lower}_open",
-                    f"COUNT(CASE WHEN i.status_actual = 'in_progress' AND i.type_inter = '{t_id}' THEN i.id END) as {t_lower}_in_progress"
-                ])
+            # Récupérer le statut 'ferme'
+            cur.execute(
+                "SELECT id FROM intervention_status_ref WHERE code = 'ferme' LIMIT 1")
+            ferme_row = cur.fetchone()
+            ferme_id = ferme_row[0] if ferme_row else None
 
             query = f"""
                 SELECT 
@@ -349,53 +397,32 @@ class EquipementRepository:
                     m.code,
                     m.name,
                     m.equipement_mere,
-                    m.is_mere,
-                    NULL as parent_id,
-                    NULL as parent_code,
-                    NULL as parent_name,
-                    COUNT(CASE WHEN i.status_actual IN ('open', 'in_progress') THEN i.id END) as open_interventions_count,
-                    {', '.join(type_columns)},
-                    COUNT(CASE WHEN i.status_actual IN ('open', 'in_progress') AND i.priority = 'urgent' THEN i.id END) as urgent_count
+                    COUNT(CASE WHEN i.status_actual != '{ferme_id}' THEN i.id END) as open_interventions_count,
+                    COUNT(CASE WHEN i.status_actual != '{ferme_id}' AND i.priority = 'urgent' THEN i.id END) as urgent_count
                 FROM machine m
                 LEFT JOIN intervention i ON i.machine_id = m.id
                 WHERE m.equipement_mere = %s
                 GROUP BY m.id
-                ORDER BY open_interventions_count DESC, m.name ASC
+                ORDER BY urgent_count DESC, open_interventions_count DESC, m.name ASC
             """
 
             cur.execute(query, (equipement_mere_id,))
-
             rows = cur.fetchall()
             cols = [desc[0] for desc in cur.description]
             equipements = [dict(zip(cols, row)) for row in rows]
 
-            # Enrichir avec statut calculé
+            # Enrichir avec health
             for equipement in equipements:
-                equipement['status'] = self._calculate_status(
-                    equipement['open_interventions_count'],
-                    equipement['urgent_count']
-                )
-                equipement['status_color'] = self._get_status_color(
-                    equipement['status'])
-                equipement['parent'] = None
+                open_count = equipement.pop('open_interventions_count', 0) or 0
+                urgent_count = equipement.pop('urgent_count', 0) or 0
 
-                # Formater stats interventions par type
-                interventions_stats = {}
-                for t_id in INTERVENTION_TYPE_IDS:
-                    t_lower = t_id.lower()
-                    interventions_stats[t_id] = {
-                        'total': equipement.pop(f'{t_lower}_total', 0) or 0,
-                        'open': equipement.pop(f'{t_lower}_open', 0) or 0,
-                        'in_progress': equipement.pop(f'{t_lower}_in_progress', 0) or 0
-                    }
-
-                equipement['stats'] = {'interventions': interventions_stats}
-
-                # Nettoyage champs internes
-                equipement.pop('parent_id', None)
-                equipement.pop('parent_code', None)
-                equipement.pop('parent_name', None)
-                equipement.pop('urgent_count', None)
+                health = self._calculate_health(open_count, urgent_count)
+                equipement['health'] = {
+                    'level': health['level'],
+                    'reason': health['reason']
+                }
+                equipement['parent_id'] = equipement.pop(
+                    'equipement_mere', None)
 
             return equipements
         except Exception as e:
@@ -403,22 +430,164 @@ class EquipementRepository:
         finally:
             conn.close()
 
-    def _calculate_status(self, open_count: int, urgent_count: int) -> str:
-        """Calcule le statut d'un équipement selon interventions"""
-        if urgent_count > 0:
-            return 'critical'
-        if open_count >= 3:
-            return 'warning'
-        if open_count > 0:
-            return 'maintenance'
-        return 'ok'
+    def get_stats_by_id(self, equipement_id: str, start_date=None, end_date=None) -> Dict[str, Any]:
+        """Récupère les statistiques détaillées d'un équipement, avec filtre période optionnel"""
+        conn = self._get_connection()
+        try:
+            cur = conn.cursor()
 
-    def _get_status_color(self, status: str) -> str:
-        """Retourne la couleur associée au statut"""
-        colors = {
-            'ok': 'green',
-            'maintenance': 'blue',
-            'warning': 'orange',
-            'critical': 'red'
+            # Vérifier que l'équipement existe
+            cur.execute("SELECT id FROM machine WHERE id = %s",
+                        (equipement_id,))
+            if not cur.fetchone():
+                raise NotFoundError(f"Équipement {equipement_id} non trouvé")
+
+            # Récupérer tous les statuts
+            cur.execute("SELECT id, code FROM intervention_status_ref")
+            all_status = [(row[0], row[1]) for row in cur.fetchall()]
+            ferme_id = next(
+                (sid for sid, scode in all_status if scode == 'ferme'), None)
+
+            # Générer colonnes par statut
+            status_columns = []
+            for status_id, _ in all_status:
+                status_columns.append(
+                    f"COUNT(CASE WHEN i.status_actual = '{status_id}' THEN i.id END) as status_{status_id}"
+                )
+
+            # Générer colonnes par priorité
+            priority_columns = []
+            for p in PRIORITY_TYPES:
+                pid = p.get('id')
+                priority_columns.append(
+                    f"COUNT(CASE WHEN i.priority = '{pid}' THEN i.id END) as priority_{pid}"
+                )
+
+            where_clauses = ["i.machine_id = %s"]
+            params = [equipement_id]
+
+            # Période: start_date optionnel, end_date optionnel (defaut = NOW())
+            if start_date:
+                where_clauses.append("i.reported_date >= %s")
+                params.append(start_date)
+            if end_date:
+                where_clauses.append("i.reported_date <= %s")
+                params.append(end_date)
+
+            where_sql = "WHERE " + " AND ".join(where_clauses)
+
+            query = f"""
+                SELECT 
+                    COUNT(CASE WHEN i.status_actual != '{ferme_id}' THEN i.id END) as open_count,
+                    COUNT(CASE WHEN i.status_actual = '{ferme_id}' THEN i.id END) as closed_count,
+                    {', '.join(status_columns)},
+                    {', '.join(priority_columns)}
+                FROM intervention i
+                {where_sql}
+            """
+
+            cur.execute(query, tuple(params))
+            row = cur.fetchone()
+            cols = [desc[0] for desc in cur.description]
+            data = dict(zip(cols, row))
+
+            # Formater stats
+            by_status = {}
+            for status_id, status_code in all_status:
+                by_status[str(status_id)] = data.pop(
+                    f'status_{status_id}', 0) or 0
+
+            by_priority = {}
+            for p in PRIORITY_TYPES:
+                pid = p.get('id')
+                by_priority[pid] = data.pop(f'priority_{pid}', 0) or 0
+
+            return {
+                'interventions': {
+                    'open': data['open_count'] or 0,
+                    'closed': data['closed_count'] or 0,
+                    'by_status': by_status,
+                    'by_priority': by_priority
+                }
+            }
+        except NotFoundError:
+            raise
+        except Exception as e:
+            raise DatabaseError(f"Erreur base de données: {str(e)}")
+        finally:
+            conn.close()
+
+    def get_health_by_id(self, equipement_id: str) -> Dict[str, Any]:
+        """Récupère uniquement le health d'un équipement (ultra-léger)"""
+        conn = self._get_connection()
+        try:
+            cur = conn.cursor()
+
+            # Récupérer le statut 'ferme'
+            cur.execute(
+                "SELECT id FROM intervention_status_ref WHERE id = 'ferme' LIMIT 1")
+            ferme_row = cur.fetchone()
+            ferme_id = ferme_row[0] if ferme_row else None
+
+            query = f"""
+                SELECT 
+                    COUNT(CASE WHEN i.status_actual != '{ferme_id}' THEN i.id END) as open_count,
+                    COUNT(CASE WHEN i.status_actual != '{ferme_id}' AND i.priority = 'urgent' THEN i.id END) as urgent_count
+                FROM machine m
+                LEFT JOIN intervention i ON i.machine_id = m.id
+                WHERE m.id = %s
+                GROUP BY m.id
+            """
+
+            cur.execute(query, (equipement_id,))
+            row = cur.fetchone()
+
+            if row is None:
+                # Vérifier si l'équipement existe
+                cur.execute("SELECT id FROM machine WHERE id = %s",
+                            (equipement_id,))
+                if not cur.fetchone():
+                    raise NotFoundError(
+                        f"Équipement {equipement_id} non trouvé")
+                # Équipement existe mais pas d'interventions
+                open_count, urgent_count = 0, 0
+            else:
+                open_count = row[0] or 0
+                urgent_count = row[1] or 0
+
+            health = self._calculate_health(open_count, urgent_count)
+            return {
+                'level': health['level'],
+                'reason': health['reason']
+            }
+        except NotFoundError:
+            raise
+        except Exception as e:
+            raise DatabaseError(f"Erreur base de données: {str(e)}")
+        finally:
+            conn.close()
+
+    def _calculate_health(self, open_count: int, urgent_count: int) -> Dict[str, Any]:
+        """Calcule le health d'un équipement selon interventions"""
+        rules_triggered = []
+        level = 'ok'
+        reason = 'Aucune intervention ouverte'
+
+        if urgent_count >= 1:
+            level = 'critical'
+            reason = f"{urgent_count} intervention{'s' if urgent_count > 1 else ''} urgente{'s' if urgent_count > 1 else ''} ouverte{'s' if urgent_count > 1 else ''}"
+            rules_triggered.append('URGENT_OPEN >= 1')
+        elif open_count > 5:
+            level = 'warning'
+            reason = f"{open_count} interventions ouvertes"
+            rules_triggered.append('OPEN_TOTAL > 5')
+        elif open_count > 0:
+            level = 'maintenance'
+            reason = f"{open_count} intervention{'s' if open_count > 1 else ''} ouverte{'s' if open_count > 1 else ''}"
+            rules_triggered.append('OPEN_TOTAL > 0')
+
+        return {
+            'level': level,
+            'reason': reason,
+            'rules_triggered': rules_triggered
         }
-        return colors.get(status, 'gray')

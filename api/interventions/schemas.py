@@ -4,7 +4,7 @@ from uuid import UUID
 
 from pydantic import BaseModel
 from api.intervention_actions.schemas import InterventionActionOut
-from api.equipements.schemas import EquipementOut
+from api.equipements.schemas import EquipementDetail
 
 
 class InterventionStats(BaseModel):
@@ -22,7 +22,7 @@ class InterventionOut(BaseModel):
     id: UUID
     code: Optional[str] = None
     title: Optional[str] = None
-    equipements: Optional[EquipementOut] = None
+    equipements: Optional[EquipementDetail] = None
     type_inter: Optional[str] = None
     priority: Optional[str] = None
     reported_by: Optional[str] = None
@@ -31,7 +31,7 @@ class InterventionOut(BaseModel):
     updated_by: Optional[UUID] = None
     printed_fiche: Optional[bool] = None
     reported_date: Optional[date] = None
-    
+
     stats: InterventionStats
     actions: List[InterventionActionOut] = []
 
