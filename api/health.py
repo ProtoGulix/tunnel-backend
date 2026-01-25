@@ -1,0 +1,55 @@
+import httpx
+from api.settings import settings
+from pydantic import BaseModel
+
+
+class HealthCheckResponse(BaseModel):
+    """Réponse du health check"""
+    status: str
+    database: str
+    directus: str
+
+
+def check_database_connection() -> str:
+    """Vérifie la connexion à PostgreSQL"""
+    try:
+        conn = settings.get_db_connection()
+        conn.close()
+        return "connected"
+    except Exception as e:
+        error_type = type(e).__name__
+        return f"error: {error_type} - {str(e)[:100]}"
+
+
+def check_directus_connection() -> str:
+    """Vérifie la connexion à Directus"""
+    try:
+        # /server/info est un endpoint public Directus qui ne nécessite pas d'auth
+        response = httpx.get(
+            f"{settings.DIRECTUS_URL}/server/info",
+            timeout=5.0
+        )
+        if response.status_code == 200:
+            return "connected"
+        else:
+            return f"error: HTTP {response.status_code}"
+    except httpx.ConnectError:
+        return "error: Connection refused"
+    except httpx.TimeoutException:
+        return "error: Timeout"
+    except Exception as e:
+        return f"error: {str(e)}"
+
+
+async def health_check() -> HealthCheckResponse:
+    """Vérification complète de santé de l'API"""
+    db_status = check_database_connection()
+    directus_status = check_directus_connection()
+
+    overall_status = "ok" if db_status == "connected" and directus_status == "connected" else "degraded"
+
+    return HealthCheckResponse(
+        status=overall_status,
+        database=db_status,
+        directus=directus_status
+    )

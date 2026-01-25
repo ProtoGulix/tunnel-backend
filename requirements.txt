@@ -1,0 +1,9 @@
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+pg8000==1.31.2
+pydantic==2.5.3
+pydantic-settings==2.1.0
+python-jose[cryptography]==3.3.0
+PyJWT==2.10.1
+python-dotenv==1.0.0
+httpx==0.25.2
