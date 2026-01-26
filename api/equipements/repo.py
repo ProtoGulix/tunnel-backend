@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 
 from api.settings import settings
 from api.errors.exceptions import DatabaseError, NotFoundError
-from api.constants import INTERVENTION_TYPE_IDS, get_active_status_ids, PRIORITY_TYPES
+from api.constants import INTERVENTION_TYPE_IDS, get_active_status_ids, PRIORITY_TYPES, CLOSED_STATUS_CODE
 
 
 class EquipementRepository:
@@ -17,17 +17,22 @@ class EquipementRepository:
             raise DatabaseError(
                 f"Erreur de connexion base de données: {str(e)}")
 
+    def _get_closed_status_id(self, conn) -> str:
+        """Récupère l'ID du statut 'ferme' depuis la DB"""
+        cur = conn.cursor()
+        cur.execute(
+            f"SELECT id FROM intervention_status_ref WHERE code = %s LIMIT 1",
+            (CLOSED_STATUS_CODE,)
+        )
+        row = cur.fetchone()
+        return row[0] if row else CLOSED_STATUS_CODE
+
     def get_all(self) -> List[Dict[str, Any]]:
         """Récupère tous les équipements - liste légère avec health"""
         conn = self._get_connection()
         try:
             cur = conn.cursor()
-
-            # Récupérer le statut 'ferme' (seul statut fermé)
-            cur.execute(
-                "SELECT id FROM intervention_status_ref WHERE id = 'ferme' LIMIT 1")
-            ferme_row = cur.fetchone()
-            ferme_id = ferme_row[0] if ferme_row else None
+            ferme_id = self._get_closed_status_id(conn)
 
             query = f"""
                 SELECT
@@ -73,15 +78,7 @@ class EquipementRepository:
         conn = self._get_connection()
         try:
             cur = conn.cursor()
-
-            # Récupérer le statut 'ferme' (seul statut fermé)
-            ferme_status = "(SELECT id FROM intervention_status_ref WHERE code = 'ferme' LIMIT 1)"
-
-            # Générer dynamiquement les colonnes par statut via IDs (sans distinguer le type d'intervention)
-            cur.execute("SELECT id, code FROM intervention_status_ref")
-            all_status = [(row[0], row[1]) for row in cur.fetchall()]
-            ferme_id = next(
-                (sid for sid, scode in all_status if scode == 'ferme'), None)
+            ferme_id = self._get_closed_status_id(conn)
 
             status_columns = []
             for status_id, _ in all_status:
@@ -184,12 +181,7 @@ class EquipementRepository:
         conn = self._get_connection()
         try:
             cur = conn.cursor()
-
-            # Récupérer le statut 'ferme'
-            cur.execute(
-                "SELECT id FROM intervention_status_ref WHERE code = 'ferme' LIMIT 1")
-            ferme_row = cur.fetchone()
-            ferme_id = ferme_row[0] if ferme_row else None
+            ferme_id = self._get_closed_status_id(conn)
 
             query = f"""
                 SELECT 
@@ -240,18 +232,7 @@ class EquipementRepository:
         conn = self._get_connection()
         try:
             cur = conn.cursor()
-
-            # Récupérer l'ID du statut 'ferme' (seul statut fermé)
-            cur.execute(
-                """
-                SELECT id
-                FROM intervention_status_ref
-                WHERE code = 'ferme'
-                LIMIT 1
-                """
-            )
-            ferme_row = cur.fetchone()
-            ferme_status_id = ferme_row[0] if ferme_row else None
+            ferme_status_id = self._get_closed_status_id(conn)
 
             # Une seule requête pour tout
             cur.execute(
@@ -384,12 +365,7 @@ class EquipementRepository:
         conn = self._get_connection()
         try:
             cur = conn.cursor()
-
-            # Récupérer le statut 'ferme'
-            cur.execute(
-                "SELECT id FROM intervention_status_ref WHERE code = 'ferme' LIMIT 1")
-            ferme_row = cur.fetchone()
-            ferme_id = ferme_row[0] if ferme_row else None
+            ferme_id = self._get_closed_status_id(conn)
 
             query = f"""
                 SELECT 
@@ -435,6 +411,7 @@ class EquipementRepository:
         conn = self._get_connection()
         try:
             cur = conn.cursor()
+            ferme_id = self._get_closed_status_id(conn)
 
             # Vérifier que l'équipement existe
             cur.execute("SELECT id FROM machine WHERE id = %s",
@@ -445,8 +422,6 @@ class EquipementRepository:
             # Récupérer tous les statuts
             cur.execute("SELECT id, code FROM intervention_status_ref")
             all_status = [(row[0], row[1]) for row in cur.fetchall()]
-            ferme_id = next(
-                (sid for sid, scode in all_status if scode == 'ferme'), None)
 
             # Générer colonnes par statut
             status_columns = []
@@ -522,12 +497,7 @@ class EquipementRepository:
         conn = self._get_connection()
         try:
             cur = conn.cursor()
-
-            # Récupérer le statut 'ferme'
-            cur.execute(
-                "SELECT id FROM intervention_status_ref WHERE id = 'ferme' LIMIT 1")
-            ferme_row = cur.fetchone()
-            ferme_id = ferme_row[0] if ferme_row else None
+            ferme_id = self._get_closed_status_id(conn)
 
             query = f"""
                 SELECT 

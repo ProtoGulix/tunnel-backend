@@ -1,5 +1,8 @@
 """Constantes et configurations de l'API"""
 
+# Statut fermé d'une intervention (constante)
+CLOSED_STATUS_CODE = 'ferme'
+
 # Type de priorité des interventions
 PRIORITY_TYPES = [
     {'id': 'faible', 'title': 'Faible', 'color': 'green'},

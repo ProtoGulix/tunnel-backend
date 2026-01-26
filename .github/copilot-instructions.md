@@ -1,3 +1,7 @@
+---
+applyTo: "**"
+---
+
 # GitHub Copilot Instructions
 
 ## Instruction Loading

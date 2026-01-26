@@ -42,6 +42,37 @@ If logic appears 2+ times, extract it. Applies to calculations, validation, data
 - Si `start_date` absente, ne pas appliquer de borne basse.
 - Respecter ces règles dans code et manifest; aucune autre convention de dates.
 
+### Changelog & Versioning (Project)
+
+Maintenir `CHANGELOG.md` à la racine du projet:
+
+**Structure par version:**
+
+```markdown
+## [X.Y.Z] - YYYY-MM-DD
+
+### Nouveautés
+
+### Améliorations
+
+### Corrections
+```
+
+**Règles:**
+
+1. **Langage**: Français, accessible (pas de jargon technique, expliquer le "pourquoi" pas le "comment")
+2. **Exemples**: Inclure cas d'usage réels (ex: "filtrer par période" vs "start_date/end_date query param")
+3. **Versioning**: Suivre [Semantic Versioning](https://semver.org/)
+   - MAJOR (X.0.0): Breaking changes (suppression champs, changement structure)
+   - MINOR (1.Y.0): Nouvelles features, backwards-compatible
+   - PATCH (1.0.Z): Corrections bugs uniquement
+4. **Mise à jour version**:
+   - Modifier `API_VERSION` dans `api/settings.py`
+   - Créer nouvelle section dans CHANGELOG.md
+   - Enregistrer la date de release (format: YYYY-MM-DD)
+5. **Quand updater**: À chaque changement **API visible** (endpoints, paramètres, structures de réponse)
+   - Ne pas logger: refactoring interne, optimisations, nettoyage de code
+
 ## Architecture (Project)
 
 - Data: PostgreSQL as source of truth
