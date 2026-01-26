@@ -1,5 +1,5 @@
-from fastapi import APIRouter, Request, Query
-from typing import List
+"""Routes pour les équipements"""
+from fastapi import APIRouter, Query
 from api.equipements.repo import EquipementRepository
 from api.equipements.schemas import (
     EquipementListItem, EquipementDetail, EquipementStatsDetailed, EquipementHealthOnly
@@ -8,16 +8,16 @@ from api.equipements.schemas import (
 router = APIRouter(prefix="/equipements", tags=["equipements"])
 
 
-@router.get("", response_model=List[EquipementListItem])
-@router.get("/", response_model=List[EquipementListItem])
-async def list_equipements(request: Request):
+@router.get("", response_model=list[EquipementListItem])
+@router.get("/", response_model=list[EquipementListItem])
+async def list_equipements():
     """Liste tous les équipements - vue légère avec health"""
     repo = EquipementRepository()
     return repo.get_all()
 
 
 @router.get("/{equipement_id}", response_model=EquipementDetail)
-async def get_equipement(equipement_id: str, request: Request):
+async def get_equipement(equipement_id: str):
     """Récupère un équipement par ID avec health et children_ids"""
     repo = EquipementRepository()
     return repo.get_by_id(equipement_id)
@@ -26,7 +26,6 @@ async def get_equipement(equipement_id: str, request: Request):
 @router.get("/{equipement_id}/stats", response_model=EquipementStatsDetailed)
 async def get_equipement_stats(
     equipement_id: str,
-    request: Request,
     start_date: str | None = Query(
         None, description="Date de début (YYYY-MM-DD), optionnel"),
     end_date: str | None = Query(
@@ -38,7 +37,7 @@ async def get_equipement_stats(
 
 
 @router.get("/{equipement_id}/health", response_model=EquipementHealthOnly)
-async def get_equipement_health(equipement_id: str, request: Request):
+async def get_equipement_health(equipement_id: str):
     """Récupère uniquement le health d'un équipement (ultra-léger)"""
     repo = EquipementRepository()
     return repo.get_health_by_id(equipement_id)

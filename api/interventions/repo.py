@@ -3,6 +3,7 @@ from datetime import datetime
 
 from api.settings import settings
 from api.errors.exceptions import DatabaseError, NotFoundError
+from api.constants import PRIORITY_TYPES
 
 
 class InterventionRepository:
