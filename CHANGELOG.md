@@ -2,6 +2,23 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [1.0.1] - 26 janvier 2026
+
+### Corrections
+
+- Code cleanup interne (suppression de méthodes mortes et imports inutilisés)
+- Respect strict de PEP8 (import ordering, docstrings de module)
+- Migration vers syntaxe Python 3.9+ (list/dict au lieu de List/Dict, union type | au lieu de Optional)
+- Chaînage d'exceptions amélioré (raise ... from e)
+
+### Améliorations techniques
+
+- Réduction de la complexité du code (moins de méthodes inutilisées)
+- Meilleure conformité Pylint (zéro avertissements dans les domaines)
+- Imports organisés selon PEP8 (stdlib avant third-party)
+
+---
+
 ## [1.0.0] - 26 janvier 2026
 
 ### Nouveautés
