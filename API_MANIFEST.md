@@ -1,6 +1,6 @@
 # API Manifest
 
-Last updated: 2026-01-25
+Last updated: 2026-01-27 (v1.1.0 - Status logs integration)
 
 ## Endpoints
 
@@ -23,7 +23,7 @@ Last updated: 2026-01-25
     - `priority` (csv) - Filter by priorities from PRIORITY_TYPES (faible,normale,important,urgent)
     - `sort` (csv) - Sort fields with - prefix for DESC (ex: -priority,-reported_date)
     - `include` (csv) - Include optional data (stats). Stats included by default if omitted
-- `GET /interventions/{id}` - Get intervention by ID with actions and stats (Auth: Optional if AUTH_DISABLED)
+- `GET /interventions/{id}` - Get intervention by ID with actions, status logs, and stats (Auth: Optional if AUTH_DISABLED)
 - `GET /interventions/{id}/actions` - Get actions for specific intervention (Auth: Optional if AUTH_DISABLED)
 
 ### Intervention Status
@@ -31,10 +31,57 @@ Last updated: 2026-01-25
 - `GET /intervention_status` - List all available intervention statuses from database (Auth: Optional if AUTH_DISABLED)
   - Returns: id, code, label, color, value for each status
 
+### Intervention Status Log
+
+- `GET /intervention_status_log` - List all status change logs with optional filters (Auth: Optional if AUTH_DISABLED)
+  - Query params:
+    - `intervention_id` (uuid, optional) - Filter logs by intervention
+    - `skip` (default 0), `limit` (default 100, max 1000)
+  - Returns: Array of logs ordered by date DESC with enriched status details
+- `GET /intervention_status_log/{id}` - Get specific status change log by ID (Auth: Optional if AUTH_DISABLED)
+- `POST /intervention_status_log` - Create a new status change log (Auth: Optional if AUTH_DISABLED)
+  - Body (json):
+    ```json
+    {
+      "intervention_id": "uuid",
+      "status_from": "string|null",
+      "status_to": "string",
+      "technician_id": "uuid",
+      "date": "datetime",
+      "notes": "string|null"
+    }
+    ```
+  - Business rules:
+    - `intervention_id`, `status_to`, `technician_id`, `date` are required
+    - `status_from` must match current intervention status (except if null for first change)
+    - All status transitions are allowed
+    - `notes`: HTML stripped and sanitized
+  - Returns: Full log with enriched status details (status_from_detail, status_to_detail)
+  - Note: Database trigger automatically updates intervention.status_actual with status_to
+
 ### Intervention Actions
 
 - `GET /intervention_actions` - List all intervention actions (Auth: Optional if AUTH_DISABLED)
 - `GET /intervention_actions/{id}` - Get specific intervention action by ID (Auth: Optional if AUTH_DISABLED)
+- `POST /intervention_actions` - Add a new action to an intervention (Auth: Optional if AUTH_DISABLED)
+  - Body (json):
+    ```json
+    {
+      "intervention_id": "uuid",
+      "description": "string",
+      "time_spent": 0.75,
+      "action_subcategory": 30,
+      "tech": "uuid",
+      "complexity_score": 7,
+      "complexity_anotation": "AUT"
+    }
+    ```
+  - Business rules:
+    - `time_spent`: Quarter hours only (0.25, 0.5, 0.75, 1.0...), minimum 0.25
+    - `complexity_score`: Integer between 1 and 10
+    - `complexity_anotation`: Code must exist in complexity_factor table
+    - `description`: HTML stripped and sanitized
+  - Returns: Full action with subcategory details, complexity stored as `{"AUT": true}` in DB
 
 ### Action Categories
 
@@ -46,6 +93,11 @@ Last updated: 2026-01-25
 
 - `GET /action_subcategories` - List all action subcategories (Auth: Optional if AUTH_DISABLED)
 - `GET /action_subcategories/{id}` - Get specific action subcategory by ID (Auth: Optional if AUTH_DISABLED)
+
+### Complexity Factors
+
+- `GET /complexity_factors` - List all complexity factors ordered by category and code (Auth: Optional if AUTH_DISABLED)
+- `GET /complexity_factors/{code}` - Get specific complexity factor by code (Auth: Optional if AUTH_DISABLED)
 
 ### Equipements
 
@@ -69,6 +121,12 @@ Last updated: 2026-01-25
 
 ### InterventionOut
 
+Note: `GET /interventions` returns `actions: []` and `status_logs: []` (empty), `GET /interventions/{id}` returns full actions and status logs.
+
+For `GET /interventions/{id}`:
+- The `equipements` object is fetched via `EquipementRepository.get_by_id()` to ensure schema consistency
+- The `status_logs` array is fetched via `InterventionStatusLogRepository.get_by_intervention()` to include complete status change history
+
 ```json
 {
   "id": "uuid",
@@ -78,18 +136,13 @@ Last updated: 2026-01-25
     "id": "uuid",
     "code": "string|null",
     "name": "string",
-    "no_machine": "int|null",
-    "affectation": "string|null",
-    "marque": "string|null",
-    "model": "string|null",
-    "no_serie": "string|null",
-    "equipement_mere": "uuid|null",
-    "is_mere": "boolean",
-    "type_equipement": "string|null",
-    "fabricant": "string|null",
-    "numero_serie": "string|null",
-    "date_mise_service": "date|null",
-    "notes": "string|null"
+    "health": {
+      "level": "ok|maintenance|warning|critical",
+      "reason": "string",
+      "rules_triggered": ["string"]
+    },
+    "parent_id": "uuid|null",
+    "children_ids": ["uuid"]
   },
   "type_inter": "string",
   "priority": "string",
@@ -104,30 +157,37 @@ Last updated: 2026-01-25
     "total_time": "float",
     "avg_complexity": "float|null"
   },
-  "actions": [
-    {
-      "id": "uuid",
-      "intervention_id": "uuid",
-      "description": "string|null",
-      "time_spent": "float|null",
-      "subcategory": {
-        "id": "int",
-        "name": "string",
-        "code": "string|null",
-        "category": {
-          "id": "int",
-          "name": "string",
-          "code": "string|null",
-          "color": "string|null"
-        }
-      },
-      "tech": "uuid|null",
-      "complexity_score": "int|null",
-      "complexity_anotation": "object|null",
-      "created_at": "datetime|null",
-      "updated_at": "datetime|null"
+  "actions": ["InterventionActionOut"],
+  "status_logs": ["InterventionStatusLogOut"]
+}
+```
+
+### InterventionActionOut
+
+Note: Actions are fetched via `InterventionActionRepository.get_by_intervention()` when included in intervention queries to ensure schema consistency.
+
+```json
+{
+  "id": "uuid",
+  "intervention_id": "uuid",
+  "description": "string|null",
+  "time_spent": "float|null",
+  "subcategory": {
+    "id": "int",
+    "name": "string",
+    "code": "string|null",
+    "category": {
+      "id": "int",
+      "name": "string",
+      "code": "string|null",
+      "color": "string|null"
     }
-  ]
+  },
+  "tech": "uuid|null",
+  "complexity_score": "int|null",
+  "complexity_anotation": "object|null",
+  "created_at": "datetime|null",
+  "updated_at": "datetime|null"
 }
 ```
 
@@ -143,7 +203,74 @@ Last updated: 2026-01-25
 }
 ```
 
-Note: `GET /interventions` retourne `actions: []` (vide), `GET /interventions/{id}` retourne les actions complètes.
+### InterventionStatusLogIn (POST)
+
+```json
+{
+  "intervention_id": "uuid",
+  "status_from": "string|null",
+  "status_to": "string",
+  "technician_id": "uuid",
+  "date": "datetime",
+  "notes": "string|null"
+}
+```
+
+### InterventionStatusLogOut
+
+Note: Status logs are automatically included when fetching a specific intervention via `GET /interventions/{id}` to provide complete status change history. The `value` field in status details is converted to integer or null if the database stores non-numeric values.
+
+```json
+{
+  "id": "uuid",
+  "intervention_id": "uuid",
+  "status_from": "string|null",
+  "status_to": "string",
+  "status_from_detail": {
+    "id": "string",
+    "code": "string|null",
+    "label": "string|null",
+    "color": "string|null",
+    "value": "int|null"
+  },
+  "status_to_detail": {
+    "id": "string",
+    "code": "string|null",
+    "label": "string|null",
+    "color": "string|null",
+    "value": "int|null"
+  },
+  "technician_id": "uuid|null",
+  "date": "datetime",
+  "notes": "string|null"
+}
+```
+
+### InterventionActionIn (POST)
+
+```json
+{
+  "intervention_id": "uuid",
+  "description": "string",
+  "time_spent": "float",
+  "action_subcategory": "int",
+  "tech": "uuid",
+  "complexity_score": "int",
+  "complexity_anotation": "string"
+}
+```
+
+### ComplexityFactorOut
+
+```json
+{
+  "code": "string",
+  "label": "string|null",
+  "category": "string|null"
+}
+```
+
+Note: `GET /interventions` returns `actions: []` and `status_logs: []` (empty), `GET /interventions/{id}` returns full actions and status logs with schemas defined in `InterventionActionOut` and `InterventionStatusLogOut`.
 
 ### ActionCategoryOut
 

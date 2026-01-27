@@ -2,6 +2,31 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [1.1.0] - 27 janvier 2026
+
+### Nouveautés
+
+- **Historique des changements de statut**: Les interventions incluent maintenant leur historique complet de changements de statut via `status_logs`
+  - `GET /interventions/{id}` retourne automatiquement tous les changements de statut avec détails enrichis
+  - Chaque log inclut le statut source, le statut destination, le technicien, la date et les notes
+  - Les détails des statuts sont enrichis avec les informations de la table de référence (code, label, couleur)
+
+### Corrections
+
+- **Validation des status logs**: Correction des erreurs de validation Pydantic
+  - `technician_id` est maintenant optionnel (peut être NULL en base de données)
+  - Le champ `value` des statuts est correctement converti en integer ou NULL (gère les valeurs textuelles en base)
+- **Dépendance circulaire**: Résolution de l'import circulaire entre `InterventionRepository` et `InterventionStatusLogValidator`
+  - Utilisation d'un import lazy dans le validator pour éviter le blocage au démarrage
+
+### Améliorations techniques
+
+- Ajout de la méthode `_safe_int_value()` pour gérer proprement la conversion des valeurs de statut
+- Les status logs sont chargés automatiquement pour les détails d'intervention mais pas dans les listes (optimisation performance)
+- Schéma `InterventionOut` étendu avec le champ `status_logs: List[InterventionStatusLogOut]`
+
+---
+
 ## [1.0.1] - 26 janvier 2026
 
 ### Corrections

@@ -1,9 +1,11 @@
-from typing import Dict, Any, List, Optional
-from datetime import datetime
+from typing import Dict, Any, List
 
 from api.settings import settings
 from api.errors.exceptions import DatabaseError, NotFoundError
 from api.constants import PRIORITY_TYPES
+
+from api.intervention_actions.repo import InterventionActionRepository
+from api.intervention_status_log.repo import InterventionStatusLogRepository
 
 
 class InterventionRepository:
@@ -15,44 +17,7 @@ class InterventionRepository:
             return settings.get_db_connection()
         except Exception as e:
             raise DatabaseError(
-                f"Erreur de connexion base de données: {str(e)}")
-
-    def _map_equipement(self, row_dict: Dict[str, Any]) -> Dict[str, Any]:
-        """Mappe machine_id et ses colonnes associées en objet equipements + stats"""
-        if row_dict.get('machine_id') is not None:
-            row_dict['equipements'] = {
-                'id': row_dict['machine_id'],
-                'code': row_dict['m_code'],
-                'name': row_dict['m_name'],
-                'no_machine': row_dict['m_no_machine'],
-                'affectation': row_dict['m_affectation'],
-                'marque': row_dict['m_marque'],
-                'model': row_dict['m_model'],
-                'no_serie': row_dict['m_no_serie'],
-                'equipement_mere': row_dict['m_equipement_mere'],
-                'is_mere': row_dict['m_is_mere'],
-                'type_equipement': row_dict['m_type_equipement'],
-                'fabricant': row_dict['m_fabricant'],
-                'numero_serie': row_dict['m_numero_serie'],
-                'date_mise_service': row_dict['m_date_mise_service'],
-                'notes': row_dict['m_notes']
-            }
-        else:
-            row_dict['equipements'] = None
-
-        # Crée l'objet stats
-        row_dict['stats'] = {
-            'action_count': row_dict.get('action_count', 0),
-            'total_time': row_dict.get('total_time', 0),
-            'avg_complexity': row_dict.get('avg_complexity')
-        }
-
-        # Nettoie les colonnes intermédiaires
-        for key in list(row_dict.keys()):
-            if key.startswith('m_') or key in ['action_count', 'total_time', 'avg_complexity']:
-                row_dict.pop(key, None)
-
-        return row_dict
+                f"Erreur de connexion base de données: {str(e)}") from e
 
     def get_all(
         self,
@@ -152,43 +117,70 @@ class InterventionRepository:
             result = []
             for row in rows:
                 row_dict = dict(zip(cols, row))
-                row_dict['actions'] = []  # Vide
-                mapped = self._map_equipement(row_dict)
-                if not include_stats:
-                    # Retirer l'objet stats si non demandé
-                    mapped.pop('stats', None)
-                result.append(mapped)
+
+                # Construire l'objet equipement depuis les colonnes m_*
+                if row_dict.get('machine_id') is not None:
+                    row_dict['equipements'] = {
+                        'id': row_dict.pop('machine_id'),
+                        'code': row_dict.pop('m_code', None),
+                        'name': row_dict.pop('m_name', None),
+                        'no_machine': row_dict.pop('m_no_machine', None),
+                        'affectation': row_dict.pop('m_affectation', None),
+                        'marque': row_dict.pop('m_marque', None),
+                        'model': row_dict.pop('m_model', None),
+                        'no_serie': row_dict.pop('m_no_serie', None),
+                        'equipement_mere': row_dict.pop('m_equipement_mere', None),
+                        'is_mere': row_dict.pop('m_is_mere', None),
+                        'type_equipement': row_dict.pop('m_type_equipement', None),
+                        'fabricant': row_dict.pop('m_fabricant', None),
+                        'numero_serie': row_dict.pop('m_numero_serie', None),
+                        'date_mise_service': row_dict.pop('m_date_mise_service', None),
+                        'notes': row_dict.pop('m_notes', None),
+                        'health': {
+                            'level': 'unknown',
+                            'reason': 'not_provided',
+                            'rules_triggered': None
+                        },
+                        'parent_id': row_dict.get('m_equipement_mere'),
+                        'children_ids': []
+                    }
+                else:
+                    row_dict['equipements'] = None
+                    # Nettoyer les colonnes m_* si machine_id est None
+                    for key in list(row_dict.keys()):
+                        if key.startswith('m_'):
+                            row_dict.pop(key)
+
+                # Créer l'objet stats si demandé
+                if include_stats:
+                    row_dict['stats'] = {
+                        'action_count': row_dict.pop('action_count', 0),
+                        'total_time': row_dict.pop('total_time', 0),
+                        'avg_complexity': row_dict.pop('avg_complexity', None)
+                    }
+                else:
+                    # Nettoyer les colonnes stats si non demandées
+                    row_dict.pop('action_count', None)
+                    row_dict.pop('total_time', None)
+                    row_dict.pop('avg_complexity', None)
+
+                row_dict['actions'] = []  # Vide pour get_all
+                row_dict['status_logs'] = []  # Vide pour get_all
+                result.append(row_dict)
 
             return result
         except Exception as e:
-            raise DatabaseError(f"Erreur base de données: {str(e)}")
+            raise DatabaseError(f"Erreur base de données: {str(e)}") from e
         finally:
             conn.close()
 
-    def get_by_id(self, intervention_id: str) -> Dict[str, Any]:
-        """Récupère une intervention par ID avec équipement et stats calculées en SQL"""
+    def get_by_id(self, intervention_id: str, include_actions: bool = True) -> Dict[str, Any]:
+        """Récupère une intervention par ID avec équipement et stats calculées depuis les actions"""
         conn = self._get_connection()
         try:
             cur = conn.cursor()
             cur.execute(
-                """
-                SELECT 
-                    i.*,
-                    m.code as m_code, m.name as m_name, m.no_machine as m_no_machine,
-                    m.affectation as m_affectation, m.marque as m_marque, m.model as m_model,
-                    m.no_serie as m_no_serie, m.equipement_mere as m_equipement_mere,
-                    m.is_mere as m_is_mere, m.type_equipement as m_type_equipement,
-                    m.fabricant as m_fabricant, m.numero_serie as m_numero_serie,
-                    m.date_mise_service as m_date_mise_service, m.notes as m_notes,
-                    COALESCE(SUM(ia.time_spent), 0) as total_time,
-                    COUNT(ia.id) as action_count,
-                    ROUND(AVG(ia.complexity_score)::numeric, 2)::float as avg_complexity
-                FROM intervention i
-                LEFT JOIN machine m ON i.machine_id = m.id
-                LEFT JOIN intervention_action ia ON i.id = ia.intervention_id
-                WHERE i.id = %s
-                GROUP BY i.id, m.id
-                """,
+                "SELECT * FROM intervention WHERE id = %s",
                 (intervention_id,)
             )
             row = cur.fetchone()
@@ -198,18 +190,60 @@ class InterventionRepository:
                     f"Intervention {intervention_id} non trouvée")
 
             cols = [desc[0] for desc in cur.description]
-            return self._map_equipement(dict(zip(cols, row)))
+            intervention = dict(zip(cols, row))
+
+            # Récupérer l'équipement via EquipementRepository pour garantir la cohérence
+            if intervention.get('machine_id'):
+                from api.equipements.repo import EquipementRepository
+                equipement_repo = EquipementRepository()
+                try:
+                    intervention['equipements'] = equipement_repo.get_by_id(
+                        intervention['machine_id'])
+                except NotFoundError:
+                    intervention['equipements'] = None
+            else:
+                intervention['equipements'] = None
+
+            # Récupérer les actions via InterventionActionRepository
+            if include_actions:
+
+                action_repo = InterventionActionRepository()
+                actions = action_repo.get_by_intervention(intervention_id)
+                intervention['actions'] = actions
+
+                # Calculer les stats depuis les actions récupérées
+                intervention['stats'] = {
+                    'action_count': len(actions),
+                    'total_time': sum(a.get('time_spent', 0) or 0 for a in actions),
+                    'avg_complexity': (
+                        round(sum(a.get('complexity_score', 0) or 0 for a in actions if a.get('complexity_score')) /
+                              len([a for a in actions if a.get('complexity_score')]), 2)
+                        if any(a.get('complexity_score') for a in actions) else None
+                    )
+                }
+            else:
+                intervention['actions'] = []
+                intervention['stats'] = {
+                    'action_count': 0,
+                    'total_time': 0,
+                    'avg_complexity': None
+                }
+
+            # Récupérer les status logs via InterventionStatusLogRepository
+            status_log_repo = InterventionStatusLogRepository()
+            intervention['status_logs'] = status_log_repo.get_by_intervention(intervention_id)
+
+            return intervention
         except NotFoundError:
             raise
         except Exception as e:
             error_msg = str(e)
             if "does not exist" in error_msg:
                 raise DatabaseError(
-                    "Table 'intervention' inexistante - vérifier la structure de la base")
-            elif "connection" in error_msg.lower():
+                    "Table 'intervention' inexistante - vérifier la structure de la base") from e
+            if "connection" in error_msg.lower():
                 raise DatabaseError(
-                    "Impossible de se connecter à la base de données")
-            else:
-                raise DatabaseError(f"Erreur base de données: {error_msg}")
+                    "Impossible de se connecter à la base de données") from e
+            raise DatabaseError(f"Erreur base de données: {error_msg}") from e
         finally:
             conn.close()

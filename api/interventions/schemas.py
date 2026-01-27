@@ -4,6 +4,7 @@ from uuid import UUID
 
 from pydantic import BaseModel
 from api.intervention_actions.schemas import InterventionActionOut
+from api.intervention_status_log.schemas import InterventionStatusLogOut
 from api.equipements.schemas import EquipementDetail
 
 
@@ -34,6 +35,7 @@ class InterventionOut(BaseModel):
 
     stats: InterventionStats
     actions: List[InterventionActionOut] = []
+    status_logs: List[InterventionStatusLogOut] = []
 
     class Config:
         from_attributes = True

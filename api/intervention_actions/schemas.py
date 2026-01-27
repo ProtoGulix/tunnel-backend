@@ -4,6 +4,20 @@ from datetime import datetime
 from uuid import UUID
 
 
+class InterventionActionIn(BaseModel):
+    """Schéma d'entrée pour créer une action d'intervention"""
+    intervention_id: UUID
+    description: str
+    time_spent: float
+    action_subcategory: int
+    tech: UUID
+    complexity_score: int
+    complexity_anotation: str
+
+    class Config:
+        from_attributes = True
+
+
 class ActionCategoryDetail(BaseModel):
     """Détail de catégorie d'action"""
     id: int

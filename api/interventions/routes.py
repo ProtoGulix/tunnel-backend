@@ -57,12 +57,7 @@ async def list_interventions(
 async def get_intervention(intervention_id: str, request: Request):
     """Récupère une intervention par ID avec ses actions et stats (calculées en SQL)"""
     intervention_repo = InterventionRepository()
-    action_repo = InterventionActionRepository()
-
-    intervention = intervention_repo.get_by_id(intervention_id)
-    intervention['actions'] = action_repo.get_by_intervention(intervention_id)
-
-    return intervention
+    return intervention_repo.get_by_id(intervention_id)
 
 
 @router.get("/{intervention_id}/actions", response_model=List[InterventionActionOut])

@@ -1,7 +1,10 @@
 import jwt
+import logging
 from typing import Optional, Dict, Any
 from api.settings import settings
 from api.errors.exceptions import UnauthorizedError
+
+logger = logging.getLogger(__name__)
 
 
 def decode_directus_token(token: str) -> Dict[str, Any]:
@@ -29,10 +32,13 @@ def extract_user_from_token(token: str) -> Dict[str, Any]:
     """
     payload = decode_directus_token(token)
 
-    user_id = payload.get("sub")
+    user_id = payload.get("id") or payload.get("sub")
     role = payload.get("role")
 
+    logger.debug(f"Token payload: id={user_id}, role={role}")
+
     if not user_id:
+        logger.error(f"user_id manquant dans le token. Payload: {payload}")
         raise UnauthorizedError("user_id manquant dans le token")
 
     return {

@@ -1,4 +1,5 @@
 import logging
+import sys
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from api.settings import settings
@@ -7,17 +8,43 @@ from api.auth.routes import router as auth_router
 from api.interventions.routes import router as intervention_router
 from api.intervention_actions.routes import router as intervention_action_router
 from api.intervention_status.routes import router as intervention_status_router
+from api.intervention_status_log.routes import router as intervention_status_log_router
 from api.action_categories.routes import router as action_category_router
 from api.action_subcategories.routes import router as action_subcategory_router
+from api.complexity_factors.routes import router as complexity_factor_router
 from api.equipements.routes import router as equipement_router
 from api.stats.routes import router as stats_router
 from api.errors.handlers import register_error_handlers
 from api.health import health_check
 
+
+class ColoredFormatter(logging.Formatter):
+    """Custom formatter with colors for log levels"""
+    COLORS = {
+        'DEBUG': '\033[36m',     # Cyan
+        'INFO': '\033[32m',      # Green
+        'WARNING': '\033[33m',   # Yellow
+        'ERROR': '\033[31m',     # Red
+        'CRITICAL': '\033[35m',  # Magenta
+    }
+    RESET = '\033[0m'
+
+    def format(self, record):
+        log_color = self.COLORS.get(record.levelname, self.RESET)
+        record.levelname = f"{log_color}{record.levelname}{self.RESET}"
+        return super().format(record)
+
+
 # Simple logging setup
+handler = logging.StreamHandler(sys.stdout)
+handler.setFormatter(ColoredFormatter(
+    fmt="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S"
+))
+
 logging.basicConfig(
     level=logging.DEBUG if settings.API_ENV == "development" else logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    handlers=[handler]
 )
 logger = logging.getLogger(__name__)
 
@@ -45,10 +72,12 @@ app.add_middleware(
 app.include_router(intervention_router)
 app.include_router(intervention_action_router)
 app.include_router(intervention_status_router)
+app.include_router(intervention_status_log_router)
 app.include_router(action_category_router)
 app.include_router(action_subcategory_router)
 app.include_router(equipement_router)
 app.include_router(stats_router)
+app.include_router(complexity_factor_router)
 app.include_router(auth_router)
 
 

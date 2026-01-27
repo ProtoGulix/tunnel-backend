@@ -42,6 +42,16 @@ Update README.md when implementing features or significant changes. Keep it agno
 
 Never keep legacy code "for compatibility". This is DEV, not production. If a spec says field X goes in `stats`, it goes ONLY in `stats`, nowhere else. If it breaks client code, it breaks and gets fixed. No compromises, no "just in case" fields.
 
+### 9. Logging Standards
+
+**Use centralized colored logging configured in api/app.py:**
+
+- `logger = logging.getLogger(__name__)` in each module
+- Use lazy % formatting: `logger.info("Message: %s", value)` not f-strings
+- Never add manual ANSI color codes - ColoredFormatter handles it
+- Levels auto-colored: DEBUG (cyan), INFO (green), WARNING (yellow), ERROR (red)
+- Format: `YYYY-MM-DD HH:MM:SS - LEVEL - module.name - message`
+
 ---
 
 ## What NOT To Do (Reusable)

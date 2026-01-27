@@ -3,7 +3,6 @@ from fastapi import Request, status
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from api.auth.jwt_handler import extract_user_from_token
-from api.errors.exceptions import UnauthorizedError
 from api.settings import settings
 
 logger = logging.getLogger(__name__)
@@ -22,12 +21,6 @@ class JWTMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next):
         try:
-            # Mode test : skip auth si AUTH_DISABLED=true
-            if settings.AUTH_DISABLED:
-                logger.info("AUTH_DISABLED mode: skipping JWT validation")
-                request.state.user_id = None
-                return await call_next(request)
-
             # Routes publiques : laisser passer sans auth
             if request.url.path in self.PUBLIC_ROUTES or request.url.path.startswith("/static"):
                 return await call_next(request)
@@ -35,9 +28,46 @@ class JWTMiddleware(BaseHTTPMiddleware):
             # Extraction du token
             auth_header = request.headers.get("Authorization")
 
+            # Mode test : valider le JWT mais ne pas bloquer si invalide
+            if settings.AUTH_DISABLED:
+                if auth_header:
+                    try:
+                        scheme, token = auth_header.split()
+                        if scheme.lower() == "bearer":
+                            user_info = extract_user_from_token(token)
+                            logger.info(
+                                "[AUTH_DISABLED] \u2713 JWT VALIDE - User: %s, Role: %s, Route: %s %s",
+                                user_info['user_id'], user_info['role'],
+                                request.method, request.url.path
+                            )
+                            request.state.user_id = user_info["user_id"]
+                            request.state.role = user_info["role"]
+                        else:
+                            logger.warning(
+                                "[AUTH_DISABLED] Invalid auth scheme: %s",
+                                scheme
+                            )
+                            request.state.user_id = None
+                    except Exception as e:
+                        logger.warning(
+                            "[AUTH_DISABLED] \u2717 JWT INVALIDE - Route: %s %s, Erreur: %s",
+                            request.method, request.url.path, str(e)
+                        )
+                        request.state.user_id = None
+                else:
+                    logger.info(
+                        "[AUTH_DISABLED] No Authorization header for %s %s",
+                        request.method, request.url.path
+                    )
+                    request.state.user_id = None
+
+                return await call_next(request)
+
             if not auth_header:
                 logger.warning(
-                    f"Missing Authorization header for {request.method} {request.url.path}")
+                    "Missing Authorization header for %s %s",
+                    request.method, request.url.path
+                )
                 return JSONResponse(
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     content={"detail": "Header Authorization manquant",
@@ -48,7 +78,7 @@ class JWTMiddleware(BaseHTTPMiddleware):
             try:
                 scheme, token = auth_header.split()
                 if scheme.lower() != "bearer":
-                    logger.warning(f"Invalid auth scheme: {scheme}")
+                    logger.warning("Invalid auth scheme: %s", scheme)
                     return JSONResponse(
                         status_code=status.HTTP_401_UNAUTHORIZED,
                         content={"detail": "Schéma d'authentification invalide",
@@ -69,8 +99,17 @@ class JWTMiddleware(BaseHTTPMiddleware):
                 user_info = extract_user_from_token(token)
                 request.state.user_id = user_info["user_id"]
                 request.state.role = user_info["role"]
+
+                logger.info(
+                    "\u2713 JWT VALIDE - User: %s, Role: %s, Route: %s %s",
+                    user_info['user_id'], user_info['role'],
+                    request.method, request.url.path
+                )
             except Exception as e:
-                logger.warning(f"Token extraction error: {str(e)}")
+                logger.warning(
+                    "\u2717 JWT INVALIDE - Route: %s %s, Erreur: %s",
+                    request.method, request.url.path, str(e)
+                )
                 return JSONResponse(
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     content={"detail": "Token invalide ou expiré",
@@ -82,7 +121,7 @@ class JWTMiddleware(BaseHTTPMiddleware):
             return response
 
         except Exception as e:
-            logger.error(f"Middleware error: {str(e)}", exc_info=e)
+            logger.error("Middleware error: %s", str(e), exc_info=e)
             return JSONResponse(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 content={
