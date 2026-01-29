@@ -2,6 +2,65 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [1.1.7] - 29 janvier 2026
+
+### Nouveautés
+
+- **Module de gestion des commandes fournisseurs**: Ensemble complet d'endpoints pour la gestion des commandes
+  - `GET /supplier_orders` - Liste des commandes avec filtres (statut, fournisseur)
+  - `GET /supplier_orders/{id}` - Détail d'une commande avec ses lignes
+  - `GET /supplier_orders/number/{order_number}` - Recherche par numéro de commande
+  - `POST /supplier_orders` - Création d'une nouvelle commande
+  - `PUT /supplier_orders/{id}` - Mise à jour d'une commande
+  - `DELETE /supplier_orders/{id}` - Suppression d'une commande (cascade sur les lignes)
+  - Numéro de commande auto-généré par trigger base de données
+  - Calcul automatique du montant total basé sur les lignes
+
+- **Module de lignes de commande fournisseur**: Gestion des articles commandés
+  - `GET /supplier_order_lines` - Liste des lignes avec filtres (commande, article, sélection)
+  - `GET /supplier_order_lines/order/{supplier_order_id}` - Toutes les lignes d'une commande
+  - `GET /supplier_order_lines/{id}` - Détail d'une ligne avec article et demandes d'achat liées
+  - `POST /supplier_order_lines` - Création d'une ligne avec liaison optionnelle aux demandes d'achat
+  - `PUT /supplier_order_lines/{id}` - Mise à jour d'une ligne
+  - `DELETE /supplier_order_lines/{id}` - Suppression d'une ligne
+  - `POST /supplier_order_lines/{id}/purchase_requests` - Lier une demande d'achat à une ligne
+  - `DELETE /supplier_order_lines/{id}/purchase_requests/{pr_id}` - Délier une demande d'achat
+  - Prix total calculé automatiquement (quantité × prix unitaire)
+  - Support complet des devis (prix, date réception, fabricant, délai livraison)
+
+- **Module de demandes d'achat**: Suivi des demandes de matériel
+  - `GET /purchase_requests` - Liste avec filtres (statut, intervention, urgence)
+  - `GET /purchase_requests/{id}` - Détail d'une demande avec lignes de commande liées
+  - `GET /purchase_requests/intervention/{id}` - Demandes liées à une intervention
+  - `POST /purchase_requests` - Création d'une demande
+  - `PUT /purchase_requests/{id}` - Mise à jour d'une demande
+  - `DELETE /purchase_requests/{id}` - Suppression d'une demande
+  - Liaison bidirectionnelle avec les lignes de commande fournisseur
+  - Enrichissement automatique avec les détails de l'article en stock
+
+- **Module de gestion du stock**: Catalogue d'articles
+  - `GET /stock_items` - Liste avec filtres (famille, sous-famille, recherche)
+  - `GET /stock_items/{id}` - Détail d'un article
+  - `GET /stock_items/ref/{ref}` - Recherche par référence
+  - `POST /stock_items` - Création d'un article
+  - `PUT /stock_items/{id}` - Mise à jour d'un article
+  - `PATCH /stock_items/{id}/quantity` - Mise à jour rapide de la quantité
+  - `DELETE /stock_items/{id}` - Suppression d'un article
+  - Référence auto-générée par trigger (famille-sous_famille-spec-dimension)
+  - Compteur automatique des références fournisseurs
+
+### Améliorations techniques
+
+- Relation M2M complète entre lignes de commande fournisseur et demandes d'achat
+  - Table de liaison `supplier_order_line_purchase_request` avec quantité allouée
+  - Permet de tracer quelle demande d'achat est satisfaite par quelle ligne de commande
+  - Une ligne peut satisfaire plusieurs demandes, une demande peut être liée à plusieurs lignes
+- Schémas légers (`ListItem`) pour les listes, schémas complets (`Out`) pour les détails
+- Conversion automatique des Decimal en float pour la sérialisation JSON
+- Enrichissement automatique des relations (stock_item, purchase_requests, order_lines)
+- Tous les endpoints respectent les standards de pagination (skip, limit max 1000)
+- Gestion cohérente des erreurs avec `DatabaseError` et `NotFoundError`
+
 ## [1.1.1] - 29 janvier 2026
 
 ### Corrections

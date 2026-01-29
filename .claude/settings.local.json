@@ -8,7 +8,8 @@
       "Bash(pip install:*)",
       "Bash(powershell -Command \"Get-ChildItem -Path api -Recurse -Directory -Filter ''__pycache__'' | Remove-Item -Recurse -Force\")",
       "Bash(pip download:*)",
-      "Bash(where:*)"
+      "Bash(where:*)",
+      "Bash(tree:*)"
     ]
   }
 }

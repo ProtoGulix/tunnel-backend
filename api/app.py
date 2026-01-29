@@ -14,6 +14,10 @@ from api.action_subcategories.routes import router as action_subcategory_router
 from api.complexity_factors.routes import router as complexity_factor_router
 from api.equipements.routes import router as equipement_router
 from api.stats.routes import router as stats_router
+from api.purchase_requests.routes import router as purchase_request_router
+from api.stock_items.routes import router as stock_item_router
+from api.supplier_order_lines.routes import router as supplier_order_line_router
+from api.supplier_orders.routes import router as supplier_order_router
 from api.errors.handlers import register_error_handlers
 from api.health import health_check
 
@@ -78,6 +82,10 @@ app.include_router(action_subcategory_router)
 app.include_router(equipement_router)
 app.include_router(stats_router)
 app.include_router(complexity_factor_router)
+app.include_router(purchase_request_router)
+app.include_router(stock_item_router)
+app.include_router(supplier_order_line_router)
+app.include_router(supplier_order_router)
 app.include_router(auth_router)
 
 
