@@ -32,7 +32,9 @@ async def list_interventions(
         None, description="CSV de priorités (faible,normale,important,urgent)"),
     sort: str | None = Query(
         None, description="Ex: -priority,-reported_date ou -reported_date"),
-    include: str | None = Query(None, description="Ex: stats")
+    include: str | None = Query(None, description="Ex: stats"),
+    printed: bool | None = Query(
+        None, description="Filtre interventions imprimées"),
 ):
     """Liste interventions avec filtres/sort et stats optionnelles (sans actions)"""
     intervention_repo = InterventionRepository()
@@ -49,7 +51,8 @@ async def list_interventions(
         statuses=statuses,
         priorities=priorities,
         sort=sort,
-        include_stats=include_stats
+        include_stats=include_stats,
+        printed=printed
     )
 
 

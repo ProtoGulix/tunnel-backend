@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional
 from datetime import datetime
 from uuid import UUID
@@ -12,7 +12,8 @@ class InterventionActionIn(BaseModel):
     action_subcategory: int
     tech: UUID
     complexity_score: int
-    complexity_anotation: str
+    complexity_anotation: Optional[str] = Field(default=None)
+    created_at: Optional[str] = Field(default=None)  # String format, validator convertira en datetime
 
     class Config:
         from_attributes = True
@@ -22,8 +23,8 @@ class ActionCategoryDetail(BaseModel):
     """Détail de catégorie d'action"""
     id: int
     name: str
-    code: Optional[str] = None
-    color: Optional[str] = None
+    code: Optional[str] = Field(default=None)
+    color: Optional[str] = Field(default=None)
 
     class Config:
         from_attributes = True
@@ -33,8 +34,8 @@ class ActionSubcategoryDetail(BaseModel):
     """Sous-catégorie avec catégorie parent imbriquée"""
     id: int
     name: str
-    code: Optional[str] = None
-    category: Optional[ActionCategoryDetail] = None
+    code: Optional[str] = Field(default=None)
+    category: Optional[ActionCategoryDetail] = Field(default=None)
 
     class Config:
         from_attributes = True
@@ -43,15 +44,15 @@ class ActionSubcategoryDetail(BaseModel):
 class InterventionActionOut(BaseModel):
     """Schéma de sortie pour une action d'intervention"""
     id: UUID
-    intervention_id: Optional[UUID] = None
-    description: Optional[str] = None
-    time_spent: Optional[float] = None
-    subcategory: Optional[ActionSubcategoryDetail] = None
-    tech: Optional[UUID] = None
-    complexity_score: Optional[int] = None
-    complexity_anotation: Optional[dict] = None
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
+    intervention_id: Optional[UUID] = Field(default=None)
+    description: Optional[str] = Field(default=None)
+    time_spent: Optional[float] = Field(default=None)
+    subcategory: Optional[ActionSubcategoryDetail] = Field(default=None)
+    tech: Optional[UUID] = Field(default=None)
+    complexity_score: Optional[int] = Field(default=None)
+    complexity_anotation: Optional[dict] = Field(default=None)
+    created_at: Optional[datetime] = Field(default=None)
+    updated_at: Optional[datetime] = Field(default=None)
 
     class Config:
         from_attributes = True

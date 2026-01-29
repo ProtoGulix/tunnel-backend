@@ -1,7 +1,14 @@
 {
   "permissions": {
     "allow": [
-      "Bash(.venv/Scripts/python.exe:*)"
+      "Bash(.venv/Scripts/python.exe:*)",
+      "Bash(\"/c/Users/Quentin/DEV/web.tunnel-backend/.venv/Scripts/python.exe\" \"/c/Users/Quentin/AppData/Local/Temp/claude/c--Users-Quentin-DEV-web-tunnel-backend/f4643a87-c722-45e9-8284-38faa2e1332d/scratchpad/test_date_validator.py\")",
+      "Bash(python:*)",
+      "Bash(git stash:*)",
+      "Bash(pip install:*)",
+      "Bash(powershell -Command \"Get-ChildItem -Path api -Recurse -Directory -Filter ''__pycache__'' | Remove-Item -Recurse -Force\")",
+      "Bash(pip download:*)",
+      "Bash(where:*)"
     ]
   }
 }

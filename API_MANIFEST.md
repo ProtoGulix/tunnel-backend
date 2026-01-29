@@ -1,6 +1,6 @@
 # API Manifest
 
-Last updated: 2026-01-27 (v1.1.0 - Status logs integration)
+Last updated: 2026-01-29 (v1.1.1 - Date format support)
 
 ## Endpoints
 
@@ -21,6 +21,7 @@ Last updated: 2026-01-27 (v1.1.0 - Status logs integration)
     - `equipement_id` (uuid) - Filter by intervention.machine_id
     - `status` (csv) - Filter by status codes (ex: ouvert,ferme,en_cours) - case insensitive
     - `priority` (csv) - Filter by priorities from PRIORITY_TYPES (faible,normale,important,urgent)
+    - `printed` (boolean, optional) - Filter by printed status (true: only printed, false: only non-printed, omit: all)
     - `sort` (csv) - Sort fields with - prefix for DESC (ex: -priority,-reported_date)
     - `include` (csv) - Include optional data (stats). Stats included by default if omitted
 - `GET /interventions/{id}` - Get intervention by ID with actions, status logs, and stats (Auth: Optional if AUTH_DISABLED)
@@ -54,6 +55,7 @@ Last updated: 2026-01-27 (v1.1.0 - Status logs integration)
   - Business rules:
     - `intervention_id`, `status_to`, `technician_id`, `date` are required
     - `status_from` must match current intervention status (except if null for first change)
+    - `date`: Must be a valid date/datetime. Supports "YYYY-MM-DD", "YYYY-MM-DDTHH:MM:SS", or with timezone. Invalid dates like 2026-01-36 are rejected
     - All status transitions are allowed
     - `notes`: HTML stripped and sanitized
   - Returns: Full log with enriched status details (status_from_detail, status_to_detail)
@@ -73,13 +75,15 @@ Last updated: 2026-01-27 (v1.1.0 - Status logs integration)
       "action_subcategory": 30,
       "tech": "uuid",
       "complexity_score": 7,
-      "complexity_anotation": "AUT"
+      "complexity_anotation": "AUT",
+      "created_at": "datetime|null"
     }
     ```
   - Business rules:
     - `time_spent`: Quarter hours only (0.25, 0.5, 0.75, 1.0...), minimum 0.25
     - `complexity_score`: Integer between 1 and 10
-    - `complexity_anotation`: Code must exist in complexity_factor table
+    - `complexity_anotation`: Optional if score ≤ 5, **required** if score > 5. Code must exist in complexity_factor table
+    - `created_at`: Optional datetime. If null or omitted, uses current timestamp. Allows backdating actions. Supports "YYYY-MM-DD", "YYYY-MM-DDTHH:MM:SS", or with timezone
     - `description`: HTML stripped and sanitized
   - Returns: Full action with subcategory details, complexity stored as `{"AUT": true}` in DB
 
@@ -248,6 +252,10 @@ Note: Status logs are automatically included when fetching a specific interventi
 
 ### InterventionActionIn (POST)
 
+Notes:
+- `complexity_anotation` is optional if `complexity_score` ≤ 5, but required if `complexity_score` > 5
+- `created_at` is optional - defaults to current timestamp if null/omitted, allowing backdating of actions. Supports "YYYY-MM-DD", "YYYY-MM-DDTHH:MM:SS", or with timezone
+
 ```json
 {
   "intervention_id": "uuid",
@@ -256,7 +264,8 @@ Note: Status logs are automatically included when fetching a specific interventi
   "action_subcategory": "int",
   "tech": "uuid",
   "complexity_score": "int",
-  "complexity_anotation": "string"
+  "complexity_anotation": "string|null",
+  "created_at": "datetime|null"
 }
 ```
 

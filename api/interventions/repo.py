@@ -28,6 +28,7 @@ class InterventionRepository:
         priorities: List[str] | None = None,
         sort: str | None = None,
         include_stats: bool = True,
+        printed: bool | None = None,
     ) -> List[Dict[str, Any]]:
         """Récupère interventions avec filtres/sort et stats calculées en SQL (sans actions)"""
         # Garde-fou: limit max 1000
@@ -57,6 +58,10 @@ class InterventionRepository:
             placeholders = ",".join(["%s"] * len(priorities_norm))
             where_clauses.append(f"i.priority IN ({placeholders})")
             params.extend(priorities_norm)
+
+        if printed is not None:
+            where_clauses.append("i.printed_fiche = %s")
+            params.append(printed)
 
         where_sql = ("WHERE " + " AND ".join(where_clauses)
                      ) if where_clauses else ""
@@ -231,7 +236,8 @@ class InterventionRepository:
 
             # Récupérer les status logs via InterventionStatusLogRepository
             status_log_repo = InterventionStatusLogRepository()
-            intervention['status_logs'] = status_log_repo.get_by_intervention(intervention_id)
+            intervention['status_logs'] = status_log_repo.get_by_intervention(
+                intervention_id)
 
             return intervention
         except NotFoundError:

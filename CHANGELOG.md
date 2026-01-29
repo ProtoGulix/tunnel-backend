@@ -2,6 +2,24 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [1.1.1] - 29 janvier 2026
+
+### Corrections
+
+- **Support du format de date standard**: Correction de la validation Pydantic pour accepter le format date "YYYY-MM-DD"
+  - Utilisation de `Field(default=None)` pour tous les champs optionnels (compatibilité Pydantic v2)
+  - Les schémas `InterventionActionIn` et `InterventionStatusLogIn` acceptent maintenant correctement les dates au format "YYYY-MM-DD"
+  - Le validateur centralisé `validate_date()` convertit automatiquement les strings en datetime
+  - Fix: Erreur "Input should be a valid datetime, invalid datetime separator" résolue
+
+### Améliorations techniques
+
+- Migration complète vers Pydantic v2 avec `Field()` pour les valeurs par défaut
+- Tous les schémas utilisent `from_attributes = True` (syntaxe Pydantic v2)
+- Meilleure gestion des champs optionnels dans tous les schémas de l'API
+
+---
+
 ## [1.1.0] - 27 janvier 2026
 
 ### Nouveautés
@@ -10,6 +28,9 @@ Toutes les modifications importantes de l'API sont documentées ici.
   - `GET /interventions/{id}` retourne automatiquement tous les changements de statut avec détails enrichis
   - Chaque log inclut le statut source, le statut destination, le technicien, la date et les notes
   - Les détails des statuts sont enrichis avec les informations de la table de référence (code, label, couleur)
+- **Filtre d'impression**: Nouveau paramètre `printed` pour `GET /interventions`
+  - Permet de filtrer les interventions imprimées (`printed=true`) ou non imprimées (`printed=false`)
+  - Omission du paramètre retourne toutes les interventions (comportement par défaut)
 
 ### Corrections
 
@@ -24,6 +45,15 @@ Toutes les modifications importantes de l'API sont documentées ici.
 - Ajout de la méthode `_safe_int_value()` pour gérer proprement la conversion des valeurs de statut
 - Les status logs sont chargés automatiquement pour les détails d'intervention mais pas dans les listes (optimisation performance)
 - Schéma `InterventionOut` étendu avec le champ `status_logs: List[InterventionStatusLogOut]`
+- **Validation des dates**: Nouveau validateur centralisé `validate_date()` dans `api/utils/validators.py`
+  - Rejette les dates invalides (ex: 2026-01-36)
+  - Vérifie la plage d'années (1900-2100)
+  - Support des formats: date seule "YYYY-MM-DD", datetime complet "YYYY-MM-DDTHH:MM:SS", avec timezone "YYYY-MM-DDTHH:MM:SS.microsZ"
+  - Réutilisable dans tous les endpoints
+- **Validation des actions d'intervention**:
+  - `complexity_anotation` est maintenant optionnel par défaut, mais obligatoire si `complexity_score > 5`
+  - `created_at` est maintenant optionnel lors de la création - utilise automatiquement `now()` si omis
+  - Permet de backdater les actions (un technicien peut saisir une action plusieurs jours après l'intervention)
 
 ---
 

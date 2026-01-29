@@ -1,5 +1,7 @@
 from typing import Dict, Any
+from datetime import datetime
 from api.utils.sanitizer import strip_html
+from api.utils.validators import validate_date
 from api.complexity_factors.repo import ComplexityFactorRepository
 from api.errors.exceptions import NotFoundError
 
@@ -41,8 +43,7 @@ class InterventionActionValidator:
             'time_spent',
             'action_subcategory',
             'tech',
-            'complexity_score',
-            'complexity_anotation'
+            'complexity_score'
         ]
 
         missing = [
@@ -52,17 +53,17 @@ class InterventionActionValidator:
                 f"Champs obligatoires manquants: {', '.join(missing)}")
 
     @staticmethod
-    def validate_complexity_anotation(anotation: str) -> str:
-        """Valide que complexity_anotation est un code existant en base"""
-        if anotation is None:
-            raise ValueError("complexity_anotation est obligatoire")
+    def validate_complexity_anotation(anotation: str | None) -> str | None:
+        """Valide que complexity_anotation est un code existant en base (si fourni)"""
+        if anotation is None or anotation == "":
+            return None
 
         if not isinstance(anotation, str):
             raise ValueError("complexity_anotation doit être un code (string)")
 
         code = anotation.strip()
         if not code:
-            raise ValueError("complexity_anotation ne peut pas être vide")
+            return None
 
         repo = ComplexityFactorRepository()
         try:
@@ -72,6 +73,16 @@ class InterventionActionValidator:
                 f"complexity_anotation contient un facteur inconnu: {code}") from exc
 
         return code
+
+    @staticmethod
+    def validate_complexity_with_factor(complexity_score: int, complexity_anotation: str | None) -> None:
+        """
+        Valide que si complexity_score > 5, un facteur de complexité valide est renseigné
+        """
+        if complexity_score > 5 and (not complexity_anotation or not complexity_anotation.strip()):
+            raise ValueError(
+                "Un facteur de complexité (complexity_anotation) est obligatoire pour un score de complexité supérieur à 5"
+            )
 
     @staticmethod
     def sanitize_description(description: str) -> str:
@@ -105,8 +116,21 @@ class InterventionActionValidator:
         # Valide complexity_score
         cls.validate_complexity_score(action_data['complexity_score'])
 
-        # Valide complexity_anotation
+        # Valide complexity_anotation (si fourni)
         action_data['complexity_anotation'] = cls.validate_complexity_anotation(
-            action_data['complexity_anotation'])
+            action_data.get('complexity_anotation'))
+
+        # Valide que si score > 5, un facteur de complexité est obligatoire
+        cls.validate_complexity_with_factor(
+            action_data['complexity_score'],
+            action_data.get('complexity_anotation')
+        )
+
+        # Valide et normalise created_at (utilise now() si None)
+        created_at = action_data.get('created_at')
+        if created_at is None:
+            action_data['created_at'] = datetime.now()
+        else:
+            action_data['created_at'] = validate_date(created_at, 'created_at')
 
         return action_data

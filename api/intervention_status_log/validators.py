@@ -1,5 +1,6 @@
 from typing import Dict, Any
 from api.utils.sanitizer import strip_html
+from api.utils.validators import validate_date
 from api.intervention_status.repo import InterventionStatusRepository
 from api.errors.exceptions import NotFoundError
 
@@ -95,6 +96,9 @@ class InterventionStatusLogValidator:
         """
         # Vérifie les champs obligatoires
         cls.validate_required_fields(log_data)
+
+        # Valide la date
+        log_data['date'] = validate_date(log_data.get('date'), 'date')
 
         # Valide que l'intervention existe et récupère ses données
         intervention = cls.validate_intervention_exists(str(log_data['intervention_id']))

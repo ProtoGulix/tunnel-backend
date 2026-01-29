@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, Union
 from datetime import datetime
 from uuid import UUID
 
@@ -22,7 +22,7 @@ class InterventionStatusLogIn(BaseModel):
     status_from: Optional[str] = None  # Peut être null pour premier changement
     status_to: str
     technician_id: UUID
-    date: datetime
+    date: Union[str, datetime]  # Accepte string ou datetime, validator convertira
     notes: Optional[str] = None
 
     class Config:

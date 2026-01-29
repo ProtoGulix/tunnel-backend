@@ -163,12 +163,17 @@ class InterventionActionRepository:
             action_id = str(uuid4())
             now = datetime.now()
             # Persist complexity as JSON object {code: true} to match DB json type
-            complexity_json = {validated_data['complexity_anotation']: True}
+            # Si complexity_anotation est None, stocker None au lieu d'un objet JSON
+            complexity_anotation = validated_data.get('complexity_anotation')
+            complexity_json = {complexity_anotation: True} if complexity_anotation else None
+
+            # Utilise created_at du validator (qui utilise now() si None)
+            created_at = validated_data.get('created_at', now)
 
             cur.execute(
                 """
-                INSERT INTO intervention_action 
-                (id, intervention_id, description, time_spent, action_subcategory, 
+                INSERT INTO intervention_action
+                (id, intervention_id, description, time_spent, action_subcategory,
                  tech, complexity_score, complexity_anotation, created_at, updated_at)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING *
@@ -182,7 +187,7 @@ class InterventionActionRepository:
                     validated_data['tech'],
                     validated_data['complexity_score'],
                     complexity_json,
-                    now,
+                    created_at,
                     now
                 )
             )
