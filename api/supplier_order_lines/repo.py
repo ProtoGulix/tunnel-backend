@@ -239,6 +239,24 @@ class SupplierOrderLineRepository:
                         )
                     )
 
+                # Règle métier: une seule ligne sélectionnée par purchase_request
+                # Si is_selected = true, désélectionne les autres lignes liées aux mêmes PR
+                if data.get('is_selected') is True:
+                    pr_ids = [str(pr['purchase_request_id']) for pr in purchase_requests]
+                    cur.execute(
+                        """
+                        UPDATE supplier_order_line
+                        SET is_selected = false
+                        WHERE id != %s
+                        AND id IN (
+                            SELECT DISTINCT supplier_order_line_id
+                            FROM supplier_order_line_purchase_request
+                            WHERE purchase_request_id = ANY(%s)
+                        )
+                        """,
+                        (line_id, pr_ids)
+                    )
+
             conn.commit()
         except Exception as e:
             conn.rollback()
@@ -282,6 +300,28 @@ class SupplierOrderLineRepository:
                     WHERE id = %s
                 """
                 cur.execute(query, params)
+
+            # Règle métier: une seule ligne sélectionnée par purchase_request
+            # Si is_selected = true, désélectionne les autres lignes liées aux mêmes PR
+            if data.get('is_selected') is True:
+                cur.execute(
+                    """
+                    UPDATE supplier_order_line
+                    SET is_selected = false
+                    WHERE id != %s
+                    AND id IN (
+                        SELECT DISTINCT sol2.id
+                        FROM supplier_order_line sol2
+                        JOIN supplier_order_line_purchase_request solpr2 ON sol2.id = solpr2.supplier_order_line_id
+                        WHERE solpr2.purchase_request_id IN (
+                            SELECT purchase_request_id
+                            FROM supplier_order_line_purchase_request
+                            WHERE supplier_order_line_id = %s
+                        )
+                    )
+                    """,
+                    (line_id, line_id)
+                )
 
             # Met à jour les liens purchase_requests si fournis
             if 'purchase_requests' in data:

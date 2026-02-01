@@ -78,10 +78,13 @@ class PurchaseRequestRepository:
                     solpr.created_at,
                     sol.supplier_order_id, sol.stock_item_id, sol.quantity,
                     sol.unit_price, sol.total_price, sol.quantity_received, sol.is_selected,
-                    si.name as stock_item_name, si.ref as stock_item_ref
+                    sol.quote_received, sol.quote_price,
+                    si.name as stock_item_name, si.ref as stock_item_ref,
+                    so.status as supplier_order_status, so.order_number as supplier_order_number
                 FROM supplier_order_line_purchase_request solpr
                 JOIN supplier_order_line sol ON solpr.supplier_order_line_id = sol.id
                 LEFT JOIN stock_item si ON sol.stock_item_id = si.id
+                LEFT JOIN supplier_order so ON sol.supplier_order_id = so.id
                 WHERE solpr.purchase_request_id = %s
                 ORDER BY solpr.created_at ASC
                 """,
@@ -93,7 +96,7 @@ class PurchaseRequestRepository:
             for row in rows:
                 line = dict(zip(cols, row))
                 # Convertit Decimal en float
-                for key in ['unit_price', 'total_price']:
+                for key in ['unit_price', 'total_price', 'quote_price']:
                     if line.get(key) is not None and isinstance(line[key], Decimal):
                         line[key] = float(line[key])
                 results.append(line)

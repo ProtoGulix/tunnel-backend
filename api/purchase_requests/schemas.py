@@ -12,14 +12,18 @@ class LinkedOrderLine(BaseModel):
     supplier_order_line_id: UUID
     quantity_allocated: int = Field(..., description="Quantité allouée à cette demande")
     supplier_order_id: UUID
+    supplier_order_status: Optional[str] = Field(default=None, description="Statut de la commande fournisseur")
+    supplier_order_number: Optional[str] = Field(default=None, description="Numéro de la commande fournisseur")
     stock_item_id: UUID
     stock_item_name: Optional[str] = Field(default=None)
     stock_item_ref: Optional[str] = Field(default=None)
     quantity: int = Field(..., description="Quantité totale de la ligne")
     unit_price: Optional[float] = Field(default=None)
     total_price: Optional[float] = Field(default=None)
+    quote_received: Optional[bool] = Field(default=None, description="Devis reçu")
+    quote_price: Optional[float] = Field(default=None, description="Prix du devis")
     quantity_received: Optional[int] = Field(default=0)
-    is_selected: Optional[bool] = Field(default=None)
+    is_selected: Optional[bool] = Field(default=None, description="Ligne sélectionnée pour commande")
     created_at: Optional[datetime] = Field(default=None)
 
     class Config:

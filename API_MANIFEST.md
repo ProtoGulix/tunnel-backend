@@ -1,6 +1,6 @@
 # API Manifest
 
-Last updated: 2026-01-29 (v1.1.7 - Supplier Orders endpoint)
+Last updated: 2026-01-29 (v1.1.12 - Stock Item Suppliers endpoint)
 
 ## Endpoints
 
@@ -239,10 +239,13 @@ Last updated: 2026-01-29 (v1.1.7 - Supplier Orders endpoint)
     - `supplier_order_id`, `stock_item_id`, `quantity` are required
     - `total_price` is auto-calculated by trigger (quantity * unit_price)
     - `purchase_requests` is optional - links to purchase requests via M2M table
+    - **Only one line can be selected per purchase_request**: when `is_selected = true`, all other lines linked to the same purchase_request(s) are automatically deselected
   - Returns: Full line with stock_item and purchase_requests
 - `PUT /supplier_order_lines/{id}` - Update an existing line (Auth: Optional if AUTH_DISABLED)
   - Body: Same as POST
-  - Note: If `purchase_requests` is provided, existing links are replaced
+  - Notes:
+    - If `purchase_requests` is provided, existing links are replaced
+    - **Only one line can be selected per purchase_request**: when `is_selected = true`, all other lines linked to the same purchase_request(s) are automatically deselected
 - `DELETE /supplier_order_lines/{id}` - Delete a line (cascades to M2M) (Auth: Optional if AUTH_DISABLED)
 - `POST /supplier_order_lines/{id}/purchase_requests` - Link a purchase request to a line (Auth: Optional if AUTH_DISABLED)
   - Body: `{ "purchase_request_id": "uuid", "quantity": int }`
@@ -280,6 +283,77 @@ Last updated: 2026-01-29 (v1.1.7 - Supplier Orders endpoint)
   - Body: Same as POST
   - Note: `order_number` cannot be modified
 - `DELETE /supplier_orders/{id}` - Delete an order (cascades to lines) (Auth: Optional if AUTH_DISABLED)
+
+### Suppliers
+
+- `GET /suppliers` - List all suppliers with optional filters (Auth: Optional if AUTH_DISABLED)
+  - Query params:
+    - `skip` (default 0), `limit` (default 100, max 1000)
+    - `is_active` (boolean, optional) - Filter by active status
+    - `search` (string, optional) - Search by name, code, or contact_name (ILIKE)
+  - Returns: Array of suppliers (lightweight schema) ordered by name ASC
+- `GET /suppliers/{id}` - Get specific supplier by ID (Auth: Optional if AUTH_DISABLED)
+- `GET /suppliers/code/{code}` - Get supplier by code (Auth: Optional if AUTH_DISABLED)
+- `POST /suppliers` - Create a new supplier (Auth: Optional if AUTH_DISABLED)
+  - Body (json):
+    ```json
+    {
+      "name": "string",
+      "code": "string|null",
+      "contact_name": "string|null",
+      "email": "string|null",
+      "phone": "string|null",
+      "address": "string|null",
+      "notes": "string|null",
+      "is_active": "boolean|null (default: true)"
+    }
+    ```
+  - Business rules:
+    - `name` is required
+    - `updated_at` is auto-updated by database trigger
+  - Returns: Full supplier with generated ID
+- `PUT /suppliers/{id}` - Update an existing supplier (Auth: Optional if AUTH_DISABLED)
+  - Body: Same as POST
+- `DELETE /suppliers/{id}` - Delete a supplier (Auth: Optional if AUTH_DISABLED)
+
+### Stock Item Suppliers
+
+- `GET /stock_item_suppliers` - List all supplier references with optional filters (Auth: Optional if AUTH_DISABLED)
+  - Query params:
+    - `skip` (default 0), `limit` (default 100, max 1000)
+    - `stock_item_id` (uuid, optional) - Filter by stock item
+    - `supplier_id` (uuid, optional) - Filter by supplier
+    - `is_preferred` (boolean, optional) - Filter by preferred status
+  - Returns: Array of references (lightweight schema) ordered by is_preferred DESC, supplier name ASC
+- `GET /stock_item_suppliers/{id}` - Get specific reference by ID (Auth: Optional if AUTH_DISABLED)
+- `GET /stock_item_suppliers/stock_item/{stock_item_id}` - Get all supplier references for a stock item (Auth: Optional if AUTH_DISABLED)
+- `GET /stock_item_suppliers/supplier/{supplier_id}` - Get all stock item references for a supplier (Auth: Optional if AUTH_DISABLED)
+- `POST /stock_item_suppliers` - Create a new supplier reference (Auth: Optional if AUTH_DISABLED)
+  - Body (json):
+    ```json
+    {
+      "stock_item_id": "uuid",
+      "supplier_id": "uuid",
+      "supplier_ref": "string",
+      "unit_price": "float|null",
+      "min_order_quantity": "int|null (default: 1)",
+      "delivery_time_days": "int|null",
+      "is_preferred": "boolean|null (default: false)",
+      "manufacturer_item_id": "uuid|null"
+    }
+    ```
+  - Business rules:
+    - `stock_item_id`, `supplier_id`, `supplier_ref` are required
+    - Unique constraint on (stock_item_id, supplier_id)
+    - **Only one preferred supplier per stock_item**: when `is_preferred = true`, other references for the same stock_item are automatically set to `is_preferred = false`
+    - `supplier_refs_count` on stock_item is updated by database trigger
+  - Returns: Full reference with stock_item and supplier details
+- `PUT /stock_item_suppliers/{id}` - Update an existing reference (Auth: Optional if AUTH_DISABLED)
+  - Body: Same as POST
+  - Note: Same `is_preferred` business rule applies
+- `POST /stock_item_suppliers/{id}/set_preferred` - Set this reference as preferred for the stock item (Auth: Optional if AUTH_DISABLED)
+  - Note: All other references for the same stock_item are set to `is_preferred = false`
+- `DELETE /stock_item_suppliers/{id}` - Delete a supplier reference (Auth: Optional if AUTH_DISABLED)
 
 ## Schemas
 
@@ -673,18 +747,28 @@ Note:
 
 ### LinkedOrderLine (embedded in PurchaseRequestOut)
 
+Note: Includes all fields needed for purchase request status calculation:
+- `quote_received`: devis reçu pour cette ligne
+- `quote_price`: prix du devis
+- `is_selected`: ligne sélectionnée pour passer commande
+- `supplier_order_status`: statut de la commande fournisseur (OPEN, SENT, PARTIAL, RECEIVED, CLOSED)
+
 ```json
 {
   "id": "uuid",
   "supplier_order_line_id": "uuid",
   "quantity_allocated": "int",
   "supplier_order_id": "uuid",
+  "supplier_order_status": "string|null",
+  "supplier_order_number": "string|null",
   "stock_item_id": "uuid",
   "stock_item_name": "string|null",
   "stock_item_ref": "string|null",
   "quantity": "int",
   "unit_price": "float|null",
   "total_price": "float|null",
+  "quote_received": "boolean|null",
+  "quote_price": "float|null",
   "quantity_received": "int|null",
   "is_selected": "boolean|null",
   "created_at": "datetime|null"
@@ -876,6 +960,111 @@ Note: Includes `lines` array with all supplier order lines for this order.
   "ordered_at": "datetime|null",
   "expected_delivery_date": "date|null",
   "line_count": "int|null"
+}
+```
+
+### SupplierIn (POST)
+
+```json
+{
+  "name": "string",
+  "code": "string|null",
+  "contact_name": "string|null",
+  "email": "string|null",
+  "phone": "string|null",
+  "address": "string|null",
+  "notes": "string|null",
+  "is_active": "boolean|null"
+}
+```
+
+### SupplierOut
+
+```json
+{
+  "id": "uuid",
+  "name": "string",
+  "code": "string|null",
+  "contact_name": "string|null",
+  "email": "string|null",
+  "phone": "string|null",
+  "address": "string|null",
+  "notes": "string|null",
+  "is_active": "boolean|null",
+  "created_at": "datetime|null",
+  "updated_at": "datetime|null"
+}
+```
+
+### SupplierListItem (lightweight)
+
+```json
+{
+  "id": "uuid",
+  "name": "string",
+  "code": "string|null",
+  "contact_name": "string|null",
+  "email": "string|null",
+  "phone": "string|null",
+  "is_active": "boolean|null"
+}
+```
+
+### StockItemSupplierIn (POST)
+
+```json
+{
+  "stock_item_id": "uuid",
+  "supplier_id": "uuid",
+  "supplier_ref": "string",
+  "unit_price": "float|null",
+  "min_order_quantity": "int|null",
+  "delivery_time_days": "int|null",
+  "is_preferred": "boolean|null",
+  "manufacturer_item_id": "uuid|null"
+}
+```
+
+### StockItemSupplierOut
+
+Note: Includes enriched `stock_item_name`, `stock_item_ref`, `supplier_name`, `supplier_code`.
+
+```json
+{
+  "id": "uuid",
+  "stock_item_id": "uuid",
+  "supplier_id": "uuid",
+  "supplier_ref": "string",
+  "unit_price": "float|null",
+  "min_order_quantity": "int|null",
+  "delivery_time_days": "int|null",
+  "is_preferred": "boolean|null",
+  "manufacturer_item_id": "uuid|null",
+  "stock_item_name": "string|null",
+  "stock_item_ref": "string|null",
+  "supplier_name": "string|null",
+  "supplier_code": "string|null",
+  "created_at": "datetime|null",
+  "updated_at": "datetime|null"
+}
+```
+
+### StockItemSupplierListItem (lightweight)
+
+```json
+{
+  "id": "uuid",
+  "stock_item_id": "uuid",
+  "supplier_id": "uuid",
+  "supplier_ref": "string",
+  "unit_price": "float|null",
+  "min_order_quantity": "int|null",
+  "delivery_time_days": "int|null",
+  "is_preferred": "boolean|null",
+  "stock_item_name": "string|null",
+  "stock_item_ref": "string|null",
+  "supplier_name": "string|null",
+  "supplier_code": "string|null"
 }
 ```
 
