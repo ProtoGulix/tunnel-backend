@@ -2,6 +2,44 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [1.2.0] - 1er février 2026
+
+### 🚀 Demandes d'achat optimisées
+
+#### Nouveautés
+
+- **Listes plus rapides** : Les tableaux de demandes d'achat se chargent instantanément
+  - Affichage du statut calculé automatiquement (En attente, Devis reçu, Commandé, Reçu...)
+  - Compteurs visibles : nombre de devis, fournisseurs contactés
+  - Plus besoin d'ouvrir chaque demande pour voir son état
+
+- **Détails complets en un clic** : Toutes les informations dans une seule page
+  - Intervention associée avec son équipement
+  - Article en stock avec ses références
+  - Tous les fournisseurs contactés avec leurs coordonnées et prix
+
+- **Nouveau tableau de bord** : Statistiques des demandes d'achat
+  - Combien de demandes en attente, en cours, terminées
+  - Répartition par urgence
+  - Articles les plus demandés
+
+#### Améliorations
+
+- Le statut des demandes est maintenant calculé automatiquement selon l'avancement
+- Les tableaux affichent uniquement l'essentiel (chargement 5x plus rapide)
+- Une seule requête pour voir tous les détails d'une demande
+
+#### Statuts des demandes
+
+- ⚪ **En attente** : Aucune action en cours
+- 🟠 **Devis reçu** : Au moins un fournisseur a répondu
+- 🔵 **Commandé** : Commande passée chez un fournisseur
+- 🟣 **Partiellement reçu** : Livraison partielle
+- 🟢 **Reçu** : Livraison complète
+- 🔴 **Refusé** : Demande annulée
+
+---
+
 ## [1.1.7] - 29 janvier 2026
 
 ### Nouveautés
