@@ -2,6 +2,106 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [1.2.6] - 4 février 2026
+
+### Corrections
+
+- **Export CSV/Email** : Correction du bug qui empêchait l'affichage des lignes de commande
+  - Les exports incluent maintenant toutes les lignes de la commande fournisseur
+  - Suppression de la jointure incorrecte avec `manufacturer_item` (colonnes inexistantes)
+  - Les informations fabricant sont récupérées depuis `supplier_order_line.manufacturer` et `manufacturer_ref`
+
+---
+
+## [1.2.5] - 3 février 2026
+
+### Améliorations
+
+- **Templates d'export configurables** : Séparation des templates dans [config/export_templates.py](config/export_templates.py)
+  - Templates CSV : En-têtes, format de ligne, nom de fichier
+  - Templates email : Sujet, corps texte, corps HTML
+  - Commentaires explicatifs pour faciliter les personnalisations
+  - Modification des templates sans toucher au code des routes
+  - Contraintes documentées (HTML email, caractères spéciaux, etc.)
+
+---
+
+## [1.2.4] - 3 février 2026
+
+### 📤 Export des commandes fournisseurs
+
+#### Nouveautés
+
+- **Export CSV** : Téléchargez une commande au format tableur
+  - Articles sélectionnés avec références, spécifications et quantités
+  - Prêt à imprimer ou envoyer par email
+  - Demandes d'achat liées visibles pour chaque ligne
+
+- **Génération d'email** : Créez un email de commande en un clic
+  - Sujet et corps de l'email pré-remplis
+  - Version texte et HTML disponibles
+  - Email du fournisseur inclus automatiquement
+
+#### Nouveaux endpoints
+
+- `POST /supplier_orders/{id}/export/csv` - Télécharge le CSV
+- `POST /supplier_orders/{id}/export/email` - Génère le contenu email
+
+---
+
+## [1.2.3] - 3 février 2026
+
+### ⏱️ Suivi de l'âge des commandes fournisseurs
+
+#### Nouveautés
+
+- **Indicateurs d'âge** : Les commandes affichent maintenant leur ancienneté
+  - `age_days` : nombre de jours depuis la création
+  - `age_color` : indicateur visuel (gray < 7j, orange 7-14j, red > 14j)
+  - `is_blocking` : commande bloquante si en attente depuis plus de 7 jours
+
+#### Statuts disponibles
+
+- `OPEN` : Commande créée, en attente d'envoi
+- `SENT` : Commande envoyée au fournisseur
+- `ACK` : Accusé de réception du fournisseur
+- `RECEIVED` : Livraison reçue
+- `CLOSED` : Commande clôturée
+- `CANCELLED` : Commande annulée
+
+---
+
+## [1.2.2] - 3 février 2026
+
+### 📦 Commandes fournisseurs enrichies
+
+#### Nouveauté
+
+- **Informations fournisseur incluses** : Les commandes fournisseurs affichent maintenant les coordonnées du fournisseur
+  - Nom, code, contact, email, téléphone
+  - Plus besoin de faire une requête supplémentaire pour avoir les infos du fournisseur
+
+---
+
+## [1.2.1] - 3 février 2026
+
+### 🔄 Simplification du statut des demandes d'achat
+
+#### Changement
+
+- **Un seul statut** : Le champ `status` (manuel) a été supprimé au profit de `derived_status` (calculé automatiquement)
+  - Évite les incohérences entre deux sources de vérité
+  - Le statut reflète toujours l'état réel de la demande
+  - Plus besoin de mettre à jour manuellement le statut
+
+#### Impact technique
+
+- `PurchaseRequestOut.status` → supprimé
+- `PurchaseRequestOut.derived_status` → obligatoire (non nullable)
+- Le champ `status` n'est plus modifiable via `PUT /purchase_requests/{id}`
+
+---
+
 ## [1.2.0] - 1er février 2026
 
 ### 🚀 Demandes d'achat optimisées
@@ -31,7 +131,8 @@ Toutes les modifications importantes de l'API sont documentées ici.
 
 #### Statuts des demandes
 
-- ⚪ **En attente** : Aucune action en cours
+- 🟡 **À qualifier** : Pas de référence stock normalisée (besoin de qualification)
+- ⚪ **En attente** : Prête à être dispatchée aux fournisseurs
 - 🟠 **Devis reçu** : Au moins un fournisseur a répondu
 - 🔵 **Commandé** : Commande passée chez un fournisseur
 - 🟣 **Partiellement reçu** : Livraison partielle

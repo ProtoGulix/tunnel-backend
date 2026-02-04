@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 
 # Mapping statuts dérivés
 DERIVED_STATUS_CONFIG = {
+    'TO_QUALIFY': {'label': 'À qualifier', 'color': '#F59E0B'},  # Pas de référence normalisée
     'OPEN': {'label': 'En attente', 'color': '#6B7280'},
     'QUOTED': {'label': 'Devis reçu', 'color': '#FFA500'},
     'ORDERED': {'label': 'Commandé', 'color': '#3B82F6'},
@@ -172,6 +173,15 @@ class PurchaseRequestRepository:
                 pr = self._map_with_stock_item(dict(zip(cols, row)))
                 pr['order_lines'] = self._get_linked_order_lines(
                     str(pr['id']), conn)
+
+                # Calcule le statut dérivé
+                stock_item_id = pr.get('stock_item_id')
+                status_code = self._derive_status_from_order_lines(
+                    pr['order_lines'],
+                    stock_item_id=str(stock_item_id) if stock_item_id else None
+                )
+                pr['derived_status'] = self._map_derived_status(status_code)
+
                 results.append(pr)
             return results
         except Exception as e:
@@ -206,6 +216,15 @@ class PurchaseRequestRepository:
             result = self._map_with_stock_item(dict(zip(cols, row)))
             result['order_lines'] = self._get_linked_order_lines(
                 request_id, conn)
+
+            # Calcule le statut dérivé
+            stock_item_id = result.get('stock_item_id')
+            status_code = self._derive_status_from_order_lines(
+                result['order_lines'],
+                stock_item_id=str(stock_item_id) if stock_item_id else None
+            )
+            result['derived_status'] = self._map_derived_status(status_code)
+
             return result
         except NotFoundError:
             raise
@@ -240,6 +259,15 @@ class PurchaseRequestRepository:
                 pr = self._map_with_stock_item(dict(zip(cols, row)))
                 pr['order_lines'] = self._get_linked_order_lines(
                     str(pr['id']), conn)
+
+                # Calcule le statut dérivé
+                stock_item_id = pr.get('stock_item_id')
+                status_code = self._derive_status_from_order_lines(
+                    pr['order_lines'],
+                    stock_item_id=str(stock_item_id) if stock_item_id else None
+                )
+                pr['derived_status'] = self._map_derived_status(status_code)
+
                 results.append(pr)
             return results
         except Exception as e:
@@ -305,9 +333,9 @@ class PurchaseRequestRepository:
             cur = conn.cursor()
             now = datetime.now()
 
-            # Champs modifiables
+            # Champs modifiables (status supprimé car calculé automatiquement)
             updatable_fields = [
-                'status', 'stock_item_id', 'item_label', 'quantity', 'unit',
+                'stock_item_id', 'item_label', 'quantity', 'unit',
                 'requested_by', 'urgency', 'reason', 'notes', 'workshop',
                 'intervention_id', 'quantity_requested', 'quantity_approved',
                 'urgent', 'requester_name', 'approver_name', 'approved_at'
@@ -377,8 +405,27 @@ class PurchaseRequestRepository:
             'color': config['color']
         }
 
-    def _derive_status_from_order_lines(self, order_lines: List[Dict]) -> str:
-        """Calcule le statut dérivé basé sur les order_lines"""
+    def _derive_status_from_order_lines(
+        self,
+        order_lines: List[Dict],
+        stock_item_id: Optional[str] = None
+    ) -> str:
+        """
+        Calcule le statut dérivé basé sur les order_lines et stock_item_id.
+
+        Règles métier :
+        - TO_QUALIFY : Pas de référence stock normalisée (stock_item_id is NULL)
+        - OPEN : En attente de dispatch (pas d'order_lines)
+        - QUOTED : Au moins un devis reçu
+        - ORDERED : Au moins une ligne sélectionnée pour commande
+        - PARTIAL : Livraison partielle
+        - RECEIVED : Livraison complète
+        """
+        # Règle 1 : Pas de référence normalisée = À qualifier
+        if stock_item_id is None:
+            return 'TO_QUALIFY'
+
+        # Règle 2 : Pas de lignes = En attente de dispatch
         if not order_lines:
             return 'OPEN'
 
@@ -436,6 +483,7 @@ class PurchaseRequestRepository:
                     pr.item_label,
                     pr.quantity,
                     pr.unit,
+                    pr.stock_item_id,
 
                     -- Infos directes (pas d'objets imbriqués)
                     si.ref AS stock_item_ref,
@@ -487,12 +535,16 @@ class PurchaseRequestRepository:
                 item = dict(zip(cols, row))
 
                 # Calcule le statut dérivé
+                stock_item_id = item.pop('stock_item_id', None)
                 quotes_count = item.get('quotes_count', 0)
                 selected_count = item.get('selected_count', 0)
                 total_allocated = item.pop('total_allocated', 0)
                 total_received = item.pop('total_received', 0)
 
-                if total_received >= total_allocated and total_allocated > 0:
+                # Règle 1 : Pas de référence normalisée = À qualifier
+                if stock_item_id is None:
+                    status_code = 'TO_QUALIFY'
+                elif total_received >= total_allocated and total_allocated > 0:
                     status_code = 'RECEIVED'
                 elif total_received > 0:
                     status_code = 'PARTIAL'
@@ -605,8 +657,12 @@ class PurchaseRequestRepository:
             order_lines = self._get_linked_order_lines_detail(request_id, conn)
             data['order_lines'] = order_lines
 
-            # Calcule le statut dérivé
-            status_code = self._derive_status_from_order_lines(order_lines)
+            # Calcule le statut dérivé (passe stock_item_id pour règle "À qualifier")
+            stock_item_id = data.get('stock_item_id')
+            status_code = self._derive_status_from_order_lines(
+                order_lines,
+                stock_item_id=str(stock_item_id) if stock_item_id else None
+            )
             data['derived_status'] = self._map_derived_status(status_code)
 
             logger.info("Fetched purchase request detail: %s", request_id)

@@ -4,13 +4,14 @@ from datetime import datetime, date
 from uuid import UUID
 
 from api.stock_items.schemas import StockItemListItem
+from api.suppliers.schemas import SupplierListItem
 
 
 # ========== Schémas optimisés v1.2.0 ==========
 
 class DerivedStatus(BaseModel):
     """Statut dérivé calculé côté backend"""
-    code: str = Field(..., description="Code statut (OPEN, QUOTED, ORDERED, PARTIAL, RECEIVED, REJECTED)")
+    code: str = Field(..., description="Code statut (TO_QUALIFY, OPEN, QUOTED, ORDERED, PARTIAL, RECEIVED, REJECTED)")
     label: str = Field(..., description="Label lisible")
     color: str = Field(..., description="Couleur hexadécimale")
 
@@ -54,19 +55,6 @@ class PurchaseRequestListItem(BaseModel):
         from_attributes = True
 
 
-class SupplierInfo(BaseModel):
-    """Informations fournisseur enrichies"""
-    id: UUID
-    name: str
-    code: Optional[str] = Field(default=None)
-    contact_name: Optional[str] = Field(default=None)
-    email: Optional[str] = Field(default=None)
-    phone: Optional[str] = Field(default=None)
-
-    class Config:
-        from_attributes = True
-
-
 class LinkedOrderLineDetail(BaseModel):
     """Ligne de commande avec fournisseur enrichi (pour détails complets)"""
     id: UUID
@@ -79,7 +67,7 @@ class LinkedOrderLineDetail(BaseModel):
     supplier_order_status: Optional[str] = Field(default=None)
 
     # Fournisseur enrichi
-    supplier: Optional[SupplierInfo] = Field(default=None)
+    supplier: Optional[SupplierListItem] = Field(default=None)
 
     # Détails ligne
     unit_price: Optional[float] = Field(default=None)
@@ -252,7 +240,8 @@ class PurchaseRequestIn(BaseModel):
 class PurchaseRequestOut(BaseModel):
     """Schéma de sortie pour une demande d'achat"""
     id: UUID
-    status: str = Field(default="open", description="Statut de la demande")
+    derived_status: DerivedStatus = Field(
+        ..., description="Statut dérivé calculé (TO_QUALIFY, OPEN, QUOTED, ORDERED, PARTIAL, RECEIVED, REJECTED)")
     stock_item_id: Optional[UUID] = Field(default=None)
     stock_item: Optional[StockItemListItem] = Field(
         default=None, description="Détail de l'article en stock")

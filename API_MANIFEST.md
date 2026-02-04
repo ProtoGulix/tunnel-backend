@@ -1,6 +1,6 @@
 # API Manifest
 
-Last updated: 2026-01-29 (v1.1.12 - Stock Item Suppliers endpoint)
+Last updated: 2026-02-04 (v1.2.6 - Fix: export email/CSV includes all order lines)
 
 ## Endpoints
 
@@ -123,15 +123,25 @@ Last updated: 2026-01-29 (v1.1.12 - Stock Item Suppliers endpoint)
 
 ### Purchase Requests
 
-- `GET /purchase_requests` - List all purchase requests with optional filters (Auth: Optional if AUTH_DISABLED)
+- `GET /purchase_requests` - [LEGACY] List all purchase requests with optional filters (Auth: Optional if AUTH_DISABLED)
   - Query params:
     - `skip` (default 0), `limit` (default 100, max 1000)
-    - `status` (string, optional) - Filter by status (open, approved, ordered, received, rejected)
+    - `status` (string, optional) - Filter by derived status (TO_QUALIFY, OPEN, QUOTED, ORDERED, PARTIAL, RECEIVED, REJECTED)
     - `intervention_id` (uuid, optional) - Filter by linked intervention
     - `urgency` (string, optional) - Filter by urgency level (normal, high, critical)
-  - Returns: Array of purchase requests ordered by created_at DESC
-- `GET /purchase_requests/{id}` - Get specific purchase request by ID (Auth: Optional if AUTH_DISABLED)
-- `GET /purchase_requests/intervention/{intervention_id}` - Get all purchase requests linked to an intervention (Auth: Optional if AUTH_DISABLED)
+  - Returns: Array of purchase requests with `derived_status` ordered by created_at DESC
+- `GET /purchase_requests/list` - [v1.2.0] Liste optimisée légère pour tableaux (Auth: Optional if AUTH_DISABLED)
+  - Query params: same as above
+  - Returns: `PurchaseRequestListItem[]` - payload ~95% plus léger
+- `GET /purchase_requests/detail/{id}` - [v1.2.0] Détail complet avec contexte enrichi (Auth: Optional if AUTH_DISABLED)
+  - Returns: `PurchaseRequestDetail` avec intervention, stock_item, order_lines enrichis
+- `GET /purchase_requests/stats` - [v1.2.0] Statistiques agrégées pour dashboards (Auth: Optional if AUTH_DISABLED)
+  - Query params: `start_date`, `end_date`, `group_by`
+  - Returns: `PurchaseRequestStats`
+- `GET /purchase_requests/{id}` - [LEGACY] Get specific purchase request by ID (Auth: Optional if AUTH_DISABLED)
+- `GET /purchase_requests/intervention/{intervention_id}` - [LEGACY] Get all purchase requests linked to an intervention (Auth: Optional if AUTH_DISABLED)
+- `GET /purchase_requests/intervention/{intervention_id}/optimized` - [v1.2.0] Filtre par intervention avec choix de granularité (Auth: Optional if AUTH_DISABLED)
+  - Query params: `view` (list|full)
 - `POST /purchase_requests` - Create a new purchase request (Auth: Optional if AUTH_DISABLED)
   - Body (json):
     ```json
@@ -155,11 +165,12 @@ Last updated: 2026-01-29 (v1.1.12 - Stock Item Suppliers endpoint)
     - `item_label` and `quantity` are required
     - `quantity` must be > 0
     - `intervention_id` is optional - links the request to an intervention/action
-    - Default status is "open"
-  - Returns: Full purchase request with generated ID and timestamps
+    - `derived_status` is calculated automatically based on progress
+  - Returns: Full purchase request with generated ID, timestamps and `derived_status`
 - `PUT /purchase_requests/{id}` - Update an existing purchase request (Auth: Optional if AUTH_DISABLED)
   - Body: Same as POST (all fields optional except required ones)
   - Additional updatable fields: `quantity_approved`, `approver_name`, `approved_at`
+  - Note: `status` is no longer manually updatable - use `derived_status` which is calculated automatically
 - `DELETE /purchase_requests/{id}` - Delete a purchase request (Auth: Optional if AUTH_DISABLED)
 
 ### Stock Items
@@ -237,7 +248,7 @@ Last updated: 2026-01-29 (v1.1.12 - Stock Item Suppliers endpoint)
     ```
   - Business rules:
     - `supplier_order_id`, `stock_item_id`, `quantity` are required
-    - `total_price` is auto-calculated by trigger (quantity * unit_price)
+    - `total_price` is auto-calculated by trigger (quantity \* unit_price)
     - `purchase_requests` is optional - links to purchase requests via M2M table
     - **Only one line can be selected per purchase_request**: when `is_selected = true`, all other lines linked to the same purchase_request(s) are automatically deselected
   - Returns: Full line with stock_item and purchase_requests
@@ -283,6 +294,15 @@ Last updated: 2026-01-29 (v1.1.12 - Stock Item Suppliers endpoint)
   - Body: Same as POST
   - Note: `order_number` cannot be modified
 - `DELETE /supplier_orders/{id}` - Delete an order (cascades to lines) (Auth: Optional if AUTH_DISABLED)
+- `POST /supplier_orders/{id}/export/csv` - Export order as CSV file (Auth: Optional if AUTH_DISABLED)
+  - Returns: CSV file with headers: Article, Référence, Spécification, Fabricant, Réf. Fabricant, Quantité, Unité, Prix unitaire, Prix total, Demandes liées
+  - Exports all lines of the order
+  - Content-Type: text/csv
+  - **Configuration**: Templates modifiables dans `config/export_templates.py` (headers, format, filename)
+- `POST /supplier_orders/{id}/export/email` - Generate email content for order (Auth: Optional if AUTH_DISABLED)
+  - Returns: `EmailExportOut` with subject, body_text, body_html, supplier_email
+  - Includes all lines of the order
+  - **Configuration**: Templates modifiables dans `config/export_templates.py` (subject, body_text, body_html)
 
 ### Suppliers
 
@@ -362,6 +382,7 @@ Last updated: 2026-01-29 (v1.1.12 - Stock Item Suppliers endpoint)
 Note: `GET /interventions` returns `actions: []` and `status_logs: []` (empty), `GET /interventions/{id}` returns full actions and status logs.
 
 For `GET /interventions/{id}`:
+
 - The `equipements` object is fetched via `EquipementRepository.get_by_id()` to ensure schema consistency
 - The `status_logs` array is fetched via `InterventionStatusLogRepository.get_by_intervention()` to include complete status change history
 
@@ -487,6 +508,7 @@ Note: Status logs are automatically included when fetching a specific interventi
 ### InterventionActionIn (POST)
 
 Notes:
+
 - `complexity_anotation` is optional if `complexity_score` ≤ 5, but required if `complexity_score` > 5
 - `created_at` is optional - defaults to current timestamp if null/omitted, allowing backdating of actions. Supports "YYYY-MM-DD", "YYYY-MM-DDTHH:MM:SS", or with timezone
 
@@ -715,13 +737,19 @@ Query params:
 ### PurchaseRequestOut
 
 Note:
+
+- `derived_status` est calculé automatiquement selon l'avancement (pas de champ `status` manuel)
 - When `stock_item_id` is not null, the `stock_item` object is automatically populated
 - `order_lines` contains all supplier order lines linked via M2M table
 
 ```json
 {
   "id": "uuid",
-  "status": "string",
+  "derived_status": {
+    "code": "TO_QUALIFY|OPEN|QUOTED|ORDERED|PARTIAL|RECEIVED|REJECTED",
+    "label": "string",
+    "color": "string (hex)"
+  },
   "stock_item_id": "uuid|null",
   "stock_item": "StockItemListItem|null",
   "item_label": "string",
@@ -745,9 +773,30 @@ Note:
 }
 ```
 
+### DerivedStatus (embedded in PurchaseRequestOut)
+
+Statut calculé automatiquement basé sur l'avancement de la demande :
+
+- `TO_QUALIFY`: Pas de référence stock normalisée (stock_item_id is null)
+- `OPEN`: En attente de dispatch (aucune ligne de commande)
+- `QUOTED`: Au moins un devis reçu
+- `ORDERED`: Au moins une ligne sélectionnée pour commande
+- `PARTIAL`: Livraison partielle
+- `RECEIVED`: Livraison complète
+- `REJECTED`: Demande annulée
+
+```json
+{
+  "code": "string",
+  "label": "string",
+  "color": "string (hex)"
+}
+```
+
 ### LinkedOrderLine (embedded in PurchaseRequestOut)
 
 Note: Includes all fields needed for purchase request status calculation:
+
 - `quote_received`: devis reçu pour cette ligne
 - `quote_price`: prix du devis
 - `is_selected`: ligne sélectionnée pour passer commande
@@ -845,9 +894,7 @@ Note: Includes all fields needed for purchase request status calculation:
   "quote_received_at": "datetime|null",
   "rejected_reason": "string|null",
   "lead_time_days": "int|null",
-  "purchase_requests": [
-    { "purchase_request_id": "uuid", "quantity": "int" }
-  ]
+  "purchase_requests": [{ "purchase_request_id": "uuid", "quantity": "int" }]
 }
 ```
 
@@ -928,14 +975,22 @@ Note: Includes `stock_item` details and `purchase_requests` linked via M2M table
 
 ### SupplierOrderOut
 
-Note: Includes `lines` array with all supplier order lines for this order.
+Note: Includes `lines` array, `supplier` object, and computed age fields (`age_days`, `age_color`, `is_blocking`).
 
 ```json
 {
   "id": "uuid",
   "order_number": "string",
   "supplier_id": "uuid",
-  "status": "string",
+  "supplier": {
+    "id": "uuid",
+    "name": "string",
+    "code": "string|null",
+    "contact_name": "string|null",
+    "email": "string|null",
+    "phone": "string|null"
+  },
+  "status": "OPEN|SENT|ACK|RECEIVED|CLOSED|CANCELLED",
   "total_amount": "float|null",
   "ordered_at": "datetime|null",
   "expected_delivery_date": "date|null",
@@ -943,6 +998,10 @@ Note: Includes `lines` array with all supplier order lines for this order.
   "notes": "string|null",
   "currency": "float|null",
   "lines": ["SupplierOrderLineListItem"],
+  "line_count": "int",
+  "age_days": "int",
+  "age_color": "gray|orange|red",
+  "is_blocking": "boolean",
   "created_at": "datetime|null",
   "updated_at": "datetime|null"
 }
@@ -950,16 +1009,44 @@ Note: Includes `lines` array with all supplier order lines for this order.
 
 ### SupplierOrderListItem (lightweight)
 
+Note: Includes enriched `supplier` object and computed age fields.
+
 ```json
 {
   "id": "uuid",
   "order_number": "string",
   "supplier_id": "uuid",
-  "status": "string",
+  "supplier": {
+    "id": "uuid",
+    "name": "string",
+    "code": "string|null",
+    "contact_name": "string|null",
+    "email": "string|null",
+    "phone": "string|null"
+  },
+  "status": "OPEN|SENT|ACK|RECEIVED|CLOSED|CANCELLED",
   "total_amount": "float|null",
   "ordered_at": "datetime|null",
   "expected_delivery_date": "date|null",
-  "line_count": "int|null"
+  "line_count": "int",
+  "age_days": "int",
+  "age_color": "gray|orange|red",
+  "is_blocking": "boolean",
+  "created_at": "datetime|null",
+  "updated_at": "datetime|null"
+}
+```
+
+### EmailExportOut (POST /supplier_orders/{id}/export/email)
+
+Note: Generated email content for supplier order. Includes text and HTML versions of the email body.
+
+```json
+{
+  "subject": "string",
+  "body_text": "string",
+  "body_html": "string",
+  "supplier_email": "string|null"
 }
 ```
 
