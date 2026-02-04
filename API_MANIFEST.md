@@ -1,6 +1,6 @@
 # API Manifest
 
-Last updated: 2026-02-04 (v1.2.6 - Fix: export email/CSV includes all order lines)
+Last updated: 2026-02-04 (v1.2.8 - Statut qualifiée sans référence fournisseur)
 
 ## Endpoints
 
@@ -126,7 +126,7 @@ Last updated: 2026-02-04 (v1.2.6 - Fix: export email/CSV includes all order line
 - `GET /purchase_requests` - [LEGACY] List all purchase requests with optional filters (Auth: Optional if AUTH_DISABLED)
   - Query params:
     - `skip` (default 0), `limit` (default 100, max 1000)
-    - `status` (string, optional) - Filter by derived status (TO_QUALIFY, OPEN, QUOTED, ORDERED, PARTIAL, RECEIVED, REJECTED)
+    - `status` (string, optional) - Filter by derived status (TO_QUALIFY, NO_SUPPLIER_REF, OPEN, QUOTED, ORDERED, PARTIAL, RECEIVED, REJECTED)
     - `intervention_id` (uuid, optional) - Filter by linked intervention
     - `urgency` (string, optional) - Filter by urgency level (normal, high, critical)
   - Returns: Array of purchase requests with `derived_status` ordered by created_at DESC
@@ -740,13 +740,14 @@ Note:
 
 - `derived_status` est calculé automatiquement selon l'avancement (pas de champ `status` manuel)
 - When `stock_item_id` is not null, the `stock_item` object is automatically populated
+- When `intervention_id` is not null, the `intervention` object is automatically populated with equipement details
 - `order_lines` contains all supplier order lines linked via M2M table
 
 ```json
 {
   "id": "uuid",
   "derived_status": {
-    "code": "TO_QUALIFY|OPEN|QUOTED|ORDERED|PARTIAL|RECEIVED|REJECTED",
+    "code": "TO_QUALIFY|NO_SUPPLIER_REF|OPEN|QUOTED|ORDERED|PARTIAL|RECEIVED|REJECTED",
     "label": "string",
     "color": "string (hex)"
   },
@@ -761,6 +762,7 @@ Note:
   "notes": "string|null",
   "workshop": "string|null",
   "intervention_id": "uuid|null",
+  "intervention": "InterventionInfo|null",
   "quantity_requested": "int|null",
   "quantity_approved": "int|null",
   "urgent": "boolean|null",
@@ -773,11 +775,31 @@ Note:
 }
 ```
 
+### InterventionInfo (embedded in PurchaseRequestOut)
+
+Note: Lightweight intervention object with equipement context.
+
+```json
+{
+  "id": "uuid",
+  "code": "string|null",
+  "title": "string",
+  "priority": "string|null",
+  "status_actual": "string|null",
+  "equipement": {
+    "id": "uuid",
+    "code": "string|null",
+    "name": "string"
+  }
+}
+```
+
 ### DerivedStatus (embedded in PurchaseRequestOut)
 
 Statut calculé automatiquement basé sur l'avancement de la demande :
 
 - `TO_QUALIFY`: Pas de référence stock normalisée (stock_item_id is null)
+- `NO_SUPPLIER_REF`: Référence stock ok, mais aucune référence fournisseur liée
 - `OPEN`: En attente de dispatch (aucune ligne de commande)
 - `QUOTED`: Au moins un devis reçu
 - `ORDERED`: Au moins une ligne sélectionnée pour commande

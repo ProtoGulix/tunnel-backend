@@ -2,6 +2,28 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [1.2.8] - 4 février 2026
+
+### Améliorations
+
+- **Statut “Qualifiée sans référence fournisseur”** : les demandes qualifiées sans référence fournisseur liée sont maintenant distinguées
+  - Permet d'identifier rapidement les articles à référencer avant dispatch
+  - Cas d'usage : une demande est qualifiée (article stock lié) mais aucun fournisseur n'est encore associé
+
+---
+
+## [1.2.7] - 4 février 2026
+
+### Améliorations
+
+- **Hydratation des interventions dans les demandes d'achat** : Les endpoints de demandes d'achat incluent maintenant les informations complètes de l'intervention liée
+  - `GET /purchase_requests/` retourne l'objet `intervention` avec : id, code, title, priority, status_actual
+  - L'équipement associé à l'intervention est également inclus (id, code, name)
+  - Plus besoin de faire une requête supplémentaire pour avoir le contexte de l'intervention
+  - Appliqué aux endpoints : `GET /purchase_requests/`, `GET /purchase_requests/{id}`, `GET /purchase_requests/intervention/{id}`
+
+---
+
 ## [1.2.6] - 4 février 2026
 
 ### Corrections

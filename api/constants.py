@@ -3,6 +3,19 @@
 # Statut fermé d'une intervention (constante)
 CLOSED_STATUS_CODE = 'ferme'
 
+# Statuts dérivés des demandes d'achat (calculés automatiquement)
+DERIVED_STATUS_CONFIG = {
+    # Pas de référence normalisée
+    'TO_QUALIFY': {'label': 'À qualifier', 'color': '#F59E0B'},
+    'NO_SUPPLIER_REF': {'label': 'Sans fournisseur', 'color': '#F97316'},
+    'OPEN': {'label': 'Mutualisation', 'color': '#6B7280'},
+    'QUOTED': {'label': 'Devis reçu', 'color': '#FFA500'},
+    'ORDERED': {'label': 'Commandé', 'color': '#3B82F6'},
+    'PARTIAL': {'label': 'Partiellement reçu', 'color': '#8B5CF6'},
+    'RECEIVED': {'label': 'Reçu', 'color': '#10B981'},
+    'REJECTED': {'label': 'Refusé', 'color': '#EF4444'}
+}
+
 # Type de priorité des interventions
 PRIORITY_TYPES = [
     {'id': 'faible', 'title': 'Faible', 'color': 'green'},

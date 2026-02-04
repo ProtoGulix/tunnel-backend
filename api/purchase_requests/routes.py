@@ -45,7 +45,7 @@ async def list_purchase_requests_optimized(
     limit: int = Query(100, ge=1, le=1000,
                        description="Nombre max d'éléments"),
     status: Optional[str] = Query(
-        None, description="Filtrer par statut dérivé (OPEN, QUOTED, ORDERED, PARTIAL, RECEIVED)"),
+        None, description="Filtrer par statut dérivé (TO_QUALIFY, NO_SUPPLIER_REF, OPEN, QUOTED, ORDERED, PARTIAL, RECEIVED, REJECTED)"),
     intervention_id: Optional[str] = Query(
         None, description="Filtrer par intervention"),
     urgency: Optional[str] = Query(None, description="Filtrer par urgence")

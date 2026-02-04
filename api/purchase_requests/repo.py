@@ -6,20 +6,9 @@ import logging
 
 from api.settings import settings
 from api.errors.exceptions import DatabaseError, NotFoundError
+from api.constants import DERIVED_STATUS_CONFIG
 
 logger = logging.getLogger(__name__)
-
-
-# Mapping statuts dérivés
-DERIVED_STATUS_CONFIG = {
-    'TO_QUALIFY': {'label': 'À qualifier', 'color': '#F59E0B'},  # Pas de référence normalisée
-    'OPEN': {'label': 'En attente', 'color': '#6B7280'},
-    'QUOTED': {'label': 'Devis reçu', 'color': '#FFA500'},
-    'ORDERED': {'label': 'Commandé', 'color': '#3B82F6'},
-    'PARTIAL': {'label': 'Partiellement reçu', 'color': '#8B5CF6'},
-    'RECEIVED': {'label': 'Reçu', 'color': '#10B981'},
-    'REJECTED': {'label': 'Refusé', 'color': '#EF4444'}
-}
 
 
 class PurchaseRequestRepository:
@@ -70,14 +59,44 @@ class PurchaseRequestRepository:
                 'sub_family_code': row_dict['si_sub_family_code'],
                 'quantity': row_dict['si_quantity'],
                 'unit': row_dict['si_unit'],
-                'location': row_dict['si_location']
+                'location': row_dict['si_location'],
+                'supplier_refs_count': row_dict.get('si_supplier_refs_count')
             }
         else:
             row_dict['stock_item'] = None
 
         # Nettoie les colonnes intermédiaires
         for key in ['si_id', 'si_name', 'si_ref', 'si_family_code',
-                    'si_sub_family_code', 'si_quantity', 'si_unit', 'si_location']:
+                    'si_sub_family_code', 'si_quantity', 'si_unit', 'si_location',
+                    'si_supplier_refs_count']:
+            row_dict.pop(key, None)
+
+        return row_dict
+
+    def _map_with_intervention(self, row_dict: Dict[str, Any]) -> Dict[str, Any]:
+        """Mappe une row avec intervention imbriqué depuis les colonnes JOIN"""
+        if row_dict.get('i_id') is not None:
+            equipement = None
+            if row_dict.get('e_id') is not None:
+                equipement = {
+                    'id': row_dict['e_id'],
+                    'code': row_dict['e_code'],
+                    'name': row_dict['e_name']
+                }
+            row_dict['intervention'] = {
+                'id': row_dict['i_id'],
+                'code': row_dict['i_code'],
+                'title': row_dict['i_title'],
+                'priority': row_dict['i_priority'],
+                'status_actual': row_dict['i_status_actual'],
+                'equipement': equipement
+            }
+        else:
+            row_dict['intervention'] = None
+
+        # Nettoie les colonnes intermédiaires
+        for key in ['i_id', 'i_code', 'i_title', 'i_priority', 'i_status_actual',
+                    'e_id', 'e_code', 'e_name']:
             row_dict.pop(key, None)
 
         return row_dict
@@ -156,9 +175,15 @@ class PurchaseRequestRepository:
                 SELECT pr.*,
                        si.id as si_id, si.name as si_name, si.ref as si_ref,
                        si.family_code as si_family_code, si.sub_family_code as si_sub_family_code,
-                       si.quantity as si_quantity, si.unit as si_unit, si.location as si_location
+                      si.quantity as si_quantity, si.unit as si_unit, si.location as si_location,
+                      (SELECT COUNT(*) FROM stock_item_supplier WHERE stock_item_id = si.id) as si_supplier_refs_count,
+                       i.id as i_id, i.code as i_code, i.title as i_title,
+                       i.priority as i_priority, i.status_actual as i_status_actual,
+                       m.id as e_id, m.code as e_code, m.name as e_name
                 FROM purchase_request pr
                 LEFT JOIN stock_item si ON pr.stock_item_id = si.id
+                LEFT JOIN intervention i ON pr.intervention_id = i.id
+                LEFT JOIN machine m ON i.machine_id = m.id
                 {where_sql}
                 ORDER BY pr.created_at DESC
                 LIMIT %s OFFSET %s
@@ -170,15 +195,24 @@ class PurchaseRequestRepository:
 
             results = []
             for row in rows:
-                pr = self._map_with_stock_item(dict(zip(cols, row)))
+                pr = dict(zip(cols, row))
+                pr = self._map_with_stock_item(pr)
+                pr = self._map_with_intervention(pr)
                 pr['order_lines'] = self._get_linked_order_lines(
                     str(pr['id']), conn)
 
                 # Calcule le statut dérivé
                 stock_item_id = pr.get('stock_item_id')
+                stock_item = pr.get('stock_item')
+                supplier_refs_count = (
+                    stock_item.get(
+                        'supplier_refs_count') if stock_item else None
+                )
                 status_code = self._derive_status_from_order_lines(
                     pr['order_lines'],
-                    stock_item_id=str(stock_item_id) if stock_item_id else None
+                    stock_item_id=str(
+                        stock_item_id) if stock_item_id else None,
+                    supplier_refs_count=supplier_refs_count
                 )
                 pr['derived_status'] = self._map_derived_status(status_code)
 
@@ -190,7 +224,7 @@ class PurchaseRequestRepository:
             conn.close()
 
     def get_by_id(self, request_id: str) -> Dict[str, Any]:
-        """Récupère une demande d'achat par ID avec stock_item"""
+        """Récupère une demande d'achat par ID avec stock_item et intervention"""
         conn = self._get_connection()
         try:
             cur = conn.cursor()
@@ -199,9 +233,15 @@ class PurchaseRequestRepository:
                 SELECT pr.*,
                        si.id as si_id, si.name as si_name, si.ref as si_ref,
                        si.family_code as si_family_code, si.sub_family_code as si_sub_family_code,
-                       si.quantity as si_quantity, si.unit as si_unit, si.location as si_location
+                      si.quantity as si_quantity, si.unit as si_unit, si.location as si_location,
+                      (SELECT COUNT(*) FROM stock_item_supplier WHERE stock_item_id = si.id) as si_supplier_refs_count,
+                       i.id as i_id, i.code as i_code, i.title as i_title,
+                       i.priority as i_priority, i.status_actual as i_status_actual,
+                       m.id as e_id, m.code as e_code, m.name as e_name
                 FROM purchase_request pr
                 LEFT JOIN stock_item si ON pr.stock_item_id = si.id
+                LEFT JOIN intervention i ON pr.intervention_id = i.id
+                LEFT JOIN machine m ON i.machine_id = m.id
                 WHERE pr.id = %s
                 """,
                 (request_id,)
@@ -213,15 +253,22 @@ class PurchaseRequestRepository:
                     f"Demande d'achat {request_id} non trouvée")
 
             cols = [desc[0] for desc in cur.description]
-            result = self._map_with_stock_item(dict(zip(cols, row)))
+            result = dict(zip(cols, row))
+            result = self._map_with_stock_item(result)
+            result = self._map_with_intervention(result)
             result['order_lines'] = self._get_linked_order_lines(
                 request_id, conn)
 
             # Calcule le statut dérivé
             stock_item_id = result.get('stock_item_id')
+            stock_item = result.get('stock_item')
+            supplier_refs_count = (
+                stock_item.get('supplier_refs_count') if stock_item else None
+            )
             status_code = self._derive_status_from_order_lines(
                 result['order_lines'],
-                stock_item_id=str(stock_item_id) if stock_item_id else None
+                stock_item_id=str(stock_item_id) if stock_item_id else None,
+                supplier_refs_count=supplier_refs_count
             )
             result['derived_status'] = self._map_derived_status(status_code)
 
@@ -234,7 +281,7 @@ class PurchaseRequestRepository:
             conn.close()
 
     def get_by_intervention(self, intervention_id: str) -> List[Dict[str, Any]]:
-        """Récupère toutes les demandes d'achat liées à une intervention avec stock_item"""
+        """Récupère toutes les demandes d'achat liées à une intervention avec stock_item et intervention"""
         conn = self._get_connection()
         try:
             cur = conn.cursor()
@@ -243,9 +290,15 @@ class PurchaseRequestRepository:
                 SELECT pr.*,
                        si.id as si_id, si.name as si_name, si.ref as si_ref,
                        si.family_code as si_family_code, si.sub_family_code as si_sub_family_code,
-                       si.quantity as si_quantity, si.unit as si_unit, si.location as si_location
+                      si.quantity as si_quantity, si.unit as si_unit, si.location as si_location,
+                      (SELECT COUNT(*) FROM stock_item_supplier WHERE stock_item_id = si.id) as si_supplier_refs_count,
+                       i.id as i_id, i.code as i_code, i.title as i_title,
+                       i.priority as i_priority, i.status_actual as i_status_actual,
+                       m.id as e_id, m.code as e_code, m.name as e_name
                 FROM purchase_request pr
                 LEFT JOIN stock_item si ON pr.stock_item_id = si.id
+                LEFT JOIN intervention i ON pr.intervention_id = i.id
+                LEFT JOIN machine m ON i.machine_id = m.id
                 WHERE pr.intervention_id = %s
                 ORDER BY pr.created_at DESC
                 """,
@@ -256,15 +309,24 @@ class PurchaseRequestRepository:
 
             results = []
             for row in rows:
-                pr = self._map_with_stock_item(dict(zip(cols, row)))
+                pr = dict(zip(cols, row))
+                pr = self._map_with_stock_item(pr)
+                pr = self._map_with_intervention(pr)
                 pr['order_lines'] = self._get_linked_order_lines(
                     str(pr['id']), conn)
 
                 # Calcule le statut dérivé
                 stock_item_id = pr.get('stock_item_id')
+                stock_item = pr.get('stock_item')
+                supplier_refs_count = (
+                    stock_item.get(
+                        'supplier_refs_count') if stock_item else None
+                )
                 status_code = self._derive_status_from_order_lines(
                     pr['order_lines'],
-                    stock_item_id=str(stock_item_id) if stock_item_id else None
+                    stock_item_id=str(
+                        stock_item_id) if stock_item_id else None,
+                    supplier_refs_count=supplier_refs_count
                 )
                 pr['derived_status'] = self._map_derived_status(status_code)
 
@@ -408,13 +470,15 @@ class PurchaseRequestRepository:
     def _derive_status_from_order_lines(
         self,
         order_lines: List[Dict],
-        stock_item_id: Optional[str] = None
+        stock_item_id: Optional[str] = None,
+        supplier_refs_count: Optional[int] = None
     ) -> str:
         """
         Calcule le statut dérivé basé sur les order_lines et stock_item_id.
 
         Règles métier :
         - TO_QUALIFY : Pas de référence stock normalisée (stock_item_id is NULL)
+        - NO_SUPPLIER_REF : Référence stock ok, mais aucune référence fournisseur liée
         - OPEN : En attente de dispatch (pas d'order_lines)
         - QUOTED : Au moins un devis reçu
         - ORDERED : Au moins une ligne sélectionnée pour commande
@@ -425,14 +489,20 @@ class PurchaseRequestRepository:
         if stock_item_id is None:
             return 'TO_QUALIFY'
 
-        # Règle 2 : Pas de lignes = En attente de dispatch
+        # Règle 2 : Référence fournisseur manquante
+        if supplier_refs_count == 0 and not order_lines:
+            return 'NO_SUPPLIER_REF'
+
+        # Règle 3 : Pas de lignes = En attente de dispatch
         if not order_lines:
             return 'OPEN'
 
         has_quotes = any(line.get('quote_received') for line in order_lines)
         has_selected = any(line.get('is_selected') for line in order_lines)
-        total_qty = sum(line.get('quantity_allocated', 0) for line in order_lines)
-        received_qty = sum(line.get('quantity_received', 0) or 0 for line in order_lines)
+        total_qty = sum(line.get('quantity_allocated', 0)
+                        for line in order_lines)
+        received_qty = sum(line.get('quantity_received', 0)
+                           or 0 for line in order_lines)
 
         if received_qty >= total_qty and total_qty > 0:
             return 'RECEIVED'
@@ -484,6 +554,7 @@ class PurchaseRequestRepository:
                     pr.quantity,
                     pr.unit,
                     pr.stock_item_id,
+                    (SELECT COUNT(*) FROM stock_item_supplier WHERE stock_item_id = si.id) AS supplier_refs_count,
 
                     -- Infos directes (pas d'objets imbriqués)
                     si.ref AS stock_item_ref,
@@ -536,14 +607,24 @@ class PurchaseRequestRepository:
 
                 # Calcule le statut dérivé
                 stock_item_id = item.pop('stock_item_id', None)
+                supplier_refs_count = item.pop('supplier_refs_count', None)
                 quotes_count = item.get('quotes_count', 0)
                 selected_count = item.get('selected_count', 0)
-                total_allocated = item.pop('total_allocated', 0)
-                total_received = item.pop('total_received', 0)
+                total_allocated = item.pop('total_allocated', 0) or 0
+                total_received = item.pop('total_received', 0) or 0
+                suppliers_count = item.get('suppliers_count', 0) or 0
+                has_order_lines = (
+                    quotes_count > 0
+                    or selected_count > 0
+                    or suppliers_count > 0
+                    or total_allocated > 0
+                )
 
                 # Règle 1 : Pas de référence normalisée = À qualifier
                 if stock_item_id is None:
                     status_code = 'TO_QUALIFY'
+                elif supplier_refs_count == 0 and not has_order_lines:
+                    status_code = 'NO_SUPPLIER_REF'
                 elif total_received >= total_allocated and total_allocated > 0:
                     status_code = 'RECEIVED'
                 elif total_received > 0:
@@ -562,7 +643,8 @@ class PurchaseRequestRepository:
                 item['derived_status'] = self._map_derived_status(status_code)
                 results.append(item)
 
-            logger.info("Fetched %d purchase requests (list view)", len(results))
+            logger.info(
+                "Fetched %d purchase requests (list view)", len(results))
             return results
         except Exception as e:
             logger.error("Error fetching purchase request list: %s", str(e))
@@ -607,7 +689,8 @@ class PurchaseRequestRepository:
             row = cur.fetchone()
 
             if not row:
-                raise NotFoundError(f"Demande d'achat {request_id} non trouvée")
+                raise NotFoundError(
+                    f"Demande d'achat {request_id} non trouvée")
 
             cols = [desc[0] for desc in cur.description]
             data = dict(zip(cols, row))
@@ -659,9 +742,14 @@ class PurchaseRequestRepository:
 
             # Calcule le statut dérivé (passe stock_item_id pour règle "À qualifier")
             stock_item_id = data.get('stock_item_id')
+            stock_item = data.get('stock_item')
+            supplier_refs_count = (
+                stock_item.get('supplier_refs_count') if stock_item else None
+            )
             status_code = self._derive_status_from_order_lines(
                 order_lines,
-                stock_item_id=str(stock_item_id) if stock_item_id else None
+                stock_item_id=str(stock_item_id) if stock_item_id else None,
+                supplier_refs_count=supplier_refs_count
             )
             data['derived_status'] = self._map_derived_status(status_code)
 
@@ -748,7 +836,7 @@ class PurchaseRequestRepository:
         view=full : retourne détail complet
         """
         logger.debug("Fetching purchase requests for intervention %s (view=%s)",
-                    intervention_id, view)
+                     intervention_id, view)
 
         if view == 'full':
             # Récupère les IDs puis appelle get_detail pour chacun
@@ -829,7 +917,8 @@ class PurchaseRequestRepository:
                 """,
                 (start_date, end_date)
             )
-            by_urgency = [{'urgency': row[0], 'count': row[1]} for row in cur.fetchall()]
+            by_urgency = [{'urgency': row[0], 'count': row[1]}
+                          for row in cur.fetchall()]
 
             # Top articles demandés
             cur.execute(
@@ -868,10 +957,12 @@ class PurchaseRequestRepository:
                         req_date = req_date.date()
                     if start_date <= req_date <= end_date:
                         status_code = req['derived_status']['code']
-                        by_status[status_code] = by_status.get(status_code, 0) + 1
+                        by_status[status_code] = by_status.get(
+                            status_code, 0) + 1
 
             by_status_list = [
-                {'status': code, 'count': count, **DERIVED_STATUS_CONFIG.get(code, {})}
+                {'status': code, 'count': count, **
+                    DERIVED_STATUS_CONFIG.get(code, {})}
                 for code, count in by_status.items()
             ]
 

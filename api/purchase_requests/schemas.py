@@ -11,7 +11,7 @@ from api.suppliers.schemas import SupplierListItem
 
 class DerivedStatus(BaseModel):
     """Statut dérivé calculé côté backend"""
-    code: str = Field(..., description="Code statut (TO_QUALIFY, OPEN, QUOTED, ORDERED, PARTIAL, RECEIVED, REJECTED)")
+    code: str = Field(..., description="Code statut (TO_QUALIFY, NO_SUPPLIER_REF, OPEN, QUOTED, ORDERED, PARTIAL, RECEIVED, REJECTED)")
     label: str = Field(..., description="Label lisible")
     color: str = Field(..., description="Couleur hexadécimale")
 
@@ -241,7 +241,7 @@ class PurchaseRequestOut(BaseModel):
     """Schéma de sortie pour une demande d'achat"""
     id: UUID
     derived_status: DerivedStatus = Field(
-        ..., description="Statut dérivé calculé (TO_QUALIFY, OPEN, QUOTED, ORDERED, PARTIAL, RECEIVED, REJECTED)")
+        ..., description="Statut dérivé calculé (TO_QUALIFY, NO_SUPPLIER_REF, OPEN, QUOTED, ORDERED, PARTIAL, RECEIVED, REJECTED)")
     stock_item_id: Optional[UUID] = Field(default=None)
     stock_item: Optional[StockItemListItem] = Field(
         default=None, description="Détail de l'article en stock")
@@ -254,6 +254,8 @@ class PurchaseRequestOut(BaseModel):
     notes: Optional[str] = Field(default=None)
     workshop: Optional[str] = Field(default=None)
     intervention_id: Optional[UUID] = Field(default=None)
+    intervention: Optional[InterventionInfo] = Field(
+        default=None, description="Détail de l'intervention liée")
     quantity_requested: Optional[int] = Field(default=None)
     quantity_approved: Optional[int] = Field(default=None)
     urgent: Optional[bool] = Field(default=None)
