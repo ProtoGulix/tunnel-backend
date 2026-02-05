@@ -1,6 +1,5 @@
 from typing import Dict, Any, List
 from uuid import uuid4
-from datetime import datetime
 
 from api.settings import settings
 from api.errors.exceptions import DatabaseError, NotFoundError
@@ -262,15 +261,14 @@ class InterventionRepository:
         try:
             cur = conn.cursor()
             intervention_id = str(uuid4())
-            now = datetime.now()
 
             cur.execute(
                 """
                 INSERT INTO intervention
                 (id, title, machine_id, type_inter, priority,
                  reported_by, tech_initials, status_actual,
-                 printed_fiche, reported_date, created_at, updated_at)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                 printed_fiche, reported_date)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     intervention_id,
@@ -282,9 +280,7 @@ class InterventionRepository:
                     data.get('tech_initials'),
                     data.get('status_actual', 'ouvert'),
                     data.get('printed_fiche', False),
-                    data.get('reported_date'),
-                    data.get('created_at', now),
-                    now
+                    data.get('reported_date')
                 )
             )
             conn.commit()
@@ -304,7 +300,6 @@ class InterventionRepository:
         conn = self._get_connection()
         try:
             cur = conn.cursor()
-            now = datetime.now()
 
             updatable_fields = [
                 'title', 'machine_id', 'type_inter', 'priority',
@@ -323,8 +318,6 @@ class InterventionRepository:
             if not set_clauses:
                 return self.get_by_id(intervention_id)
 
-            set_clauses.append("updated_at = %s")
-            params.append(now)
             params.append(intervention_id)
 
             query = f"""

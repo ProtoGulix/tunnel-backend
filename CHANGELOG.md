@@ -2,6 +2,16 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [1.2.10] - 5 février 2026
+
+### Corrections
+
+- **Correction CRUD interventions** : Alignement avec la structure réelle de la table
+  - Suppression des colonnes `created_at` et `updated_at` qui n'existent pas dans la table `intervention`
+  - Le schéma `InterventionIn` ne contient plus `created_at`
+
+---
+
 ## [1.2.9] - 5 février 2026
 
 ### Nouveautés

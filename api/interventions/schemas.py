@@ -1,4 +1,4 @@
-from datetime import datetime, date
+from datetime import date
 from typing import List, Optional
 from uuid import UUID
 
@@ -19,7 +19,6 @@ class InterventionIn(BaseModel):
     status_actual: Optional[str] = None
     printed_fiche: Optional[bool] = None
     reported_date: Optional[date] = None
-    created_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True

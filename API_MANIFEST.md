@@ -1,6 +1,6 @@
 # API Manifest
 
-Last updated: 2026-02-05 (v1.2.9 - CRUD complet interventions)
+Last updated: 2026-02-05 (v1.2.10 - Fix CRUD interventions schema)
 
 ## Endpoints
 
@@ -38,8 +38,7 @@ Last updated: 2026-02-05 (v1.2.9 - CRUD complet interventions)
       "tech_initials": "string|null",
       "status_actual": "string|null (default: ouvert)",
       "printed_fiche": "boolean|null (default: false)",
-      "reported_date": "date|null",
-      "created_at": "datetime|null (default: now)"
+      "reported_date": "date|null"
     }
     ```
   - Returns: Full intervention with equipement, stats, actions, status_logs
@@ -410,8 +409,7 @@ Last updated: 2026-02-05 (v1.2.9 - CRUD complet interventions)
   "tech_initials": "string|null",
   "status_actual": "string|null",
   "printed_fiche": "boolean|null",
-  "reported_date": "date|null",
-  "created_at": "datetime|null"
+  "reported_date": "date|null"
 }
 ```
 
