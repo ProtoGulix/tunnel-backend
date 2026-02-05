@@ -1,4 +1,6 @@
 from typing import Dict, Any, List
+from uuid import uuid4
+from datetime import datetime
 
 from api.settings import settings
 from api.errors.exceptions import DatabaseError, NotFoundError
@@ -251,5 +253,113 @@ class InterventionRepository:
                 raise DatabaseError(
                     "Impossible de se connecter à la base de données") from e
             raise DatabaseError(f"Erreur base de données: {error_msg}") from e
+        finally:
+            conn.close()
+
+    def add(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Crée une nouvelle intervention"""
+        conn = self._get_connection()
+        try:
+            cur = conn.cursor()
+            intervention_id = str(uuid4())
+            now = datetime.now()
+
+            cur.execute(
+                """
+                INSERT INTO intervention
+                (id, title, machine_id, type_inter, priority,
+                 reported_by, tech_initials, status_actual,
+                 printed_fiche, reported_date, created_at, updated_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    intervention_id,
+                    data.get('title'),
+                    data.get('machine_id'),
+                    data.get('type_inter'),
+                    data.get('priority'),
+                    data.get('reported_by'),
+                    data.get('tech_initials'),
+                    data.get('status_actual', 'ouvert'),
+                    data.get('printed_fiche', False),
+                    data.get('reported_date'),
+                    data.get('created_at', now),
+                    now
+                )
+            )
+            conn.commit()
+        except Exception as e:
+            conn.rollback()
+            raise DatabaseError(
+                f"Erreur lors de la création de l'intervention: {str(e)}") from e
+        finally:
+            conn.close()
+
+        return self.get_by_id(intervention_id)
+
+    def update(self, intervention_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Met à jour une intervention existante"""
+        self.get_by_id(intervention_id, include_actions=False)
+
+        conn = self._get_connection()
+        try:
+            cur = conn.cursor()
+            now = datetime.now()
+
+            updatable_fields = [
+                'title', 'machine_id', 'type_inter', 'priority',
+                'reported_by', 'tech_initials', 'status_actual',
+                'printed_fiche', 'reported_date'
+            ]
+
+            set_clauses = []
+            params = []
+
+            for field in updatable_fields:
+                if field in data:
+                    set_clauses.append(f"{field} = %s")
+                    params.append(data[field])
+
+            if not set_clauses:
+                return self.get_by_id(intervention_id)
+
+            set_clauses.append("updated_at = %s")
+            params.append(now)
+            params.append(intervention_id)
+
+            query = f"""
+                UPDATE intervention
+                SET {', '.join(set_clauses)}
+                WHERE id = %s
+            """
+
+            cur.execute(query, params)
+            conn.commit()
+        except Exception as e:
+            conn.rollback()
+            raise DatabaseError(
+                f"Erreur lors de la mise à jour: {str(e)}") from e
+        finally:
+            conn.close()
+
+        return self.get_by_id(intervention_id)
+
+    def delete(self, intervention_id: str) -> bool:
+        """Supprime une intervention"""
+        self.get_by_id(intervention_id, include_actions=False)
+
+        conn = self._get_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                "DELETE FROM intervention WHERE id = %s",
+                (intervention_id,)
+            )
+            conn.commit()
+            return True
+        except Exception as e:
+            conn.rollback()
+            raise DatabaseError(
+                f"Erreur lors de la suppression: {str(e)}") from e
         finally:
             conn.close()

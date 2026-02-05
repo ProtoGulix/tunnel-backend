@@ -8,6 +8,23 @@ from api.intervention_status_log.schemas import InterventionStatusLogOut
 from api.equipements.schemas import EquipementDetail
 
 
+class InterventionIn(BaseModel):
+    """Schéma d'entrée pour créer/modifier une intervention"""
+    title: Optional[str] = None
+    machine_id: Optional[UUID] = None
+    type_inter: Optional[str] = None
+    priority: Optional[str] = None
+    reported_by: Optional[str] = None
+    tech_initials: Optional[str] = None
+    status_actual: Optional[str] = None
+    printed_fiche: Optional[bool] = None
+    reported_date: Optional[date] = None
+    created_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
 class InterventionStats(BaseModel):
     """Stats calculées pour une intervention"""
     action_count: int = 0

@@ -1,6 +1,6 @@
 # API Manifest
 
-Last updated: 2026-02-04 (v1.2.8 - Statut qualifiée sans référence fournisseur)
+Last updated: 2026-02-05 (v1.2.9 - CRUD complet interventions)
 
 ## Endpoints
 
@@ -26,6 +26,27 @@ Last updated: 2026-02-04 (v1.2.8 - Statut qualifiée sans référence fournisseu
     - `include` (csv) - Include optional data (stats). Stats included by default if omitted
 - `GET /interventions/{id}` - Get intervention by ID with actions, status logs, and stats (Auth: Optional if AUTH_DISABLED)
 - `GET /interventions/{id}/actions` - Get actions for specific intervention (Auth: Optional if AUTH_DISABLED)
+- `POST /interventions` - Create a new intervention (Auth: Optional if AUTH_DISABLED)
+  - Body (json):
+    ```json
+    {
+      "title": "string|null",
+      "machine_id": "uuid|null",
+      "type_inter": "string|null",
+      "priority": "string|null (faible, normale, important, urgent)",
+      "reported_by": "string|null",
+      "tech_initials": "string|null",
+      "status_actual": "string|null (default: ouvert)",
+      "printed_fiche": "boolean|null (default: false)",
+      "reported_date": "date|null",
+      "created_at": "datetime|null (default: now)"
+    }
+    ```
+  - Returns: Full intervention with equipement, stats, actions, status_logs
+- `PUT /interventions/{id}` - Update an existing intervention (Auth: Optional if AUTH_DISABLED)
+  - Body: Same as POST (all fields optional)
+  - Updatable fields: title, machine_id, type_inter, priority, reported_by, tech_initials, status_actual, printed_fiche, reported_date
+- `DELETE /interventions/{id}` - Delete an intervention (Auth: Optional if AUTH_DISABLED)
 
 ### Intervention Status
 
@@ -376,6 +397,23 @@ Last updated: 2026-02-04 (v1.2.8 - Statut qualifiée sans référence fournisseu
 - `DELETE /stock_item_suppliers/{id}` - Delete a supplier reference (Auth: Optional if AUTH_DISABLED)
 
 ## Schemas
+
+### InterventionIn (POST/PUT)
+
+```json
+{
+  "title": "string|null",
+  "machine_id": "uuid|null",
+  "type_inter": "string|null",
+  "priority": "string|null",
+  "reported_by": "string|null",
+  "tech_initials": "string|null",
+  "status_actual": "string|null",
+  "printed_fiche": "boolean|null",
+  "reported_date": "date|null",
+  "created_at": "datetime|null"
+}
+```
 
 ### InterventionOut
 

@@ -2,7 +2,7 @@ from fastapi import APIRouter, Request, Query
 from typing import List, Dict, Any
 from api.interventions.repo import InterventionRepository
 from api.intervention_actions.repo import InterventionActionRepository
-from api.interventions.schemas import InterventionOut
+from api.interventions.schemas import InterventionOut, InterventionIn
 from api.intervention_actions.schemas import InterventionActionOut
 
 router = APIRouter(prefix="/interventions", tags=["interventions"])
@@ -68,3 +68,25 @@ async def get_intervention_actions(intervention_id: str, request: Request):
     """Récupère les actions d'une intervention"""
     repo = InterventionActionRepository()
     return repo.get_by_intervention(intervention_id)
+
+
+@router.post("/", response_model=InterventionOut)
+async def create_intervention(data: InterventionIn, request: Request):
+    """Crée une nouvelle intervention"""
+    repo = InterventionRepository()
+    return repo.add(data.model_dump(exclude_none=True))
+
+
+@router.put("/{intervention_id}", response_model=InterventionOut)
+async def update_intervention(intervention_id: str, data: InterventionIn, request: Request):
+    """Met à jour une intervention existante"""
+    repo = InterventionRepository()
+    return repo.update(intervention_id, data.model_dump(exclude_none=True))
+
+
+@router.delete("/{intervention_id}")
+async def delete_intervention(intervention_id: str, request: Request):
+    """Supprime une intervention"""
+    repo = InterventionRepository()
+    repo.delete(intervention_id)
+    return {"detail": "Intervention supprimée"}

@@ -2,6 +2,18 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [1.2.9] - 5 février 2026
+
+### Nouveautés
+
+- **CRUD complet pour les interventions** : Ajout des endpoints de création, modification et suppression
+  - `POST /interventions/` - Création d'une intervention avec équipement, priorité, type, technicien
+  - `PUT /interventions/{id}` - Modification des champs d'une intervention existante
+  - `DELETE /interventions/{id}` - Suppression d'une intervention
+  - Retourne l'intervention complète avec équipement, stats, actions et status_logs
+
+---
+
 ## [1.2.8] - 4 février 2026
 
 ### Améliorations
