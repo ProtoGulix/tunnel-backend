@@ -1,6 +1,6 @@
 # API Manifest
 
-Last updated: 2026-02-06 (v1.2.11 - purchase_request_ids dans actions)
+Last updated: 2026-02-06 (v1.2.13 - bugfix calcul statuts dérivés)
 
 ## Endpoints
 
@@ -146,7 +146,7 @@ Last updated: 2026-02-06 (v1.2.11 - purchase_request_ids dans actions)
 - `GET /purchase_requests` - [LEGACY] List all purchase requests with optional filters (Auth: Optional if AUTH_DISABLED)
   - Query params:
     - `skip` (default 0), `limit` (default 100, max 1000)
-    - `status` (string, optional) - Filter by derived status (TO_QUALIFY, NO_SUPPLIER_REF, OPEN, QUOTED, ORDERED, PARTIAL, RECEIVED, REJECTED)
+    - `status` (string, optional) - Filter by derived status (TO_QUALIFY, NO_SUPPLIER_REF, PENDING_DISPATCH, OPEN, QUOTED, ORDERED, PARTIAL, RECEIVED, REJECTED)
     - `intervention_id` (uuid, optional) - Filter by linked intervention
     - `urgency` (string, optional) - Filter by urgency level (normal, high, critical)
   - Returns: Array of purchase requests with `derived_status` ordered by created_at DESC
@@ -192,6 +192,12 @@ Last updated: 2026-02-06 (v1.2.11 - purchase_request_ids dans actions)
   - Additional updatable fields: `quantity_approved`, `approver_name`, `approved_at`
   - Note: `status` is no longer manually updatable - use `derived_status` which is calculated automatically
 - `DELETE /purchase_requests/{id}` - Delete a purchase request (Auth: Optional if AUTH_DISABLED)
+- `POST /purchase_requests/dispatch` - [v1.2.12] Dispatch automatique des demandes PENDING_DISPATCH (Auth: Optional if AUTH_DISABLED)
+  - Dispatches all purchase requests with status PENDING_DISPATCH to supplier orders
+  - For each request, finds supplier references linked to stock_item
+  - Creates or reuses OPEN supplier_orders per supplier
+  - Creates supplier_order_lines linked to purchase_requests
+  - Returns: `DispatchResult` with dispatched_count, created_orders, errors
 
 ### Stock Items
 
@@ -772,6 +778,36 @@ Query params:
 }
 ```
 
+### PurchaseRequestListItem
+
+Note: Schéma léger pour listes (tableau, pagination). Retourné par `/purchase_requests/list`.
+
+```json
+{
+  "id": "uuid",
+  "item_label": "string",
+  "quantity": "int",
+  "unit": "string|null",
+  "derived_status": {
+    "code": "TO_QUALIFY|NO_SUPPLIER_REF|PENDING_DISPATCH|OPEN|QUOTED|ORDERED|PARTIAL|RECEIVED|REJECTED",
+    "label": "string",
+    "color": "string (hex)"
+  },
+  "stock_item_id": "uuid|null",
+  "stock_item_ref": "string|null",
+  "stock_item_name": "string|null",
+  "intervention_code": "string|null",
+  "requester_name": "string|null",
+  "urgency": "string|null",
+  "urgent": "boolean",
+  "quotes_count": "int",
+  "selected_count": "int",
+  "suppliers_count": "int",
+  "created_at": "datetime|null",
+  "updated_at": "datetime|null"
+}
+```
+
 ### PurchaseRequestOut
 
 Note:
@@ -838,6 +874,7 @@ Statut calculé automatiquement basé sur l'avancement de la demande :
 
 - `TO_QUALIFY`: Pas de référence stock normalisée (stock_item_id is null)
 - `NO_SUPPLIER_REF`: Référence stock ok, mais aucune référence fournisseur liée
+- `PENDING_DISPATCH`: Référence fournisseur ok, prête à être dispatchée
 - `OPEN`: En attente de dispatch (aucune ligne de commande)
 - `QUOTED`: Au moins un devis reçu
 - `ORDERED`: Au moins une ligne sélectionnée pour commande
@@ -881,6 +918,62 @@ Note: Includes all fields needed for purchase request status calculation:
   "quantity_received": "int|null",
   "is_selected": "boolean|null",
   "created_at": "datetime|null"
+}
+```
+
+### PurchaseRequestStats
+
+Note: Statistiques agrégées pour les dashboards. Par défaut, analyse les 3 derniers mois.
+
+```json
+{
+  "period": {
+    "start_date": "date (YYYY-MM-DD)",
+    "end_date": "date (YYYY-MM-DD)"
+  },
+  "totals": {
+    "total_requests": "int",
+    "urgent_count": "int"
+  },
+  "by_status": [
+    {
+      "status": "TO_QUALIFY|NO_SUPPLIER_REF|PENDING_DISPATCH|OPEN|QUOTED|ORDERED|PARTIAL|RECEIVED|REJECTED",
+      "count": "int",
+      "label": "string",
+      "color": "string (hex)"
+    }
+  ],
+  "by_urgency": [
+    {
+      "urgency": "string (normal, high, critical)",
+      "count": "int"
+    }
+  ],
+  "top_items": [
+    {
+      "item_label": "string",
+      "stock_item_ref": "string|null",
+      "request_count": "int",
+      "total_quantity": "int"
+    }
+  ]
+}
+```
+
+### DispatchResult
+
+Note: Résultat du dispatch automatique des demandes PENDING_DISPATCH vers les supplier_orders.
+
+```json
+{
+  "dispatched_count": "int",
+  "created_orders": "int",
+  "errors": [
+    {
+      "purchase_request_id": "string (uuid)",
+      "error": "string"
+    }
+  ]
 }
 ```
 

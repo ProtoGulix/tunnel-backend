@@ -57,7 +57,7 @@ class SupplierOrderLineRepository:
             cur.execute(
                 """
                 SELECT
-                    solpr.id, solpr.purchase_request_id, solpr.quantity, solpr.created_at,
+                    solpr.id, solpr.purchase_request_id, solpr.quantity_fulfilled as quantity, solpr.created_at,
                     pr.item_label, pr.requester_name, pr.intervention_id
                 FROM supplier_order_line_purchase_request solpr
                 JOIN purchase_request pr ON solpr.purchase_request_id = pr.id
@@ -225,17 +225,18 @@ class SupplierOrderLineRepository:
             purchase_requests = data.get('purchase_requests')
             if purchase_requests:
                 for pr_link in purchase_requests:
+                    qty = pr_link.get('quantity_fulfilled', pr_link.get('quantity', 1))
                     cur.execute(
                         """
                         INSERT INTO supplier_order_line_purchase_request
-                        (id, supplier_order_line_id, purchase_request_id, quantity)
+                        (id, supplier_order_line_id, purchase_request_id, quantity_fulfilled)
                         VALUES (%s, %s, %s, %s)
                         """,
                         (
                             str(uuid4()),
                             line_id,
                             str(pr_link['purchase_request_id']),
-                            pr_link['quantity']
+                            qty
                         )
                     )
 
@@ -334,17 +335,18 @@ class SupplierOrderLineRepository:
                 # Ajoute les nouveaux liens
                 purchase_requests = data.get('purchase_requests') or []
                 for pr_link in purchase_requests:
+                    qty = pr_link.get('quantity_fulfilled', pr_link.get('quantity', 1))
                     cur.execute(
                         """
                         INSERT INTO supplier_order_line_purchase_request
-                        (id, supplier_order_line_id, purchase_request_id, quantity)
+                        (id, supplier_order_line_id, purchase_request_id, quantity_fulfilled)
                         VALUES (%s, %s, %s, %s)
                         """,
                         (
                             str(uuid4()),
                             line_id,
                             str(pr_link['purchase_request_id']),
-                            pr_link['quantity']
+                            qty
                         )
                     )
 
@@ -381,7 +383,7 @@ class SupplierOrderLineRepository:
         self,
         line_id: str,
         purchase_request_id: str,
-        quantity: int
+        quantity_fulfilled: int
     ) -> Dict[str, Any]:
         """Lie une demande d'achat à une ligne de commande"""
         # Vérifie que la ligne existe
@@ -393,12 +395,12 @@ class SupplierOrderLineRepository:
             cur.execute(
                 """
                 INSERT INTO supplier_order_line_purchase_request
-                (id, supplier_order_line_id, purchase_request_id, quantity)
+                (id, supplier_order_line_id, purchase_request_id, quantity_fulfilled)
                 VALUES (%s, %s, %s, %s)
                 ON CONFLICT (supplier_order_line_id, purchase_request_id)
-                DO UPDATE SET quantity = EXCLUDED.quantity
+                DO UPDATE SET quantity_fulfilled = EXCLUDED.quantity_fulfilled
                 """,
-                (str(uuid4()), line_id, purchase_request_id, quantity)
+                (str(uuid4()), line_id, purchase_request_id, quantity_fulfilled)
             )
             conn.commit()
         except Exception as e:

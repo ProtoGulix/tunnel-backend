@@ -467,14 +467,18 @@ class PurchaseRequestRepository:
             'color': config['color']
         }
 
-    def _derive_status_from_order_lines(
+    def _derive_status(
         self,
-        order_lines: List[Dict],
         stock_item_id: Optional[str] = None,
-        supplier_refs_count: Optional[int] = None
+        supplier_refs_count: Optional[int] = None,
+        has_order_lines: bool = False,
+        quotes_count: int = 0,
+        selected_count: int = 0,
+        total_allocated: int = 0,
+        total_received: int = 0
     ) -> str:
         """
-        Calcule le statut dérivé basé sur les order_lines et stock_item_id.
+        Calcule le statut dérivé basé sur les compteurs agrégés.
 
         Règles métier :
         - TO_QUALIFY : Pas de référence stock normalisée (stock_item_id is NULL)
@@ -491,29 +495,59 @@ class PurchaseRequestRepository:
             return 'TO_QUALIFY'
 
         # Règle 2 : Référence fournisseur manquante
-        if supplier_refs_count == 0 and not order_lines:
+        if supplier_refs_count == 0:
             return 'NO_SUPPLIER_REF'
 
         # Règle 3 : Référence fournisseur ok mais pas de lignes = À dispatcher
-        if not order_lines:
+        if not has_order_lines:
             return 'PENDING_DISPATCH'
 
-        has_quotes = any(line.get('quote_received') for line in order_lines)
-        has_selected = any(line.get('is_selected') for line in order_lines)
-        total_qty = sum(line.get('quantity_allocated', 0)
-                        for line in order_lines)
-        received_qty = sum(line.get('quantity_received', 0)
-                           or 0 for line in order_lines)
-
-        if received_qty >= total_qty and total_qty > 0:
+        # Règle 4+ : Statuts basés sur les order_lines
+        if total_received >= total_allocated and total_allocated > 0:
             return 'RECEIVED'
-        if received_qty > 0:
+        if total_received > 0:
             return 'PARTIAL'
-        if has_selected:
+        if selected_count > 0:
             return 'ORDERED'
-        if has_quotes:
+        if quotes_count > 0:
             return 'QUOTED'
         return 'OPEN'
+
+    def _derive_status_from_order_lines(
+        self,
+        order_lines: List[Dict],
+        stock_item_id: Optional[str] = None,
+        supplier_refs_count: Optional[int] = None
+    ) -> str:
+        """
+        Calcule le statut dérivé basé sur les order_lines.
+        Wrapper autour de _derive_status pour compatibilité.
+        """
+        if not order_lines:
+            return self._derive_status(
+                stock_item_id=stock_item_id,
+                supplier_refs_count=supplier_refs_count,
+                has_order_lines=False
+            )
+
+        quotes_count = sum(
+            1 for line in order_lines if line.get('quote_received'))
+        selected_count = sum(
+            1 for line in order_lines if line.get('is_selected'))
+        total_allocated = sum(line.get('quantity_allocated', 0)
+                              for line in order_lines)
+        total_received = sum(line.get('quantity_received', 0)
+                             or 0 for line in order_lines)
+
+        return self._derive_status(
+            stock_item_id=stock_item_id,
+            supplier_refs_count=supplier_refs_count,
+            has_order_lines=True,
+            quotes_count=quotes_count,
+            selected_count=selected_count,
+            total_allocated=total_allocated,
+            total_received=total_received
+        )
 
     def get_list(
         self,
@@ -606,11 +640,11 @@ class PurchaseRequestRepository:
             for row in rows:
                 item = dict(zip(cols, row))
 
-                # Calcule le statut dérivé
-                stock_item_id = item.pop('stock_item_id', None)
+                # Extrait les données pour le calcul du statut
+                stock_item_id = item.get('stock_item_id')
                 supplier_refs_count = item.pop('supplier_refs_count', None)
-                quotes_count = item.get('quotes_count', 0)
-                selected_count = item.get('selected_count', 0)
+                quotes_count = item.get('quotes_count', 0) or 0
+                selected_count = item.get('selected_count', 0) or 0
                 total_allocated = item.pop('total_allocated', 0) or 0
                 total_received = item.pop('total_received', 0) or 0
                 suppliers_count = item.get('suppliers_count', 0) or 0
@@ -621,21 +655,17 @@ class PurchaseRequestRepository:
                     or total_allocated > 0
                 )
 
-                # Règle 1 : Pas de référence normalisée = À qualifier
-                if stock_item_id is None:
-                    status_code = 'TO_QUALIFY'
-                elif supplier_refs_count == 0 and not has_order_lines:
-                    status_code = 'NO_SUPPLIER_REF'
-                elif total_received >= total_allocated and total_allocated > 0:
-                    status_code = 'RECEIVED'
-                elif total_received > 0:
-                    status_code = 'PARTIAL'
-                elif selected_count > 0:
-                    status_code = 'ORDERED'
-                elif quotes_count > 0:
-                    status_code = 'QUOTED'
-                else:
-                    status_code = 'OPEN'
+                # Calcule le statut dérivé via la fonction centralisée
+                status_code = self._derive_status(
+                    stock_item_id=str(
+                        stock_item_id) if stock_item_id else None,
+                    supplier_refs_count=supplier_refs_count,
+                    has_order_lines=has_order_lines,
+                    quotes_count=quotes_count,
+                    selected_count=selected_count,
+                    total_allocated=total_allocated,
+                    total_received=total_received
+                )
 
                 # Filtre par statut si demandé
                 if status and status_code != status:
@@ -772,7 +802,7 @@ class PurchaseRequestRepository:
             cur.execute(
                 """
                 SELECT
-                    solpr.id, solpr.supplier_order_line_id, solpr.quantity as quantity_allocated,
+                    solpr.id, solpr.supplier_order_line_id, solpr.quantity_fulfilled as quantity_allocated,
                     solpr.created_at,
                     sol.supplier_order_id, sol.unit_price, sol.total_price,
                     sol.quantity_received, sol.is_selected,
@@ -981,5 +1011,184 @@ class PurchaseRequestRepository:
         except Exception as e:
             logger.error("Error fetching stats: %s", str(e))
             raise DatabaseError(f"Erreur base de données: {str(e)}") from e
+        finally:
+            conn.close()
+
+    def dispatch_all(self) -> Dict[str, Any]:
+        """
+        Dispatch toutes les demandes en PENDING_DISPATCH vers des supplier_orders.
+
+        Pour chaque demande:
+        1. Récupère les stock_item_suppliers liés au stock_item
+        2. Pour chaque fournisseur, trouve ou crée un supplier_order ouvert
+        3. Crée une supplier_order_line liée à la demande
+
+        Retourne un résumé: dispatched_count, created_orders, errors
+        """
+        logger.info("Starting dispatch_all for PENDING_DISPATCH requests")
+
+        # Récupère toutes les demandes PENDING_DISPATCH
+        pending_requests = [
+            req for req in self.get_list(limit=1000, offset=0)
+            if req.get('derived_status', {}).get('code') == 'PENDING_DISPATCH'
+        ]
+
+        logger.info("Found %d requests to dispatch", len(pending_requests))
+
+        dispatched_count = 0
+        created_orders = 0
+        errors = []
+        orders_cache = {}  # Cache: supplier_id -> order_id
+
+        conn = self._get_connection()
+        try:
+            cur = conn.cursor()
+
+            for req in pending_requests:
+                req_id_str = str(req['id'])
+                savepoint_name = f"sp_{req_id_str.replace('-', '_')[:8]}"
+
+                try:
+                    # Crée un savepoint pour pouvoir rollback cette demande seule
+                    cur.execute(f"SAVEPOINT {savepoint_name}")
+
+                    stock_item_id = req.get('stock_item_id')
+                    if not stock_item_id:
+                        cur.execute(f"ROLLBACK TO SAVEPOINT {savepoint_name}")
+                        errors.append({
+                            'purchase_request_id': req_id_str,
+                            'error': 'Pas de stock_item_id'
+                        })
+                        continue
+
+                    # Récupère le fournisseur préféré lié au stock_item
+                    cur.execute(
+                        """
+                        SELECT sis.id, sis.supplier_id, sis.supplier_ref, sis.unit_price
+                        FROM stock_item_supplier sis
+                        WHERE sis.stock_item_id = %s
+                        ORDER BY sis.is_preferred DESC
+                        LIMIT 1
+                        """,
+                        (str(stock_item_id),)
+                    )
+                    supplier_row = cur.fetchone()
+
+                    if not supplier_row:
+                        cur.execute(f"ROLLBACK TO SAVEPOINT {savepoint_name}")
+                        errors.append({
+                            'purchase_request_id': req_id_str,
+                            'error': 'Aucune référence fournisseur'
+                        })
+                        continue
+
+                    # Utilise le fournisseur préféré (ou le premier disponible)
+                    _, supplier_id, supplier_ref, unit_price = supplier_row
+                    supplier_id_str = str(supplier_id)
+
+                    # Trouve ou crée un supplier_order ouvert pour ce fournisseur
+                    if supplier_id_str not in orders_cache:
+                        cur.execute(
+                            """
+                            SELECT id FROM supplier_order
+                            WHERE supplier_id = %s AND status = 'OPEN'
+                            ORDER BY created_at DESC
+                            LIMIT 1
+                            """,
+                            (supplier_id_str,)
+                        )
+                        row = cur.fetchone()
+
+                        if row:
+                            orders_cache[supplier_id_str] = str(row[0])
+                        else:
+                            # Crée un nouveau supplier_order
+                            new_order_id = str(uuid4())
+                            cur.execute(
+                                """
+                                INSERT INTO supplier_order (id, supplier_id, status, created_at)
+                                VALUES (%s, %s, 'OPEN', NOW())
+                                """,
+                                (new_order_id, supplier_id_str)
+                            )
+                            orders_cache[supplier_id_str] = new_order_id
+                            created_orders += 1
+                            logger.info("Created new supplier_order %s for supplier %s",
+                                        new_order_id, supplier_id_str)
+
+                    order_id = orders_cache[supplier_id_str]
+                    req_quantity = req.get('quantity', 1)
+
+                    # Crée ou met à jour la ligne de commande (incrémente quantité si existe)
+                    cur.execute(
+                        """
+                        INSERT INTO supplier_order_line
+                        (id, supplier_order_id, stock_item_id, supplier_ref_snapshot, quantity, unit_price)
+                        VALUES (%s, %s, %s, %s, %s, %s)
+                        ON CONFLICT (supplier_order_id, stock_item_id)
+                        DO UPDATE SET quantity = COALESCE(supplier_order_line.quantity, 0) + EXCLUDED.quantity
+                        RETURNING id
+                        """,
+                        (
+                            str(uuid4()),
+                            order_id,
+                            str(stock_item_id),
+                            supplier_ref,
+                            req_quantity,
+                            float(unit_price) if unit_price else None
+                        )
+                    )
+                    line_row = cur.fetchone()
+                    line_id = str(line_row[0])
+
+                    # Lie la demande à la ligne (quantity_fulfilled = quantité couverte)
+                    cur.execute(
+                        """
+                        INSERT INTO supplier_order_line_purchase_request
+                        (id, supplier_order_line_id, purchase_request_id, quantity_fulfilled)
+                        VALUES (%s, %s, %s, %s)
+                        ON CONFLICT (supplier_order_line_id, purchase_request_id)
+                        DO UPDATE SET quantity_fulfilled = EXCLUDED.quantity_fulfilled
+                        """,
+                        (
+                            str(uuid4()),
+                            line_id,
+                            str(req['id']),
+                            req_quantity
+                        )
+                    )
+
+                    # Libère le savepoint (succès)
+                    cur.execute(f"RELEASE SAVEPOINT {savepoint_name}")
+                    dispatched_count += 1
+                    logger.debug("Dispatched request %s", req['id'])
+
+                except Exception as e:
+                    # Rollback au savepoint pour récupérer la transaction
+                    try:
+                        cur.execute(f"ROLLBACK TO SAVEPOINT {savepoint_name}")
+                    except Exception:
+                        pass  # Le savepoint peut ne pas exister
+                    errors.append({
+                        'purchase_request_id': req_id_str,
+                        'error': str(e)
+                    })
+                    logger.error(
+                        "Error dispatching request %s: %s", req['id'], str(e))
+
+            conn.commit()
+            logger.info("Dispatch completed: %d dispatched, %d orders created, %d errors",
+                        dispatched_count, created_orders, len(errors))
+
+            return {
+                'dispatched_count': dispatched_count,
+                'created_orders': created_orders,
+                'errors': errors
+            }
+
+        except Exception as e:
+            conn.rollback()
+            logger.error("Dispatch failed: %s", str(e))
+            raise DatabaseError(f"Erreur lors du dispatch: {str(e)}") from e
         finally:
             conn.close()

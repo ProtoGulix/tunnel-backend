@@ -11,7 +11,7 @@ from api.suppliers.schemas import SupplierListItem
 
 class DerivedStatus(BaseModel):
     """Statut dérivé calculé côté backend"""
-    code: str = Field(..., description="Code statut (TO_QUALIFY, NO_SUPPLIER_REF, OPEN, QUOTED, ORDERED, PARTIAL, RECEIVED, REJECTED)")
+    code: str = Field(..., description="Code statut (TO_QUALIFY, NO_SUPPLIER_REF, PENDING_DISPATCH, OPEN, QUOTED, ORDERED, PARTIAL, RECEIVED, REJECTED)")
     label: str = Field(..., description="Label lisible")
     color: str = Field(..., description="Couleur hexadécimale")
 
@@ -30,6 +30,8 @@ class PurchaseRequestListItem(BaseModel):
     derived_status: DerivedStatus
 
     # Infos essentielles sans objets imbriqués
+    stock_item_id: Optional[UUID] = Field(
+        default=None, description="ID article stock")
     stock_item_ref: Optional[str] = Field(
         default=None, description="Référence article")
     stock_item_name: Optional[str] = Field(
@@ -175,6 +177,25 @@ class PurchaseRequestStats(BaseModel):
         from_attributes = True
 
 
+class DispatchError(BaseModel):
+    """Erreur lors du dispatch d'une demande"""
+    purchase_request_id: str
+    error: str
+
+
+class DispatchResult(BaseModel):
+    """Résultat du dispatch automatique"""
+    dispatched_count: int = Field(...,
+                                  description="Nombre de demandes dispatchées")
+    created_orders: int = Field(...,
+                                description="Nombre de supplier_orders créés")
+    errors: List[DispatchError] = Field(
+        default_factory=list, description="Erreurs rencontrées")
+
+    class Config:
+        from_attributes = True
+
+
 # ========== Schémas legacy (à déprécier) ==========
 
 class LinkedOrderLine(BaseModel):
@@ -241,7 +262,7 @@ class PurchaseRequestOut(BaseModel):
     """Schéma de sortie pour une demande d'achat"""
     id: UUID
     derived_status: DerivedStatus = Field(
-        ..., description="Statut dérivé calculé (TO_QUALIFY, NO_SUPPLIER_REF, OPEN, QUOTED, ORDERED, PARTIAL, RECEIVED, REJECTED)")
+        ..., description="Statut dérivé calculé (TO_QUALIFY, NO_SUPPLIER_REF, PENDING_DISPATCH, OPEN, QUOTED, ORDERED, PARTIAL, RECEIVED, REJECTED)")
     stock_item_id: Optional[UUID] = Field(default=None)
     stock_item: Optional[StockItemListItem] = Field(
         default=None, description="Détail de l'article en stock")

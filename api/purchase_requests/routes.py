@@ -7,7 +7,8 @@ from api.purchase_requests.schemas import (
     PurchaseRequestOut,  # Legacy
     PurchaseRequestListItem,  # v1.2.0 optimisé
     PurchaseRequestDetail,  # v1.2.0 optimisé
-    PurchaseRequestStats  # v1.2.0 nouveau
+    PurchaseRequestStats,  # v1.2.0 nouveau
+    DispatchResult  # v1.2.12 nouveau
 )
 
 router = APIRouter(prefix="/purchase_requests", tags=["purchase_requests"])
@@ -45,7 +46,7 @@ async def list_purchase_requests_optimized(
     limit: int = Query(100, ge=1, le=1000,
                        description="Nombre max d'éléments"),
     status: Optional[str] = Query(
-        None, description="Filtrer par statut dérivé (TO_QUALIFY, NO_SUPPLIER_REF, OPEN, QUOTED, ORDERED, PARTIAL, RECEIVED, REJECTED)"),
+        None, description="Filtrer par statut dérivé (TO_QUALIFY, NO_SUPPLIER_REF, PENDING_DISPATCH, OPEN, QUOTED, ORDERED, PARTIAL, RECEIVED, REJECTED)"),
     intervention_id: Optional[str] = Query(
         None, description="Filtrer par intervention"),
     urgency: Optional[str] = Query(None, description="Filtrer par urgence")
@@ -101,6 +102,25 @@ async def get_purchase_requests_by_intervention_optimized(
     repo = PurchaseRequestRepository()
     try:
         return repo.get_by_intervention_optimized(intervention_id, view=view)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+@router.post("/dispatch", response_model=DispatchResult)
+async def dispatch_pending_requests():
+    """
+    [v1.2.12] Dispatch automatique des demandes PENDING_DISPATCH.
+
+    Pour chaque demande prête à dispatcher:
+    - Récupère les fournisseurs liés au stock_item
+    - Trouve ou crée un supplier_order ouvert par fournisseur
+    - Crée une supplier_order_line liée à la demande
+
+    Les demandes passent automatiquement de PENDING_DISPATCH à OPEN.
+    """
+    repo = PurchaseRequestRepository()
+    try:
+        return repo.dispatch_all()
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 

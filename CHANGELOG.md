@@ -2,6 +2,18 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [1.2.13] - 6 février 2026
+
+### Corrections
+
+- **Calcul des statuts dérivés** : Correction de bugs critiques dans le calcul des statuts
+  - Correction du nom de colonne `quantity_fulfilled` → `quantity` dans la récupération des order_lines
+  - Correction de la logique NO_SUPPLIER_REF : statut appliqué même si des order_lines existent
+  - Impact : Les demandes affichent maintenant les bons statuts (OPEN, ORDERED, etc.) au lieu de PENDING_DISPATCH
+  - Les order_lines étaient silencieusement ignorées à cause d'une erreur SQL masquée par `except Exception: return []`
+
+---
+
 ## [1.2.12] - 6 février 2026
 
 ### Nouveautés
@@ -13,6 +25,13 @@ Toutes les modifications importantes de l'API sont documentées ici.
 - **Nouveau statut demandes d'achat `PENDING_DISPATCH`** : Distinction entre "à dispatcher" et "en mutualisation"
   - `PENDING_DISPATCH` (À dispatcher) : Référence fournisseur ok, mais pas encore dans un supplier order
   - `OPEN` (Mutualisation) : Présent dans un supplier order avec des order_lines
+
+- **Dispatch automatique des demandes d'achat** : `POST /purchase_requests/dispatch`
+  - Dispatche toutes les demandes en `PENDING_DISPATCH` vers des supplier_orders
+  - Pour chaque demande, récupère les fournisseurs liés au stock_item
+  - Trouve ou crée un supplier_order ouvert par fournisseur
+  - Crée les supplier_order_lines liées aux demandes
+  - Retourne un résumé : `dispatched_count`, `created_orders`, `errors`
 
 ---
 

@@ -408,7 +408,7 @@ class SupplierOrderRepository:
                 SELECT
                     pr.id, pr.item_label, pr.requester_name,
                     pr.intervention_id, pr.urgency_level,
-                    solpr.quantity as allocated_quantity
+                    solpr.quantity_fulfilled as allocated_quantity
                 FROM supplier_order_line_purchase_request solpr
                 JOIN purchase_request pr ON solpr.purchase_request_id = pr.id
                 WHERE solpr.supplier_order_line_id = %s
