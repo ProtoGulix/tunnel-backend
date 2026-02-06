@@ -2,6 +2,20 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [1.2.12] - 6 février 2026
+
+### Nouveautés
+
+- **Statistiques interventions enrichies** : Ajout du compteur `purchase_count` dans les stats d'intervention
+  - Nombre de demandes d'achat liées à l'intervention (via les actions)
+  - Disponible sur `GET /interventions/` et `GET /interventions/{id}`
+
+- **Nouveau statut demandes d'achat `PENDING_DISPATCH`** : Distinction entre "à dispatcher" et "en mutualisation"
+  - `PENDING_DISPATCH` (À dispatcher) : Référence fournisseur ok, mais pas encore dans un supplier order
+  - `OPEN` (Mutualisation) : Présent dans un supplier order avec des order_lines
+
+---
+
 ## [1.2.11] - 6 février 2026
 
 ### Nouveautés

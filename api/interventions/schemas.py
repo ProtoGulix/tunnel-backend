@@ -29,6 +29,7 @@ class InterventionStats(BaseModel):
     action_count: int = 0
     total_time: float = 0
     avg_complexity: Optional[float] = None
+    purchase_count: int = 0
 
     class Config:
         from_attributes = True

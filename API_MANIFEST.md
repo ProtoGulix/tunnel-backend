@@ -450,7 +450,8 @@ For `GET /interventions/{id}`:
   "stats": {
     "action_count": "int",
     "total_time": "float",
-    "avg_complexity": "float|null"
+    "avg_complexity": "float|null",
+    "purchase_count": "int"
   },
   "actions": ["InterventionActionOut"],
   "status_logs": ["InterventionStatusLogOut"]
@@ -784,7 +785,7 @@ Note:
 {
   "id": "uuid",
   "derived_status": {
-    "code": "TO_QUALIFY|NO_SUPPLIER_REF|OPEN|QUOTED|ORDERED|PARTIAL|RECEIVED|REJECTED",
+    "code": "TO_QUALIFY|NO_SUPPLIER_REF|PENDING_DISPATCH|OPEN|QUOTED|ORDERED|PARTIAL|RECEIVED|REJECTED",
     "label": "string",
     "color": "string (hex)"
   },

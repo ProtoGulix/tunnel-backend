@@ -96,7 +96,7 @@ class InterventionRepository:
         try:
             cur = conn.cursor()
             query = f"""
-                SELECT 
+                SELECT
                     i.*,
                     m.code as m_code, m.name as m_name, m.no_machine as m_no_machine,
                     m.affectation as m_affectation, m.marque as m_marque, m.model as m_model,
@@ -105,11 +105,13 @@ class InterventionRepository:
                     m.fabricant as m_fabricant, m.numero_serie as m_numero_serie,
                     m.date_mise_service as m_date_mise_service, m.notes as m_notes,
                     COALESCE(SUM(ia.time_spent), 0) as total_time,
-                    COUNT(ia.id) as action_count,
-                    ROUND(AVG(ia.complexity_score)::numeric, 2)::float as avg_complexity
+                    COUNT(DISTINCT ia.id) as action_count,
+                    ROUND(AVG(ia.complexity_score)::numeric, 2)::float as avg_complexity,
+                    COUNT(DISTINCT iapr.purchase_request_id) as purchase_count
                 FROM intervention i
                 LEFT JOIN machine m ON i.machine_id = m.id
                 LEFT JOIN intervention_action ia ON i.id = ia.intervention_id
+                LEFT JOIN intervention_action_purchase_request iapr ON ia.id = iapr.intervention_action_id
                 {" ".join(joins)}
                 {where_sql}
                 GROUP BY i.id, m.id
@@ -162,13 +164,15 @@ class InterventionRepository:
                     row_dict['stats'] = {
                         'action_count': row_dict.pop('action_count', 0),
                         'total_time': row_dict.pop('total_time', 0),
-                        'avg_complexity': row_dict.pop('avg_complexity', None)
+                        'avg_complexity': row_dict.pop('avg_complexity', None),
+                        'purchase_count': row_dict.pop('purchase_count', 0)
                     }
                 else:
                     # Nettoyer les colonnes stats si non demandées
                     row_dict.pop('action_count', None)
                     row_dict.pop('total_time', None)
                     row_dict.pop('avg_complexity', None)
+                    row_dict.pop('purchase_count', None)
 
                 row_dict['actions'] = []  # Vide pour get_all
                 row_dict['status_logs'] = []  # Vide pour get_all
@@ -218,6 +222,8 @@ class InterventionRepository:
                 intervention['actions'] = actions
 
                 # Calculer les stats depuis les actions récupérées
+                # purchase_count: compter les purchase_requests liées via les actions
+                purchase_count = sum(len(a.get('purchase_requests', [])) for a in actions)
                 intervention['stats'] = {
                     'action_count': len(actions),
                     'total_time': sum(a.get('time_spent', 0) or 0 for a in actions),
@@ -225,14 +231,16 @@ class InterventionRepository:
                         round(sum(a.get('complexity_score', 0) or 0 for a in actions if a.get('complexity_score')) /
                               len([a for a in actions if a.get('complexity_score')]), 2)
                         if any(a.get('complexity_score') for a in actions) else None
-                    )
+                    ),
+                    'purchase_count': purchase_count
                 }
             else:
                 intervention['actions'] = []
                 intervention['stats'] = {
                     'action_count': 0,
                     'total_time': 0,
-                    'avg_complexity': None
+                    'avg_complexity': None,
+                    'purchase_count': 0
                 }
 
             # Récupérer les status logs via InterventionStatusLogRepository

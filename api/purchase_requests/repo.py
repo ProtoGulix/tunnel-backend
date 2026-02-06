@@ -479,7 +479,8 @@ class PurchaseRequestRepository:
         Règles métier :
         - TO_QUALIFY : Pas de référence stock normalisée (stock_item_id is NULL)
         - NO_SUPPLIER_REF : Référence stock ok, mais aucune référence fournisseur liée
-        - OPEN : En attente de dispatch (pas d'order_lines)
+        - PENDING_DISPATCH : Référence fournisseur ok, mais pas encore dans un supplier order
+        - OPEN : Présent dans un supplier order (mutualisation)
         - QUOTED : Au moins un devis reçu
         - ORDERED : Au moins une ligne sélectionnée pour commande
         - PARTIAL : Livraison partielle
@@ -493,9 +494,9 @@ class PurchaseRequestRepository:
         if supplier_refs_count == 0 and not order_lines:
             return 'NO_SUPPLIER_REF'
 
-        # Règle 3 : Pas de lignes = En attente de dispatch
+        # Règle 3 : Référence fournisseur ok mais pas de lignes = À dispatcher
         if not order_lines:
-            return 'OPEN'
+            return 'PENDING_DISPATCH'
 
         has_quotes = any(line.get('quote_received') for line in order_lines)
         has_selected = any(line.get('is_selected') for line in order_lines)

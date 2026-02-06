@@ -8,6 +8,7 @@ DERIVED_STATUS_CONFIG = {
     # Pas de référence normalisée
     'TO_QUALIFY': {'label': 'À qualifier', 'color': '#F59E0B'},
     'NO_SUPPLIER_REF': {'label': 'Sans fournisseur', 'color': '#F97316'},
+    'PENDING_DISPATCH': {'label': 'À dispatcher', 'color': '#A855F7'},
     'OPEN': {'label': 'Mutualisation', 'color': '#6B7280'},
     'QUOTED': {'label': 'Devis reçu', 'color': '#FFA500'},
     'ORDERED': {'label': 'Commandé', 'color': '#3B82F6'},
