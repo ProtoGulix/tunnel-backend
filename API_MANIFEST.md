@@ -1,6 +1,6 @@
 # API Manifest
 
-Last updated: 2026-02-05 (v1.2.10 - Fix CRUD interventions schema)
+Last updated: 2026-02-06 (v1.2.11 - purchase_request_ids dans actions)
 
 ## Endpoints
 
@@ -481,6 +481,7 @@ Note: Actions are fetched via `InterventionActionRepository.get_by_intervention(
   "tech": "uuid|null",
   "complexity_score": "int|null",
   "complexity_anotation": "object|null",
+  "purchase_requests": ["PurchaseRequestOut"],
   "created_at": "datetime|null",
   "updated_at": "datetime|null"
 }

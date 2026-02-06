@@ -47,6 +47,39 @@ class InterventionActionRepository:
 
         return row_dict
 
+    def _get_linked_purchase_requests(self, action_id: str, conn) -> List[Dict[str, Any]]:
+        """Récupère les demandes d'achat liées à une action via PurchaseRequestRepository"""
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                SELECT purchase_request_id
+                FROM intervention_action_purchase_request
+                WHERE intervention_action_id = %s
+                """,
+                (action_id,)
+            )
+            pr_ids = [str(row[0]) for row in cur.fetchall()]
+
+            if not pr_ids:
+                return []
+
+            # Import ici pour éviter import circulaire
+            from api.purchase_requests.repo import PurchaseRequestRepository
+            pr_repo = PurchaseRequestRepository()
+
+            results = []
+            for pr_id in pr_ids:
+                try:
+                    pr = pr_repo.get_by_id(pr_id)
+                    results.append(pr)
+                except Exception:
+                    continue
+            return results
+        except Exception:
+            # Table peut ne pas exister, retourne liste vide
+            return []
+
     def get_all(self) -> List[Dict[str, Any]]:
         """Récupère toutes les actions"""
         conn = self._get_connection()
@@ -90,16 +123,16 @@ class InterventionActionRepository:
             cur = conn.cursor()
             cur.execute(
                 """
-                SELECT 
-                    ia.id, ia.intervention_id, ia.description, ia.time_spent, 
-                    ia.tech, ia.complexity_score, ia.complexity_anotation, 
+                SELECT
+                    ia.id, ia.intervention_id, ia.description, ia.time_spent,
+                    ia.tech, ia.complexity_score, ia.complexity_anotation,
                     ia.created_at, ia.updated_at,
                     sc.id as subcategory_id, sc.name as subcategory_name, sc.code as subcategory_code,
                     ac.id as category_id, ac.name as category_name, ac.code as category_code, ac.color
                 FROM intervention_action ia
                 LEFT JOIN action_subcategory sc ON ia.action_subcategory = sc.id
                 LEFT JOIN action_category ac ON sc.category_id = ac.id
-                WHERE ia.intervention_id = %s 
+                WHERE ia.intervention_id = %s
                 ORDER BY ia.created_at ASC
                 """,
                 (intervention_id,)
@@ -107,10 +140,13 @@ class InterventionActionRepository:
             rows = cur.fetchall()
             cols = [desc[0] for desc in cur.description]
 
-            return [
-                self._map_action_with_subcategory(dict(zip(cols, row)))
-                for row in rows
-            ]
+            results = []
+            for row in rows:
+                action = self._map_action_with_subcategory(dict(zip(cols, row)))
+                action['purchase_requests'] = self._get_linked_purchase_requests(
+                    str(action['id']), conn)
+                results.append(action)
+            return results
         except Exception as e:
             raise DatabaseError(f"Erreur base de données: {str(e)}") from e
         finally:
@@ -123,9 +159,9 @@ class InterventionActionRepository:
             cur = conn.cursor()
             cur.execute(
                 """
-                SELECT 
-                    ia.id, ia.intervention_id, ia.description, ia.time_spent, 
-                    ia.tech, ia.complexity_score, ia.complexity_anotation, 
+                SELECT
+                    ia.id, ia.intervention_id, ia.description, ia.time_spent,
+                    ia.tech, ia.complexity_score, ia.complexity_anotation,
                     ia.created_at, ia.updated_at,
                     sc.id as subcategory_id, sc.name as subcategory_name, sc.code as subcategory_code,
                     ac.id as category_id, ac.name as category_name, ac.code as category_code, ac.color
@@ -140,7 +176,10 @@ class InterventionActionRepository:
             if not row:
                 raise NotFoundError(f"Action {action_id} non trouvée")
             cols = [desc[0] for desc in cur.description]
-            return self._map_action_with_subcategory(dict(zip(cols, row)))
+            action = self._map_action_with_subcategory(dict(zip(cols, row)))
+            action['purchase_requests'] = self._get_linked_purchase_requests(
+                action_id, conn)
+            return action
         except NotFoundError:
             raise
         except Exception as e:

@@ -2,6 +2,18 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [1.2.11] - 6 février 2026
+
+### Nouveautés
+
+- **Demandes d'achat liées aux actions** : Les actions d'intervention incluent maintenant les demandes d'achat liées complètes
+  - Nouveau champ `purchase_requests` (array de `PurchaseRequestOut`) dans `InterventionActionOut`
+  - Utilise `PurchaseRequestRepository.get_by_id()` pour hydrater chaque demande avec toutes ses données
+  - Relation M2M via la table de jonction `intervention_action_purchase_request`
+  - Permet d'afficher les demandes d'achat associées à chaque action avec leur statut, stock_item, intervention, order_lines
+
+---
+
 ## [1.2.10] - 5 février 2026
 
 ### Corrections

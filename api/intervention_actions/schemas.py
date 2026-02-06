@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, List, Any
 from datetime import datetime
 from uuid import UUID
 
@@ -13,7 +13,7 @@ class InterventionActionIn(BaseModel):
     tech: UUID
     complexity_score: int
     complexity_anotation: Optional[str] = Field(default=None)
-    created_at: Optional[str] = Field(default=None)  # String format, validator convertira en datetime
+    created_at: Optional[str] = Field(default=None)
 
     class Config:
         from_attributes = True
@@ -51,6 +51,10 @@ class InterventionActionOut(BaseModel):
     tech: Optional[UUID] = Field(default=None)
     complexity_score: Optional[int] = Field(default=None)
     complexity_anotation: Optional[dict] = Field(default=None)
+    purchase_requests: List[Any] = Field(
+        default_factory=list,
+        description="Demandes d'achat liées (PurchaseRequestOut) via table de jonction"
+    )
     created_at: Optional[datetime] = Field(default=None)
     updated_at: Optional[datetime] = Field(default=None)
 
