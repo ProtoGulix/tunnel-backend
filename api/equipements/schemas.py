@@ -52,6 +52,22 @@ class EquipementDetail(BaseModel):
         from_attributes = True
 
 
+class EquipementCreate(BaseModel):
+    """Schéma pour créer un équipement"""
+    code: str | None = None
+    name: str
+    parent_id: UUID | None = None
+    equipment_class_id: UUID | None = None
+
+
+class EquipementUpdate(BaseModel):
+    """Schéma pour mettre à jour un équipement"""
+    code: str | None = None
+    name: str | None = None
+    parent_id: UUID | None = None
+    equipment_class_id: UUID | None = None
+
+
 class InterventionsStats(BaseModel):
     """Statistiques interventions pour endpoint /stats"""
     open: int

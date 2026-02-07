@@ -1,5 +1,6 @@
 """Requêtes pour le domaine équipements"""
 from typing import Dict, Any, List
+from uuid import uuid4
 
 from api.settings import settings
 from api.errors.exceptions import DatabaseError, NotFoundError
@@ -157,6 +158,97 @@ class EquipementRepository:
             raise
         except Exception as e:
             raise DatabaseError(f"Erreur base de données: {str(e)}") from e
+        finally:
+            conn.close()
+
+    def add(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Crée un nouvel équipement"""
+        conn = self._get_connection()
+        try:
+            cur = conn.cursor()
+            equipement_id = str(uuid4())
+
+            cur.execute(
+                """
+                INSERT INTO machine (id, code, name, equipement_mere, equipement_class_id)
+                VALUES (%s, %s, %s, %s, %s)
+                """,
+                (
+                    equipement_id,
+                    data.get('code'),
+                    data['name'],
+                    data.get('parent_id'),
+                    data.get('equipment_class_id')
+                )
+            )
+            conn.commit()
+        except Exception as e:
+            conn.rollback()
+            raise DatabaseError(
+                f"Erreur lors de la creation de l'equipement: {str(e)}") from e
+        finally:
+            conn.close()
+
+        return self.get_by_id(equipement_id)
+
+    def update(self, equipement_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Met à jour un équipement existant"""
+        self.get_by_id(equipement_id)
+
+        conn = self._get_connection()
+        try:
+            cur = conn.cursor()
+
+            field_map = {
+                'code': 'code',
+                'name': 'name',
+                'parent_id': 'equipement_mere',
+                'equipment_class_id': 'equipement_class_id'
+            }
+
+            set_clauses = []
+            params = []
+
+            for field, column in field_map.items():
+                if field in data:
+                    set_clauses.append(f"{column} = %s")
+                    params.append(data[field])
+
+            if not set_clauses:
+                return self.get_by_id(equipement_id)
+
+            params.append(equipement_id)
+            query = f"""
+                UPDATE machine
+                SET {', '.join(set_clauses)}
+                WHERE id = %s
+            """
+
+            cur.execute(query, params)
+            conn.commit()
+        except Exception as e:
+            conn.rollback()
+            raise DatabaseError(
+                f"Erreur lors de la mise a jour de l'equipement: {str(e)}") from e
+        finally:
+            conn.close()
+
+        return self.get_by_id(equipement_id)
+
+    def delete(self, equipement_id: str) -> bool:
+        """Supprime un équipement"""
+        self.get_by_id(equipement_id)
+
+        conn = self._get_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute("DELETE FROM machine WHERE id = %s", (equipement_id,))
+            conn.commit()
+            return True
+        except Exception as e:
+            conn.rollback()
+            raise DatabaseError(
+                f"Erreur lors de la suppression de l'equipement: {str(e)}") from e
         finally:
             conn.close()
 

@@ -2,13 +2,23 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
-## [1.3.0] - 2026-02-07
+## [1.3.1] - 7 février 2026
+
+### Nouveautés
+
+- **CRUD des equipements** : Creation, modification et suppression des equipements
+  - `POST /equipements/` - Cree un equipement (ex: ajouter une nouvelle machine dans l'atelier)
+  - `PUT /equipements/{id}` - Met a jour un equipement (ex: reassigner a une autre classe)
+  - `DELETE /equipements/{id}` - Supprime un equipement
+
+---
+
+## [1.3.0] - 7 février 2026
 
 ### ⚠️ BREAKING CHANGES
 
 - **Nouveau module de classes d'équipement** : Ajout d'un système de classification des équipements
   - Les réponses des endpoints `/equipements` incluent maintenant `equipment_class` (objet ou null)
-  - Si vos modèles sont stricts, une mise à jour est nécessaire pour accepter ce champ
   - Structure du champ ajouté :
     ```json
     {

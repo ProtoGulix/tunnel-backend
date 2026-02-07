@@ -1,6 +1,6 @@
 # API Manifest
 
-Last updated: 2026-02-07 (v1.3.0 - ⚠️ BREAKING: Equipment classes + equipment_class field in equipements)
+Last updated: 2026-02-07 (v1.3.1)
 
 ## Endpoints
 
@@ -170,6 +170,61 @@ Last updated: 2026-02-07 (v1.3.0 - ⚠️ BREAKING: Equipment classes + equipmen
       "children_ids": ["7f2cda3c-1b2e-4e1e-a0b7-9a1e2f3b4c5d"]
     }
     ```
+- `POST /equipements` - Create a new equipement (Auth: Optional if AUTH_DISABLED)
+  - Body (json):
+    ```json
+    {
+      "name": "Scie principale",
+      "code": "EQ-001",
+      "parent_id": null,
+      "equipment_class_id": "b28f1f4f-2a2a-4c9a-9b58-9f9a6d5f0b0c"
+    }
+    ```
+  - Returns: Full equipement with health, children_ids, equipment_class
+  - Response (json):
+    ```json
+    {
+      "id": "5e6b5a20-5d7f-4f6b-9a1f-4ccfb0b7a2a1",
+      "code": "EQ-001",
+      "name": "Scie principale",
+      "health": {
+        "level": "ok",
+        "reason": "Aucune anomalie detectee",
+        "rules_triggered": []
+      },
+      "parent_id": null,
+      "equipment_class": {
+        "id": "b28f1f4f-2a2a-4c9a-9b58-9f9a6d5f0b0c",
+        "code": "SCIE",
+        "label": "Scie"
+      },
+      "children_ids": []
+    }
+    ```
+- `PUT /equipements/{id}` - Update an existing equipement (Auth: Optional if AUTH_DISABLED)
+  - Body (json): Same as POST (all fields optional)
+  - Response (json):
+    ```json
+    {
+      "id": "5e6b5a20-5d7f-4f6b-9a1f-4ccfb0b7a2a1",
+      "code": "EQ-001",
+      "name": "Scie principale",
+      "health": {
+        "level": "ok",
+        "reason": "Aucune anomalie detectee",
+        "rules_triggered": []
+      },
+      "parent_id": null,
+      "equipment_class": {
+        "id": "b28f1f4f-2a2a-4c9a-9b58-9f9a6d5f0b0c",
+        "code": "SCIE",
+        "label": "Scie"
+      },
+      "children_ids": []
+    }
+    ```
+- `DELETE /equipements/{id}` - Delete an equipement (Auth: Optional if AUTH_DISABLED)
+  - Returns: 204 No Content
 - `GET /equipements/{id}/stats` - Get detailed statistics for equipement (opt-in) (Auth: Optional if AUTH_DISABLED)
   - Query params: `start_date` (YYYY-MM-DD, optional, default NULL = all), `end_date` (YYYY-MM-DD, optional, default NOW)
   - Returns: interventions (open, closed, by_status, by_priority)
