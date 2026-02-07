@@ -2,6 +2,27 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [1.2.14] - 7 février 2026
+
+### Corrections
+
+- **Correction complète quantity_fulfilled → quantity** : Remplacement dans tous les fichiers
+  - Correction dans `purchase_requests/repo.py` : SELECT et INSERT/UPDATE des order_lines
+  - Correction dans `supplier_order_lines/repo.py` : Tous les INSERT et paramètre de méthode `link_purchase_request`
+  - Correction dans `supplier_orders/repo.py` : SELECT des purchase_requests liées
+  - Impact : Le dispatch et la liaison purchase_request ↔ order_line fonctionnent correctement
+
+- **Amélioration dispatch** : Gestion du cache orders_cache en cas de rollback
+  - Nettoyage du cache si un supplier_order créé dans un savepoint est rollback
+  - Évite les erreurs de foreign key sur des orders qui n'existent plus
+
+- **Schema SupplierOrderUpdate** : Nouveau schéma pour updates partiels
+  - Tous les champs optionnels (incluant `supplier_id`, `received_at`)
+  - Permet de faire des PUT avec seulement les champs à modifier
+  - `PUT /supplier_orders/{id}` utilise maintenant `SupplierOrderUpdate` au lieu de `SupplierOrderIn`
+
+---
+
 ## [1.2.13] - 6 février 2026
 
 ### Corrections

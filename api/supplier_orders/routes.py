@@ -5,7 +5,7 @@ from io import StringIO
 import csv
 
 from api.supplier_orders.repo import SupplierOrderRepository
-from api.supplier_orders.schemas import SupplierOrderOut, SupplierOrderIn, SupplierOrderListItem, EmailExportOut
+from api.supplier_orders.schemas import SupplierOrderOut, SupplierOrderIn, SupplierOrderUpdate, SupplierOrderListItem, EmailExportOut
 from config.export_templates import (
     get_csv_headers,
     format_csv_row,
@@ -62,7 +62,7 @@ async def create_supplier_order(supplier_order: SupplierOrderIn):
 
 
 @router.put("/{order_id}", response_model=SupplierOrderOut)
-async def update_supplier_order(order_id: str, supplier_order: SupplierOrderIn):
+async def update_supplier_order(order_id: str, supplier_order: SupplierOrderUpdate):
     """Met à jour une commande fournisseur existante"""
     repo = SupplierOrderRepository()
     try:

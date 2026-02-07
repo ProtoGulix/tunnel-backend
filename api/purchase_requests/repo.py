@@ -802,7 +802,7 @@ class PurchaseRequestRepository:
             cur.execute(
                 """
                 SELECT
-                    solpr.id, solpr.supplier_order_line_id, solpr.quantity_fulfilled as quantity_allocated,
+                    solpr.id, solpr.supplier_order_line_id, solpr.quantity as quantity_allocated,
                     solpr.created_at,
                     sol.supplier_order_id, sol.unit_price, sol.total_price,
                     sol.quantity_received, sol.is_selected,
@@ -1087,6 +1087,7 @@ class PurchaseRequestRepository:
                     supplier_id_str = str(supplier_id)
 
                     # Trouve ou crée un supplier_order ouvert pour ce fournisseur
+                    order_id = None
                     if supplier_id_str not in orders_cache:
                         cur.execute(
                             """
@@ -1100,7 +1101,8 @@ class PurchaseRequestRepository:
                         row = cur.fetchone()
 
                         if row:
-                            orders_cache[supplier_id_str] = str(row[0])
+                            order_id = str(row[0])
+                            orders_cache[supplier_id_str] = order_id
                         else:
                             # Crée un nouveau supplier_order
                             new_order_id = str(uuid4())
@@ -1111,12 +1113,13 @@ class PurchaseRequestRepository:
                                 """,
                                 (new_order_id, supplier_id_str)
                             )
-                            orders_cache[supplier_id_str] = new_order_id
+                            order_id = new_order_id
+                            orders_cache[supplier_id_str] = order_id
                             created_orders += 1
                             logger.info("Created new supplier_order %s for supplier %s",
                                         new_order_id, supplier_id_str)
-
-                    order_id = orders_cache[supplier_id_str]
+                    else:
+                        order_id = orders_cache[supplier_id_str]
                     req_quantity = req.get('quantity', 1)
 
                     # Crée ou met à jour la ligne de commande (incrémente quantité si existe)
@@ -1141,14 +1144,14 @@ class PurchaseRequestRepository:
                     line_row = cur.fetchone()
                     line_id = str(line_row[0])
 
-                    # Lie la demande à la ligne (quantity_fulfilled = quantité couverte)
+                    # Lie la demande à la ligne (quantity = quantité couverte)
                     cur.execute(
                         """
                         INSERT INTO supplier_order_line_purchase_request
-                        (id, supplier_order_line_id, purchase_request_id, quantity_fulfilled)
+                        (id, supplier_order_line_id, purchase_request_id, quantity)
                         VALUES (%s, %s, %s, %s)
                         ON CONFLICT (supplier_order_line_id, purchase_request_id)
-                        DO UPDATE SET quantity_fulfilled = EXCLUDED.quantity_fulfilled
+                        DO UPDATE SET quantity = EXCLUDED.quantity
                         """,
                         (
                             str(uuid4()),
@@ -1167,6 +1170,14 @@ class PurchaseRequestRepository:
                     # Rollback au savepoint pour récupérer la transaction
                     try:
                         cur.execute(f"ROLLBACK TO SAVEPOINT {savepoint_name}")
+                        # Si on a créé un order dans ce savepoint, le retirer du cache
+                        if supplier_id_str in orders_cache and order_id:
+                            # Vérifie si l'ordre existe vraiment après le rollback
+                            cur.execute(
+                                "SELECT 1 FROM supplier_order WHERE id = %s", (order_id,))
+                            if not cur.fetchone():
+                                del orders_cache[supplier_id_str]
+                                created_orders -= 1
                     except Exception:
                         pass  # Le savepoint peut ne pas exister
                     errors.append({

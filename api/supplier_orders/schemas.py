@@ -10,9 +10,31 @@ from api.suppliers.schemas import SupplierListItem
 class SupplierOrderIn(BaseModel):
     """Schéma d'entrée pour créer une commande fournisseur"""
     supplier_id: UUID = Field(..., description="ID du fournisseur")
-    status: Optional[str] = Field(default="OPEN", max_length=50, description="Statut de la commande")
-    ordered_at: Optional[datetime] = Field(default=None, description="Date de commande")
-    expected_delivery_date: Optional[date] = Field(default=None, description="Date de livraison prévue")
+    status: Optional[str] = Field(
+        default="OPEN", max_length=50, description="Statut de la commande")
+    ordered_at: Optional[datetime] = Field(
+        default=None, description="Date de commande")
+    expected_delivery_date: Optional[date] = Field(
+        default=None, description="Date de livraison prévue")
+    notes: Optional[str] = Field(default=None, description="Notes")
+    currency: Optional[float] = Field(default=None, description="Devise/taux")
+
+    class Config:
+        from_attributes = True
+
+
+class SupplierOrderUpdate(BaseModel):
+    """Schéma d'entrée pour mettre à jour une commande fournisseur (tous champs optionnels)"""
+    supplier_id: Optional[UUID] = Field(
+        default=None, description="ID du fournisseur")
+    status: Optional[str] = Field(
+        default=None, max_length=50, description="Statut de la commande")
+    ordered_at: Optional[datetime] = Field(
+        default=None, description="Date de commande")
+    expected_delivery_date: Optional[date] = Field(
+        default=None, description="Date de livraison prévue")
+    received_at: Optional[datetime] = Field(
+        default=None, description="Date de réception")
     notes: Optional[str] = Field(default=None, description="Notes")
     currency: Optional[float] = Field(default=None, description="Devise/taux")
 
@@ -23,12 +45,14 @@ class SupplierOrderIn(BaseModel):
 class SupplierOrderOut(BaseModel):
     """Schéma de sortie pour une commande fournisseur"""
     id: UUID
-    order_number: str = Field(..., description="Numéro de commande (généré automatiquement)")
+    order_number: str = Field(...,
+                              description="Numéro de commande (généré automatiquement)")
     supplier_id: UUID
     supplier: Optional[SupplierListItem] = Field(
         default=None, description="Informations fournisseur enrichies")
     status: str
-    total_amount: Optional[float] = Field(default=0, description="Montant total")
+    total_amount: Optional[float] = Field(
+        default=0, description="Montant total")
     ordered_at: Optional[datetime] = Field(default=None)
     expected_delivery_date: Optional[date] = Field(default=None)
     received_at: Optional[datetime] = Field(default=None)
@@ -39,9 +63,12 @@ class SupplierOrderOut(BaseModel):
         description="Lignes de la commande"
     )
     line_count: int = Field(default=0, description="Nombre de lignes")
-    age_days: int = Field(default=0, description="Âge en jours depuis création")
-    age_color: str = Field(default="gray", description="Couleur indicateur âge (gray, orange, red)")
-    is_blocking: bool = Field(default=False, description="Commande bloquante (en attente trop longtemps)")
+    age_days: int = Field(
+        default=0, description="Âge en jours depuis création")
+    age_color: str = Field(
+        default="gray", description="Couleur indicateur âge (gray, orange, red)")
+    is_blocking: bool = Field(
+        default=False, description="Commande bloquante (en attente trop longtemps)")
     created_at: Optional[datetime] = Field(default=None)
     updated_at: Optional[datetime] = Field(default=None)
 
@@ -61,9 +88,12 @@ class SupplierOrderListItem(BaseModel):
     ordered_at: Optional[datetime] = Field(default=None)
     expected_delivery_date: Optional[date] = Field(default=None)
     line_count: int = Field(default=0, description="Nombre de lignes")
-    age_days: int = Field(default=0, description="Âge en jours depuis création")
-    age_color: str = Field(default="gray", description="Couleur indicateur âge (gray, orange, red)")
-    is_blocking: bool = Field(default=False, description="Commande bloquante (en attente trop longtemps)")
+    age_days: int = Field(
+        default=0, description="Âge en jours depuis création")
+    age_color: str = Field(
+        default="gray", description="Couleur indicateur âge (gray, orange, red)")
+    is_blocking: bool = Field(
+        default=False, description="Commande bloquante (en attente trop longtemps)")
     created_at: Optional[datetime] = Field(default=None)
     updated_at: Optional[datetime] = Field(default=None)
 
@@ -76,7 +106,8 @@ class EmailExportOut(BaseModel):
     subject: str = Field(..., description="Sujet de l'email")
     body_text: str = Field(..., description="Corps de l'email en texte brut")
     body_html: str = Field(..., description="Corps de l'email en HTML")
-    supplier_email: Optional[str] = Field(default=None, description="Email du fournisseur")
+    supplier_email: Optional[str] = Field(
+        default=None, description="Email du fournisseur")
 
     class Config:
         from_attributes = True

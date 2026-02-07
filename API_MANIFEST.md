@@ -1,6 +1,6 @@
 # API Manifest
 
-Last updated: 2026-02-06 (v1.2.13 - bugfix calcul statuts dérivés)
+Last updated: 2026-02-07 (v1.2.14 - bugfix quantity_fulfilled, SupplierOrderUpdate)
 
 ## Endpoints
 
