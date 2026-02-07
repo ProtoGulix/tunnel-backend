@@ -2,6 +2,65 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [1.3.0] - 2026-02-07
+
+### ⚠️ BREAKING CHANGES
+
+- **Nouveau module de classes d'équipement** : Ajout d'un système de classification des équipements
+  - Les réponses des endpoints `/equipements` incluent maintenant `equipment_class` (objet ou null)
+  - Si vos modèles sont stricts, une mise à jour est nécessaire pour accepter ce champ
+  - Structure du champ ajouté :
+    ```json
+    {
+      "equipment_class": {
+        "id": "uuid",
+        "code": "SCIE",
+        "label": "Scie"
+      }
+    }
+    ```
+  - Impact sur les endpoints :
+    - `GET /equipements/` - Liste avec champ `equipment_class`
+    - `GET /equipements/{id}` - Détail avec champ `equipment_class`
+  - Migration : Le champ `equipment_class` sera `null` pour tous les équipements existants jusqu'à assignation
+
+### Nouveautés
+
+- **Module CRUD complet pour les classes d'équipement** : Nouveau module `/equipement_class`
+  - `GET /equipement_class/` - Liste toutes les classes d'équipement
+  - `GET /equipement_class/{id}` - Récupère une classe par ID
+  - `POST /equipement_class/` - Crée une nouvelle classe
+    ```json
+    {
+      "code": "SCIE",
+      "label": "Scie",
+      "description": "Machines de sciage"
+    }
+    ```
+  - `PATCH /equipement_class/{id}` - Met à jour une classe existante
+  - `DELETE /equipement_class/{id}` - Supprime une classe (bloqué si des équipements l'utilisent)
+
+- **Classification hiérarchique des équipements** :
+  - Chaque équipement peut être assigné à une classe (SCIE, EXTRUDEUSE, etc.)
+  - Relation Many-to-One : plusieurs équipements peuvent partager la même classe
+  - Hydratation automatique : une seule requête SQL pour récupérer équipement + classe
+  - Validation d'intégrité : impossible de supprimer une classe utilisée par des équipements
+
+### Améliorations techniques
+
+- **Optimisation des requêtes** : Les données de classe sont récupérées via LEFT JOIN (1 seule requête)
+- **Performance** : Pas d'impact sur les performances - le LEFT JOIN est sur une table de référence
+- **Validation** : Code unique par classe pour éviter les doublons
+- **Sécurité** : Protection CASCADE - impossible de supprimer une classe en usage
+
+### Structure de base de données
+
+- Nouvelle table `equipement_class` avec colonnes : id, code (unique), label, description
+- Nouvelle colonne `equipement_class_id` (UUID, nullable) dans la table `machine`
+- Foreign key avec ON DELETE RESTRICT pour protéger les données
+
+---
+
 ## [1.2.14] - 7 février 2026
 
 ### Corrections

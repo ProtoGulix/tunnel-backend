@@ -1,6 +1,6 @@
 # API Manifest
 
-Last updated: 2026-02-07 (v1.2.14 - bugfix quantity_fulfilled, SupplierOrderUpdate)
+Last updated: 2026-02-07 (v1.3.0 - ⚠️ BREAKING: Equipment classes + equipment_class field in equipements)
 
 ## Endpoints
 
@@ -126,14 +126,144 @@ Last updated: 2026-02-07 (v1.2.14 - bugfix quantity_fulfilled, SupplierOrderUpda
 ### Equipements
 
 - `GET /equipements` - List all equipements with health (lightweight, cacheable) (Auth: Optional if AUTH_DISABLED)
-  - Returns: id, code, name, health (level + reason), parent_id
+  - Returns: id, code, name, health (level + reason), parent_id, **equipment_class** (⚠️ **NEW in v1.3.0**)
+  - Response (json):
+    ```json
+    [
+      {
+        "id": "5e6b5a20-5d7f-4f6b-9a1f-4ccfb0b7a2a1",
+        "code": "EQ-001",
+        "name": "Scie principale",
+        "health": {
+          "level": "ok",
+          "reason": "Aucune anomalie détectée",
+          "rules_triggered": null
+        },
+        "parent_id": null,
+        "equipment_class": {
+          "id": "b28f1f4f-2a2a-4c9a-9b58-9f9a6d5f0b0c",
+          "code": "SCIE",
+          "label": "Scie"
+        }
+      }
+    ]
+    ```
 - `GET /equipements/{id}` - Get specific equipement with health and children (Auth: Optional if AUTH_DISABLED)
-  - Returns: id, code, name, health (level + reason + rules_triggered), parent_id, children_ids
+  - Returns: id, code, name, health (level + reason + rules_triggered), parent_id, children_ids, **equipment_class** (⚠️ **NEW in v1.3.0**)
+  - Response (json):
+    ```json
+    {
+      "id": "5e6b5a20-5d7f-4f6b-9a1f-4ccfb0b7a2a1",
+      "code": "EQ-001",
+      "name": "Scie principale",
+      "health": {
+        "level": "warning",
+        "reason": "Maintenance planifiée dépassée",
+        "rules_triggered": ["maintenance_overdue"]
+      },
+      "parent_id": null,
+      "equipment_class": {
+        "id": "b28f1f4f-2a2a-4c9a-9b58-9f9a6d5f0b0c",
+        "code": "SCIE",
+        "label": "Scie"
+      },
+      "children_ids": ["7f2cda3c-1b2e-4e1e-a0b7-9a1e2f3b4c5d"]
+    }
+    ```
 - `GET /equipements/{id}/stats` - Get detailed statistics for equipement (opt-in) (Auth: Optional if AUTH_DISABLED)
   - Query params: `start_date` (YYYY-MM-DD, optional, default NULL = all), `end_date` (YYYY-MM-DD, optional, default NOW)
   - Returns: interventions (open, closed, by_status, by_priority)
+  - Response (json):
+    ```json
+    {
+      "interventions": {
+        "open": 2,
+        "closed": 5,
+        "by_status": {
+          "ouvert": 2,
+          "ferme": 5
+        },
+        "by_priority": {
+          "faible": 1,
+          "normale": 4,
+          "urgent": 2
+        }
+      }
+    }
+    ```
 - `GET /equipements/{id}/health` - Get health only (ultra-lightweight, polling-friendly) (Auth: Optional if AUTH_DISABLED)
   - Returns: level, reason
+  - Response (json):
+    ```json
+    {
+      "level": "ok",
+      "reason": "Aucune anomalie détectée"
+    }
+    ```
+
+### Equipement Classes (⚠️ NEW in v1.3.0)
+
+- `GET /equipement_class` - List all equipment classes (Auth: Optional if AUTH_DISABLED)
+  - Returns: Array of equipment classes ordered by code ASC
+  - Response (json):
+    ```json
+    [
+      {
+        "id": "b28f1f4f-2a2a-4c9a-9b58-9f9a6d5f0b0c",
+        "code": "SCIE",
+        "label": "Scie",
+        "description": "Machines de sciage"
+      }
+    ]
+    ```
+- `GET /equipement_class/{id}` - Get specific equipment class by ID (Auth: Optional if AUTH_DISABLED)
+  - Response (json):
+    ```json
+    {
+      "id": "b28f1f4f-2a2a-4c9a-9b58-9f9a6d5f0b0c",
+      "code": "SCIE",
+      "label": "Scie",
+      "description": "Machines de sciage"
+    }
+    ```
+- `POST /equipement_class` - Create a new equipment class (Auth: Optional if AUTH_DISABLED)
+  - Body (json):
+    ```json
+    {
+      "code": "string (unique)",
+      "label": "string",
+      "description": "string|null"
+    }
+    ```
+  - Business rules:
+    - `code` and `label` are required
+    - `code` must be unique
+  - Returns: Full equipment class with generated UUID
+  - Response (json):
+    ```json
+    {
+      "id": "b28f1f4f-2a2a-4c9a-9b58-9f9a6d5f0b0c",
+      "code": "SCIE",
+      "label": "Scie",
+      "description": "Machines de sciage"
+    }
+    ```
+- `PATCH /equipement_class/{id}` - Update an existing equipment class (Auth: Optional if AUTH_DISABLED)
+  - Body: Same as POST (all fields optional)
+  - Note: If code changes, uniqueness is validated
+  - Response (json):
+    ```json
+    {
+      "id": "b28f1f4f-2a2a-4c9a-9b58-9f9a6d5f0b0c",
+      "code": "SCIE",
+      "label": "Scie",
+      "description": "Machines de sciage"
+    }
+    ```
+- `DELETE /equipement_class/{id}` - Delete an equipment class (Auth: Optional if AUTH_DISABLED)
+  - Business rules:
+    - Cannot delete class if any equipement is using it (returns ValidationError)
+  - Returns: 204 No Content on success
 
 ### Stats
 
@@ -615,6 +745,8 @@ Note: `GET /interventions` returns `actions: []` and `status_logs: []` (empty), 
 
 ### EquipementListItem (GET /equipements)
 
+⚠️ **BREAKING CHANGE in v1.3.0**: New `equipment_class` field added.
+
 ```json
 {
   "id": "uuid",
@@ -624,13 +756,20 @@ Note: `GET /interventions` returns `actions: []` and `status_logs: []` (empty), 
     "level": "ok|maintenance|warning|critical",
     "reason": "string"
   },
-  "parent_id": "uuid|null"
+  "parent_id": "uuid|null",
+  "equipment_class": {
+    "id": "uuid",
+    "code": "string",
+    "label": "string"
+  } | null
 }
 ```
 
-Note: Sorted by urgent count (desc), then open count (desc), then name (asc). Health rules: urgent >= 1 → critical, open > 5 → warning, open > 0 → maintenance, else ok.
+Note: Sorted by urgent count (desc), then open count (desc), then name (asc). Health rules: urgent >= 1 → critical, open > 5 → warning, open > 0 → maintenance, else ok. `equipment_class` is null if no class is assigned to the equipement.
 
 ### EquipementDetail (GET /equipements/{id})
+
+⚠️ **BREAKING CHANGE in v1.3.0**: New `equipment_class` field added.
 
 ```json
 {
@@ -643,6 +782,11 @@ Note: Sorted by urgent count (desc), then open count (desc), then name (asc). He
     "rules_triggered": ["URGENT_OPEN >= 1", "OPEN_TOTAL > 5"]
   },
   "parent_id": "uuid|null",
+  "equipment_class": {
+    "id": "uuid",
+    "code": "string",
+    "label": "string"
+  } | null,
   "children_ids": ["uuid"]
 }
 ```

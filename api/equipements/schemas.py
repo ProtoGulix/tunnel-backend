@@ -4,6 +4,13 @@ from uuid import UUID
 from pydantic import BaseModel
 
 
+class EquipmentClassRef(BaseModel):
+    """Référence à une classe d'équipement"""
+    id: UUID
+    code: str
+    label: str
+
+
 class EquipementHealth(BaseModel):
     """Santé d'un équipement"""
     level: str
@@ -25,6 +32,7 @@ class EquipementListItem(BaseModel):
     name: str
     health: EquipementHealth
     parent_id: UUID | None = None
+    equipment_class: EquipmentClassRef | None = None
 
     class Config:
         from_attributes = True
@@ -37,6 +45,7 @@ class EquipementDetail(BaseModel):
     name: str
     health: EquipementHealth
     parent_id: UUID | None = None
+    equipment_class: EquipmentClassRef | None = None
     children_ids: list[UUID] = []
 
     class Config:
