@@ -133,7 +133,7 @@ def get_email_body_text(order_number, supplier_name, lines):
         - Tester l'affichage sur mobile (largeur 40 caractères max)
     """
     body_lines = [
-        f"Bonjour,",
+        "Bonjour,",
         "",
         f"Veuillez trouver ci-dessous notre demande de commande n°{order_number}.",
         "",
@@ -164,9 +164,7 @@ def get_email_body_text(order_number, supplier_name, lines):
             body_lines.append(f"  Fabricant: {manufacturer}")
         if manufacturer_ref:
             body_lines.append(f"  Réf. fabricant: {manufacturer_ref}")
-        body_lines.append(f"  Quantité: {quantity} {unit}")
-        body_lines.append("")
-
+        body_lines.extend((f"  Quantité: {quantity} {unit}", ""))
     body_lines.extend([
         "-" * 40,
         "",
@@ -242,10 +240,12 @@ def get_email_body_html(order_number, supplier_name, lines):
             f"<td style='padding: 8px; border: 1px solid #ddd;'>{manufacturer_item.get('manufacturer', '') or line.get('manufacturer', '')}</td>")
         html_lines.append(
             f"<td style='padding: 8px; border: 1px solid #ddd;'>{manufacturer_item.get('ref', '') or line.get('manufacturer_ref', '')}</td>")
-        html_lines.append(
-            f"<td style='padding: 8px; border: 1px solid #ddd; text-align: center;'>{line.get('quantity', 0)} {stock_item.get('unit', 'pcs')}</td>")
-        html_lines.append("</tr>")
-
+        html_lines.extend(
+            (
+                f"<td style='padding: 8px; border: 1px solid #ddd; text-align: center;'>{line.get('quantity', 0)} {stock_item.get('unit', 'pcs')}</td>",
+                "</tr>",
+            )
+        )
     html_lines.extend([
         "</tbody>",
         "</table>",

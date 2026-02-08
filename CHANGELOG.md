@@ -2,6 +2,27 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [1.5.0] - 8 février 2026
+
+### Nouveautés
+
+- **Charge technique (pilotage maintenance)** : Nouvel endpoint d'analyse stratégique
+  - `GET /stats/charge-technique` - Analyse où passe le temps du service maintenance et quelle part est récupérable
+  - Découpage multi-période : `period_type` = `month`, `week`, `quarter` ou `custom`
+  - Calcul automatique des charges : totale, dépannage, constructive (FAB+SUP+PREV+BAT)
+  - Distinction **dépannage évitable** vs **dépannage subi** :
+    - Évitable si `complexity_factor` renseigné (tout facteur est un signal)
+    - Évitable si même `action_subcategory` répétée ≥3 fois sur la même classe d'équipement
+  - **Taux de dépannage évitable** avec indicateur couleur :
+    - Vert (<20%) : Faible levier
+    - Orange (20-40%) : Levier de standardisation
+    - Rouge (>40%) : Problème systémique
+  - Ventilation par facteur de complexité (PCE, ACC, DOC, OUT, ENV, AUT...)
+  - Ventilation par classe d'équipement avec taux individuel
+  - Analyse toujours par classe d'équipement, jamais par machine isolée ni par technicien
+
+---
+
 ## [1.4.0] - 8 février 2026
 
 ### ⚠️ BREAKING CHANGES

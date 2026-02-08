@@ -68,3 +68,59 @@ class ServiceStatusResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# --- Charge Technique ---
+
+class ChargeTechniqueParams(BaseModel):
+    start_date: str
+    end_date: str
+    period_type: str
+
+
+class ChargeBreakdown(BaseModel):
+    charge_totale: float
+    charge_depannage: float
+    charge_constructive: float
+    charge_depannage_evitable: float
+    charge_depannage_subi: float
+
+
+class TauxDepannageEvitable(BaseModel):
+    taux: float
+    status: StatusLabel
+
+
+class ComplexityFactorBreakdown(BaseModel):
+    code: str
+    hours: float
+    action_count: int
+    percent: float
+
+
+class EquipementClassBreakdown(BaseModel):
+    equipement_class_id: str
+    equipement_class_code: str
+    equipement_class_label: str
+    charge_totale: float
+    charge_depannage: float
+    charge_constructive: float
+    charge_depannage_evitable: float
+    taux_depannage_evitable: float
+    status: StatusLabel
+
+
+class ChargeTechniquePeriod(BaseModel):
+    period: Period
+    charges: ChargeBreakdown
+    taux_depannage_evitable: TauxDepannageEvitable
+    cause_breakdown: List[ComplexityFactorBreakdown]
+    by_equipement_class: List[EquipementClassBreakdown]
+
+
+class ChargeTechniqueResponse(BaseModel):
+    params: ChargeTechniqueParams
+    periods: List[ChargeTechniquePeriod]
+
+    class Config:
+        from_attributes = True

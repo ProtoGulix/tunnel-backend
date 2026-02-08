@@ -1,6 +1,6 @@
 # API Manifest
 
-Last updated: 2026-02-08 (v1.4.0)
+Last updated: 2026-02-08 (v1.5.0)
 
 ## Endpoints
 
@@ -327,6 +327,17 @@ Data mapping: table `equipement_class`, column `machine.equipement_class_id`.
 - `GET /stats/service-status` - Get service health metrics (Auth: Optional if AUTH_DISABLED)
   - Query params: `start_date` (YYYY-MM-DD, default: 3 months ago), `end_date` (YYYY-MM-DD, default: today)
   - Returns: charge, fragmentation, pilotage capacity, top 10 causes, site consumption
+
+- `GET /stats/charge-technique` - Analyse de la charge technique (Auth: Optional if AUTH_DISABLED)
+  - Query params:
+    - `start_date` (YYYY-MM-DD, default: 3 months ago)
+    - `end_date` (YYYY-MM-DD, default: today)
+    - `period_type` (string, default: `custom`) - Découpage: `month`, `week`, `quarter`, `custom`
+  - Business rules:
+    - Analyse par **classe d'équipement** (jamais par machine isolée, jamais par technicien)
+    - Une action DEP est **évitable** si : `complexity_factor IS NOT NULL` OU action répétée ≥3 fois (même `action_subcategory` + même `equipement_class`) sur la période
+    - Taux de dépannage évitable : <20% vert, 20-40% orange, >40% rouge
+  - Returns: `ChargeTechniqueResponse`
 
 ### Purchase Requests
 
@@ -946,6 +957,65 @@ Query params:
       "frag_hours": "float",
       "percent_total": "float",
       "percent_frag": "float"
+    }
+  ]
+}
+```
+
+### ChargeTechniqueResponse
+
+```json
+{
+  "params": {
+    "start_date": "date",
+    "end_date": "date",
+    "period_type": "month|week|quarter|custom"
+  },
+  "periods": [
+    {
+      "period": {
+        "start_date": "date",
+        "end_date": "date",
+        "days": "int"
+      },
+      "charges": {
+        "charge_totale": "float",
+        "charge_depannage": "float",
+        "charge_constructive": "float",
+        "charge_depannage_evitable": "float",
+        "charge_depannage_subi": "float"
+      },
+      "taux_depannage_evitable": {
+        "taux": "float (0-100)",
+        "status": {
+          "color": "green|orange|red",
+          "text": "string"
+        }
+      },
+      "cause_breakdown": [
+        {
+          "code": "string (PCE, ACC, DOC, OUT, ENV, AUT...)",
+          "hours": "float",
+          "action_count": "int",
+          "percent": "float"
+        }
+      ],
+      "by_equipement_class": [
+        {
+          "equipement_class_id": "uuid",
+          "equipement_class_code": "string",
+          "equipement_class_label": "string",
+          "charge_totale": "float",
+          "charge_depannage": "float",
+          "charge_constructive": "float",
+          "charge_depannage_evitable": "float",
+          "taux_depannage_evitable": "float (0-100)",
+          "status": {
+            "color": "green|orange|red",
+            "text": "string"
+          }
+        }
+      ]
     }
   ]
 }

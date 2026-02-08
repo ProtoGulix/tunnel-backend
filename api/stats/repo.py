@@ -1,5 +1,6 @@
-from typing import Dict, Any, List
-from datetime import date
+from typing import Dict, Any, List, Tuple
+from datetime import date, timedelta
+from calendar import monthrange
 
 from api.settings import settings
 from api.errors.exceptions import DatabaseError
@@ -13,6 +14,13 @@ from api.stats.schemas import (
     SiteConsumption,
     StatusLabel,
     TopCause,
+    ChargeTechniqueResponse,
+    ChargeTechniqueParams,
+    ChargeTechniquePeriod,
+    ChargeBreakdown,
+    TauxDepannageEvitable,
+    ComplexityFactorBreakdown,
+    EquipementClassBreakdown,
 )
 
 
@@ -315,3 +323,269 @@ class StatsRepository:
         if pilot_percent > 10:
             return self._status('orange', 'Capacité limitée')
         return self._status('red', 'Aucune capacité')
+
+    # ── Charge Technique ──────────────────────────────────────────────
+
+    def get_charge_technique(
+        self, start_date: date, end_date: date, period_type: str = "custom"
+    ) -> ChargeTechniqueResponse:
+        """Analyse de la charge technique sur une ou plusieurs périodes"""
+        periods = self._split_periods(start_date, end_date, period_type)
+        results = [
+            self._compute_charge_technique_period(p_start, p_end)
+            for p_start, p_end in periods
+        ]
+        return ChargeTechniqueResponse(
+            params=ChargeTechniqueParams(
+                start_date=start_date.isoformat(),
+                end_date=end_date.isoformat(),
+                period_type=period_type,
+            ),
+            periods=results,
+        )
+
+    def _split_periods(
+        self, start_date: date, end_date: date, period_type: str
+    ) -> List[Tuple[date, date]]:
+        """Découpe la plage en sous-périodes selon le type"""
+        if period_type == "custom":
+            return [(start_date, end_date)]
+
+        periods: List[Tuple[date, date]] = []
+        current = start_date
+
+        if period_type == "month":
+            while current <= end_date:
+                month_end = date(
+                    current.year, current.month,
+                    monthrange(current.year, current.month)[1],
+                )
+                period_end = min(month_end, end_date)
+                periods.append((current, period_end))
+                current = month_end + timedelta(days=1)
+
+        elif period_type == "week":
+            while current <= end_date:
+                week_end = current + timedelta(days=6 - current.weekday())
+                period_end = min(week_end, end_date)
+                periods.append((current, period_end))
+                current = period_end + timedelta(days=1)
+
+        elif period_type == "quarter":
+            while current <= end_date:
+                quarter_month = ((current.month - 1) // 3 + 1) * 3
+                quarter_end = date(
+                    current.year, quarter_month,
+                    monthrange(current.year, quarter_month)[1],
+                )
+                period_end = min(quarter_end, end_date)
+                periods.append((current, period_end))
+                current = period_end + timedelta(days=1)
+
+        return periods
+
+    def _compute_charge_technique_period(
+        self, start_date: date, end_date: date
+    ) -> ChargeTechniquePeriod:
+        """Calcule la charge technique pour une seule période"""
+        conn = self._get_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                WITH actions_base AS (
+                    SELECT
+                        ia.id,
+                        ia.time_spent,
+                        ia.complexity_factor,
+                        ia.action_subcategory,
+                        c.code as category_code,
+                        ec.id as equipement_class_id,
+                        ec.code as equipement_class_code,
+                        ec.label as equipement_class_label
+                    FROM intervention_action ia
+                    JOIN intervention i ON ia.intervention_id = i.id
+                    LEFT JOIN action_subcategory s ON ia.action_subcategory = s.id
+                    LEFT JOIN action_category c ON s.category_id = c.id
+                    LEFT JOIN machine m ON i.machine_id = m.id
+                    LEFT JOIN equipement_class ec ON m.equipement_class_id = ec.id
+                    WHERE ia.created_at >= %s AND ia.created_at <= %s
+                ),
+                systemic AS (
+                    SELECT action_subcategory, equipement_class_id
+                    FROM actions_base
+                    WHERE category_code = 'DEP'
+                    GROUP BY action_subcategory, equipement_class_id
+                    HAVING COUNT(*) >= 3
+                ),
+                classified AS (
+                    SELECT
+                        a.*,
+                        CASE WHEN a.category_code = 'DEP' THEN 'DEP' ELSE 'CONSTRUCTIVE' END as charge_type,
+                        CASE
+                            WHEN a.category_code = 'DEP' AND (
+                                a.complexity_factor IS NOT NULL
+                                OR EXISTS (
+                                    SELECT 1 FROM systemic sy
+                                    WHERE sy.action_subcategory = a.action_subcategory
+                                    AND (sy.equipement_class_id = a.equipement_class_id
+                                         OR (sy.equipement_class_id IS NULL AND a.equipement_class_id IS NULL))
+                                )
+                            ) THEN true
+                            ELSE false
+                        END as is_evitable
+                    FROM actions_base a
+                ),
+                global_agg AS (
+                    SELECT
+                        COALESCE(SUM(time_spent), 0) as charge_totale,
+                        COALESCE(SUM(CASE WHEN charge_type = 'DEP' THEN time_spent ELSE 0 END), 0) as charge_depannage,
+                        COALESCE(SUM(CASE WHEN charge_type = 'CONSTRUCTIVE' THEN time_spent ELSE 0 END), 0) as charge_constructive,
+                        COALESCE(SUM(CASE WHEN charge_type = 'DEP' AND is_evitable THEN time_spent ELSE 0 END), 0) as charge_depannage_evitable,
+                        COALESCE(SUM(CASE WHEN charge_type = 'DEP' AND NOT is_evitable THEN time_spent ELSE 0 END), 0) as charge_depannage_subi
+                    FROM classified
+                ),
+                cause_breakdown AS (
+                    SELECT
+                        complexity_factor,
+                        SUM(time_spent) as hours,
+                        COUNT(*) as action_count
+                    FROM classified
+                    WHERE charge_type = 'DEP' AND is_evitable AND complexity_factor IS NOT NULL
+                    GROUP BY complexity_factor
+                    ORDER BY hours DESC
+                ),
+                by_equipement_class AS (
+                    SELECT
+                        equipement_class_id,
+                        equipement_class_code,
+                        equipement_class_label,
+                        COALESCE(SUM(time_spent), 0) as charge_totale,
+                        COALESCE(SUM(CASE WHEN charge_type = 'DEP' THEN time_spent ELSE 0 END), 0) as charge_depannage,
+                        COALESCE(SUM(CASE WHEN charge_type = 'CONSTRUCTIVE' THEN time_spent ELSE 0 END), 0) as charge_constructive,
+                        COALESCE(SUM(CASE WHEN charge_type = 'DEP' AND is_evitable THEN time_spent ELSE 0 END), 0) as charge_depannage_evitable
+                    FROM classified
+                    WHERE equipement_class_id IS NOT NULL
+                    GROUP BY equipement_class_id, equipement_class_code, equipement_class_label
+                    ORDER BY charge_totale DESC
+                )
+                SELECT
+                    (SELECT row_to_json(global_agg.*) FROM global_agg) as global_charges,
+                    (SELECT json_agg(row_to_json(cause_breakdown.*)) FROM cause_breakdown) as cause_breakdown,
+                    (SELECT json_agg(row_to_json(by_equipement_class.*)) FROM by_equipement_class) as by_equipement_class
+                """,
+                (start_date, end_date),
+            )
+
+            result = cur.fetchone()
+
+            if not result or not result[0]:
+                return self._empty_charge_technique_period(start_date, end_date)
+
+            global_charges = result[0]
+            cause_data = result[1] or []
+            ec_data = result[2] or []
+
+            period_days = (end_date - start_date).days + 1
+
+            charge_dep = global_charges.get('charge_depannage', 0)
+            charge_evitable = global_charges.get('charge_depannage_evitable', 0)
+            taux = (charge_evitable / charge_dep * 100) if charge_dep > 0 else 0
+
+            return ChargeTechniquePeriod(
+                period=Period(
+                    start_date=start_date.isoformat(),
+                    end_date=end_date.isoformat(),
+                    days=period_days,
+                ),
+                charges=ChargeBreakdown(
+                    charge_totale=round(global_charges.get('charge_totale', 0), 2),
+                    charge_depannage=round(charge_dep, 2),
+                    charge_constructive=round(global_charges.get('charge_constructive', 0), 2),
+                    charge_depannage_evitable=round(charge_evitable, 2),
+                    charge_depannage_subi=round(global_charges.get('charge_depannage_subi', 0), 2),
+                ),
+                taux_depannage_evitable=TauxDepannageEvitable(
+                    taux=round(taux, 1),
+                    status=self._get_taux_evitable_status(taux),
+                ),
+                cause_breakdown=self._format_cause_breakdown(cause_data, charge_evitable),
+                by_equipement_class=self._format_equipement_class_breakdown(ec_data),
+            )
+
+        except Exception as e:
+            raise DatabaseError(f"Erreur base de données: {str(e)}")
+        finally:
+            conn.close()
+
+    def _get_taux_evitable_status(self, taux: float) -> StatusLabel:
+        """Statut couleur du taux de dépannage évitable"""
+        if taux < 20:
+            return self._status('green', 'Faible levier')
+        if taux <= 40:
+            return self._status('orange', 'Levier de standardisation')
+        return self._status('red', 'Problème systémique')
+
+    def _format_cause_breakdown(
+        self, cause_data: List[Dict[str, Any]], total_evitable: float
+    ) -> List[ComplexityFactorBreakdown]:
+        """Formate la ventilation par facteur de complexité"""
+        return [
+            ComplexityFactorBreakdown(
+                code=item['complexity_factor'],
+                hours=round(item['hours'], 2),
+                action_count=item['action_count'],
+                percent=round((item['hours'] / total_evitable * 100), 1) if total_evitable > 0 else 0,
+            )
+            for item in cause_data
+        ]
+
+    def _format_equipement_class_breakdown(
+        self, ec_data: List[Dict[str, Any]]
+    ) -> List[EquipementClassBreakdown]:
+        """Formate la ventilation par classe d'équipement"""
+        results = []
+        for item in ec_data:
+            dep = item.get('charge_depannage', 0)
+            evitable = item.get('charge_depannage_evitable', 0)
+            taux = (evitable / dep * 100) if dep > 0 else 0
+            results.append(
+                EquipementClassBreakdown(
+                    equipement_class_id=str(item['equipement_class_id']),
+                    equipement_class_code=item['equipement_class_code'],
+                    equipement_class_label=item['equipement_class_label'],
+                    charge_totale=round(item.get('charge_totale', 0), 2),
+                    charge_depannage=round(dep, 2),
+                    charge_constructive=round(item.get('charge_constructive', 0), 2),
+                    charge_depannage_evitable=round(evitable, 2),
+                    taux_depannage_evitable=round(taux, 1),
+                    status=self._get_taux_evitable_status(taux),
+                )
+            )
+        return results
+
+    def _empty_charge_technique_period(
+        self, start_date: date, end_date: date
+    ) -> ChargeTechniquePeriod:
+        """Retourne une période vide quand pas de données"""
+        period_days = (end_date - start_date).days + 1
+        return ChargeTechniquePeriod(
+            period=Period(
+                start_date=start_date.isoformat(),
+                end_date=end_date.isoformat(),
+                days=period_days,
+            ),
+            charges=ChargeBreakdown(
+                charge_totale=0,
+                charge_depannage=0,
+                charge_constructive=0,
+                charge_depannage_evitable=0,
+                charge_depannage_subi=0,
+            ),
+            taux_depannage_evitable=TauxDepannageEvitable(
+                taux=0,
+                status=self._status('green', 'Aucune donnée'),
+            ),
+            cause_breakdown=[],
+            by_equipement_class=[],
+        )
