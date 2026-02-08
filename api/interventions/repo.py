@@ -99,11 +99,10 @@ class InterventionRepository:
                 SELECT
                     i.*,
                     m.code as m_code, m.name as m_name, m.no_machine as m_no_machine,
-                    m.affectation as m_affectation, m.marque as m_marque, m.model as m_model,
-                    m.no_serie as m_no_serie, m.equipement_mere as m_equipement_mere,
-                    m.is_mere as m_is_mere, m.type_equipement as m_type_equipement,
-                    m.fabricant as m_fabricant, m.numero_serie as m_numero_serie,
-                    m.date_mise_service as m_date_mise_service, m.notes as m_notes,
+                    m.affectation as m_affectation, m.equipement_mere as m_equipement_mere,
+                    m.is_mere as m_is_mere, m.fabricant as m_fabricant,
+                    m.numero_serie as m_numero_serie, m.date_mise_service as m_date_mise_service,
+                    m.notes as m_notes,
                     COALESCE(SUM(ia.time_spent), 0) as total_time,
                     COUNT(DISTINCT ia.id) as action_count,
                     ROUND(AVG(ia.complexity_score)::numeric, 2)::float as avg_complexity,
@@ -134,12 +133,8 @@ class InterventionRepository:
                         'name': row_dict.pop('m_name', None),
                         'no_machine': row_dict.pop('m_no_machine', None),
                         'affectation': row_dict.pop('m_affectation', None),
-                        'marque': row_dict.pop('m_marque', None),
-                        'model': row_dict.pop('m_model', None),
-                        'no_serie': row_dict.pop('m_no_serie', None),
                         'equipement_mere': row_dict.pop('m_equipement_mere', None),
                         'is_mere': row_dict.pop('m_is_mere', None),
-                        'type_equipement': row_dict.pop('m_type_equipement', None),
                         'fabricant': row_dict.pop('m_fabricant', None),
                         'numero_serie': row_dict.pop('m_numero_serie', None),
                         'date_mise_service': row_dict.pop('m_date_mise_service', None),
@@ -223,7 +218,8 @@ class InterventionRepository:
 
                 # Calculer les stats depuis les actions récupérées
                 # purchase_count: compter les purchase_requests liées via les actions
-                purchase_count = sum(len(a.get('purchase_requests', [])) for a in actions)
+                purchase_count = sum(
+                    len(a.get('purchase_requests', [])) for a in actions)
                 intervention['stats'] = {
                     'action_count': len(actions),
                     'total_time': sum(a.get('time_spent', 0) or 0 for a in actions),

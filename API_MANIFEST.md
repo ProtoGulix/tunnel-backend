@@ -1,6 +1,6 @@
 # API Manifest
 
-Last updated: 2026-02-07 (v1.3.1)
+Last updated: 2026-02-08 (v1.4.0)
 
 ## Endpoints
 
@@ -95,17 +95,17 @@ Last updated: 2026-02-07 (v1.3.1)
       "action_subcategory": 30,
       "tech": "uuid",
       "complexity_score": 7,
-      "complexity_anotation": "AUT",
+      "complexity_factor": "AUT",
       "created_at": "datetime|null"
     }
     ```
   - Business rules:
     - `time_spent`: Quarter hours only (0.25, 0.5, 0.75, 1.0...), minimum 0.25
     - `complexity_score`: Integer between 1 and 10
-    - `complexity_anotation`: Optional if score ≤ 5, **required** if score > 5. Code must exist in complexity_factor table
+    - `complexity_factor`: Optional if score ≤ 5, **required** if score > 5. Code must exist in complexity_factor table
     - `created_at`: Optional datetime. If null or omitted, uses current timestamp. Allows backdating actions. Supports "YYYY-MM-DD", "YYYY-MM-DDTHH:MM:SS", or with timezone
     - `description`: HTML stripped and sanitized
-  - Returns: Full action with subcategory details, complexity stored as `{"AUT": true}` in DB
+  - Returns: Full action with subcategory details
 
 ### Action Categories
 
@@ -126,7 +126,7 @@ Last updated: 2026-02-07 (v1.3.1)
 ### Equipements
 
 - `GET /equipements` - List all equipements with health (lightweight, cacheable) (Auth: Optional if AUTH_DISABLED)
-  - Returns: id, code, name, health (level + reason), parent_id, **equipment_class** (⚠️ **NEW in v1.3.0**)
+  - Returns: id, code, name, health (level + reason), parent_id, **equipement_class** (⚠️ **NEW in v1.3.0**)
   - Response (json):
     ```json
     [
@@ -140,7 +140,7 @@ Last updated: 2026-02-07 (v1.3.1)
           "rules_triggered": null
         },
         "parent_id": null,
-        "equipment_class": {
+        "equipement_class": {
           "id": "b28f1f4f-2a2a-4c9a-9b58-9f9a6d5f0b0c",
           "code": "SCIE",
           "label": "Scie"
@@ -149,7 +149,7 @@ Last updated: 2026-02-07 (v1.3.1)
     ]
     ```
 - `GET /equipements/{id}` - Get specific equipement with health and children (Auth: Optional if AUTH_DISABLED)
-  - Returns: id, code, name, health (level + reason + rules_triggered), parent_id, children_ids, **equipment_class** (⚠️ **NEW in v1.3.0**)
+  - Returns: id, code, name, health (level + reason + rules_triggered), parent_id, children_ids, **equipement_class** (⚠️ **NEW in v1.3.0**)
   - Response (json):
     ```json
     {
@@ -162,7 +162,7 @@ Last updated: 2026-02-07 (v1.3.1)
         "rules_triggered": ["maintenance_overdue"]
       },
       "parent_id": null,
-      "equipment_class": {
+      "equipement_class": {
         "id": "b28f1f4f-2a2a-4c9a-9b58-9f9a6d5f0b0c",
         "code": "SCIE",
         "label": "Scie"
@@ -177,10 +177,10 @@ Last updated: 2026-02-07 (v1.3.1)
       "name": "Scie principale",
       "code": "EQ-001",
       "parent_id": null,
-      "equipment_class_id": "b28f1f4f-2a2a-4c9a-9b58-9f9a6d5f0b0c"
+      "equipement_class_id": "b28f1f4f-2a2a-4c9a-9b58-9f9a6d5f0b0c"
     }
     ```
-  - Returns: Full equipement with health, children_ids, equipment_class
+  - Returns: Full equipement with health, children_ids, equipement_class
   - Response (json):
     ```json
     {
@@ -193,7 +193,7 @@ Last updated: 2026-02-07 (v1.3.1)
         "rules_triggered": []
       },
       "parent_id": null,
-      "equipment_class": {
+      "equipement_class": {
         "id": "b28f1f4f-2a2a-4c9a-9b58-9f9a6d5f0b0c",
         "code": "SCIE",
         "label": "Scie"
@@ -215,7 +215,7 @@ Last updated: 2026-02-07 (v1.3.1)
         "rules_triggered": []
       },
       "parent_id": null,
-      "equipment_class": {
+      "equipement_class": {
         "id": "b28f1f4f-2a2a-4c9a-9b58-9f9a6d5f0b0c",
         "code": "SCIE",
         "label": "Scie"
@@ -258,8 +258,10 @@ Last updated: 2026-02-07 (v1.3.1)
 
 ### Equipement Classes (⚠️ NEW in v1.3.0)
 
-- `GET /equipement_class` - List all equipment classes (Auth: Optional if AUTH_DISABLED)
-  - Returns: Array of equipment classes ordered by code ASC
+Data mapping: table `equipement_class`, column `machine.equipement_class_id`.
+
+- `GET /equipement_class` - List all equipement classes (Auth: Optional if AUTH_DISABLED)
+  - Returns: Array of equipement classes ordered by code ASC
   - Response (json):
     ```json
     [
@@ -271,7 +273,7 @@ Last updated: 2026-02-07 (v1.3.1)
       }
     ]
     ```
-- `GET /equipement_class/{id}` - Get specific equipment class by ID (Auth: Optional if AUTH_DISABLED)
+- `GET /equipement_class/{id}` - Get specific equipement class by ID (Auth: Optional if AUTH_DISABLED)
   - Response (json):
     ```json
     {
@@ -281,7 +283,7 @@ Last updated: 2026-02-07 (v1.3.1)
       "description": "Machines de sciage"
     }
     ```
-- `POST /equipement_class` - Create a new equipment class (Auth: Optional if AUTH_DISABLED)
+- `POST /equipement_class` - Create a new equipement class (Auth: Optional if AUTH_DISABLED)
   - Body (json):
     ```json
     {
@@ -293,7 +295,7 @@ Last updated: 2026-02-07 (v1.3.1)
   - Business rules:
     - `code` and `label` are required
     - `code` must be unique
-  - Returns: Full equipment class with generated UUID
+  - Returns: Full equipement class with generated UUID
   - Response (json):
     ```json
     {
@@ -303,7 +305,7 @@ Last updated: 2026-02-07 (v1.3.1)
       "description": "Machines de sciage"
     }
     ```
-- `PATCH /equipement_class/{id}` - Update an existing equipment class (Auth: Optional if AUTH_DISABLED)
+- `PATCH /equipement_class/{id}` - Update an existing equipement class (Auth: Optional if AUTH_DISABLED)
   - Body: Same as POST (all fields optional)
   - Note: If code changes, uniqueness is validated
   - Response (json):
@@ -315,7 +317,7 @@ Last updated: 2026-02-07 (v1.3.1)
       "description": "Machines de sciage"
     }
     ```
-- `DELETE /equipement_class/{id}` - Delete an equipment class (Auth: Optional if AUTH_DISABLED)
+- `DELETE /equipement_class/{id}` - Delete an equipement class (Auth: Optional if AUTH_DISABLED)
   - Business rules:
     - Cannot delete class if any equipement is using it (returns ValidationError)
   - Returns: 204 No Content on success
@@ -651,6 +653,8 @@ For `GET /interventions/{id}`:
 
 ### InterventionActionOut
 
+⚠️ **BREAKING CHANGE in v1.4.0**: Field `complexity_anotation` renamed to `complexity_factor`. Type changed from `object|null` to `string|null` (now a direct FK to complexity_factor table).
+
 Note: Actions are fetched via `InterventionActionRepository.get_by_intervention()` when included in intervention queries to ensure schema consistency.
 
 ```json
@@ -672,7 +676,7 @@ Note: Actions are fetched via `InterventionActionRepository.get_by_intervention(
   },
   "tech": "uuid|null",
   "complexity_score": "int|null",
-  "complexity_anotation": "object|null",
+  "complexity_factor": "string|null",
   "purchase_requests": ["PurchaseRequestOut"],
   "created_at": "datetime|null",
   "updated_at": "datetime|null"
@@ -736,9 +740,11 @@ Note: Status logs are automatically included when fetching a specific interventi
 
 ### InterventionActionIn (POST)
 
+⚠️ **BREAKING CHANGE in v1.4.0**: Field `complexity_anotation` renamed to `complexity_factor`.
+
 Notes:
 
-- `complexity_anotation` is optional if `complexity_score` ≤ 5, but required if `complexity_score` > 5
+- `complexity_factor` is optional if `complexity_score` ≤ 5, but required if `complexity_score` > 5
 - `created_at` is optional - defaults to current timestamp if null/omitted, allowing backdating of actions. Supports "YYYY-MM-DD", "YYYY-MM-DDTHH:MM:SS", or with timezone
 
 ```json
@@ -749,7 +755,7 @@ Notes:
   "action_subcategory": "int",
   "tech": "uuid",
   "complexity_score": "int",
-  "complexity_anotation": "string|null",
+  "complexity_factor": "string|null",
   "created_at": "datetime|null"
 }
 ```
@@ -800,7 +806,7 @@ Note: `GET /interventions` returns `actions: []` and `status_logs: []` (empty), 
 
 ### EquipementListItem (GET /equipements)
 
-⚠️ **BREAKING CHANGE in v1.3.0**: New `equipment_class` field added.
+⚠️ **BREAKING CHANGE in v1.3.0**: New `equipement_class` field added.
 
 ```json
 {
@@ -812,7 +818,7 @@ Note: `GET /interventions` returns `actions: []` and `status_logs: []` (empty), 
     "reason": "string"
   },
   "parent_id": "uuid|null",
-  "equipment_class": {
+  "equipement_class": {
     "id": "uuid",
     "code": "string",
     "label": "string"
@@ -820,11 +826,11 @@ Note: `GET /interventions` returns `actions: []` and `status_logs: []` (empty), 
 }
 ```
 
-Note: Sorted by urgent count (desc), then open count (desc), then name (asc). Health rules: urgent >= 1 → critical, open > 5 → warning, open > 0 → maintenance, else ok. `equipment_class` is null if no class is assigned to the equipement.
+Note: Sorted by urgent count (desc), then open count (desc), then name (asc). Health rules: urgent >= 1 → critical, open > 5 → warning, open > 0 → maintenance, else ok. `equipement_class` is null if no class is assigned to the equipement.
 
 ### EquipementDetail (GET /equipements/{id})
 
-⚠️ **BREAKING CHANGE in v1.3.0**: New `equipment_class` field added.
+⚠️ **BREAKING CHANGE in v1.3.0**: New `equipement_class` field added.
 
 ```json
 {
@@ -837,7 +843,7 @@ Note: Sorted by urgent count (desc), then open count (desc), then name (asc). He
     "rules_triggered": ["URGENT_OPEN >= 1", "OPEN_TOTAL > 5"]
   },
   "parent_id": "uuid|null",
-  "equipment_class": {
+  "equipement_class": {
     "id": "uuid",
     "code": "string",
     "label": "string"

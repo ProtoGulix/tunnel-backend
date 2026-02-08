@@ -53,15 +53,15 @@ class InterventionActionValidator:
                 f"Champs obligatoires manquants: {', '.join(missing)}")
 
     @staticmethod
-    def validate_complexity_anotation(anotation: str | None) -> str | None:
-        """Valide que complexity_anotation est un code existant en base (si fourni)"""
-        if anotation is None or anotation == "":
+    def validate_complexity_factor(factor: str | None) -> str | None:
+        """Valide que complexity_factor est un code existant en base (si fourni)"""
+        if factor is None or factor == "":
             return None
 
-        if not isinstance(anotation, str):
-            raise ValueError("complexity_anotation doit être un code (string)")
+        if not isinstance(factor, str):
+            raise ValueError("complexity_factor doit être un code (string)")
 
-        code = anotation.strip()
+        code = factor.strip()
         if not code:
             return None
 
@@ -70,18 +70,18 @@ class InterventionActionValidator:
             repo.get_by_code(code)
         except NotFoundError as exc:
             raise ValueError(
-                f"complexity_anotation contient un facteur inconnu: {code}") from exc
+                f"complexity_factor contient un facteur inconnu: {code}") from exc
 
         return code
 
     @staticmethod
-    def validate_complexity_with_factor(complexity_score: int, complexity_anotation: str | None) -> None:
+    def validate_complexity_with_factor(complexity_score: int, complexity_factor: str | None) -> None:
         """
         Valide que si complexity_score > 5, un facteur de complexité valide est renseigné
         """
-        if complexity_score > 5 and (not complexity_anotation or not complexity_anotation.strip()):
+        if complexity_score > 5 and (not complexity_factor or not complexity_factor.strip()):
             raise ValueError(
-                "Un facteur de complexité (complexity_anotation) est obligatoire pour un score de complexité supérieur à 5"
+                "Un facteur de complexité (complexity_factor) est obligatoire pour un score de complexité supérieur à 5"
             )
 
     @staticmethod
@@ -116,14 +116,14 @@ class InterventionActionValidator:
         # Valide complexity_score
         cls.validate_complexity_score(action_data['complexity_score'])
 
-        # Valide complexity_anotation (si fourni)
-        action_data['complexity_anotation'] = cls.validate_complexity_anotation(
-            action_data.get('complexity_anotation'))
+        # Valide complexity_factor (si fourni)
+        action_data['complexity_factor'] = cls.validate_complexity_factor(
+            action_data.get('complexity_factor'))
 
         # Valide que si score > 5, un facteur de complexité est obligatoire
         cls.validate_complexity_with_factor(
             action_data['complexity_score'],
-            action_data.get('complexity_anotation')
+            action_data.get('complexity_factor')
         )
 
         # Valide et normalise created_at (utilise now() si None)

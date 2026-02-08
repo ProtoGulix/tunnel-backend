@@ -41,9 +41,9 @@ class EquipementRepository:
                     m.code,
                     m.name,
                     m.equipement_mere,
-                    ec.id as equipment_class_id,
-                    ec.code as equipment_class_code,
-                    ec.label as equipment_class_label,
+                    ec.id as equipement_class_id,
+                    ec.code as equipement_class_code,
+                    ec.label as equipement_class_label,
                     COUNT(CASE WHEN i.status_actual != '{ferme_id}' THEN i.id END) as open_interventions_count,
                     COUNT(CASE WHEN i.status_actual != '{ferme_id}' AND i.priority = 'urgent' THEN i.id END) as urgent_count
                 FROM machine m
@@ -58,7 +58,7 @@ class EquipementRepository:
             cols = [desc[0] for desc in cur.description]
             equipements = [dict(zip(cols, row)) for row in rows]
 
-            # Enrichir avec health et restructurer equipment_class
+            # Enrichir avec health et restructurer equipement_class
             for equipement in equipements:
                 open_count = equipement.pop('open_interventions_count', 0) or 0
                 urgent_count = equipement.pop('urgent_count', 0) or 0
@@ -71,19 +71,19 @@ class EquipementRepository:
                 equipement['parent_id'] = equipement.pop(
                     'equipement_mere', None)
 
-                # Restructurer equipment_class
-                ec_id = equipement.pop('equipment_class_id', None)
-                ec_code = equipement.pop('equipment_class_code', None)
-                ec_label = equipement.pop('equipment_class_label', None)
+                # Restructurer equipement_class
+                ec_id = equipement.pop('equipement_class_id', None)
+                ec_code = equipement.pop('equipement_class_code', None)
+                ec_label = equipement.pop('equipement_class_label', None)
 
                 if ec_id:
-                    equipement['equipment_class'] = {
+                    equipement['equipement_class'] = {
                         'id': ec_id,
                         'code': ec_code,
                         'label': ec_label
                     }
                 else:
-                    equipement['equipment_class'] = None
+                    equipement['equipement_class'] = None
 
             return equipements
 
@@ -105,9 +105,9 @@ class EquipementRepository:
                     m.code,
                     m.name,
                     m.equipement_mere,
-                    ec.id as equipment_class_id,
-                    ec.code as equipment_class_code,
-                    ec.label as equipment_class_label,
+                    ec.id as equipement_class_id,
+                    ec.code as equipement_class_code,
+                    ec.label as equipement_class_label,
                     COUNT(CASE WHEN i.status_actual != '{ferme_id}' THEN i.id END) as open_interventions_count,
                     COUNT(CASE WHEN i.status_actual != '{ferme_id}' AND i.priority = 'urgent' THEN i.id END) as urgent_count
                 FROM machine m
@@ -133,19 +133,19 @@ class EquipementRepository:
             equipement['health'] = health
             equipement['parent_id'] = equipement.pop('equipement_mere', None)
 
-            # Restructurer equipment_class
-            ec_id = equipement.pop('equipment_class_id', None)
-            ec_code = equipement.pop('equipment_class_code', None)
-            ec_label = equipement.pop('equipment_class_label', None)
+            # Restructurer equipement_class
+            ec_id = equipement.pop('equipement_class_id', None)
+            ec_code = equipement.pop('equipement_class_code', None)
+            ec_label = equipement.pop('equipement_class_label', None)
 
             if ec_id:
-                equipement['equipment_class'] = {
+                equipement['equipement_class'] = {
                     'id': ec_id,
                     'code': ec_code,
                     'label': ec_label
                 }
             else:
-                equipement['equipment_class'] = None
+                equipement['equipement_class'] = None
 
             # Get children_ids
             cur.execute(
@@ -178,7 +178,7 @@ class EquipementRepository:
                     data.get('code'),
                     data['name'],
                     data.get('parent_id'),
-                    data.get('equipment_class_id')
+                    data.get('equipement_class_id')
                 )
             )
             conn.commit()
@@ -203,7 +203,7 @@ class EquipementRepository:
                 'code': 'code',
                 'name': 'name',
                 'parent_id': 'equipement_mere',
-                'equipment_class_id': 'equipement_class_id'
+                'equipement_class_id': 'equipement_class_id'
             }
 
             set_clauses = []
@@ -265,9 +265,9 @@ class EquipementRepository:
                     m.code,
                     m.name,
                     m.equipement_mere,
-                    ec.id as equipment_class_id,
-                    ec.code as equipment_class_code,
-                    ec.label as equipment_class_label,
+                    ec.id as equipement_class_id,
+                    ec.code as equipement_class_code,
+                    ec.label as equipement_class_label,
                     COUNT(CASE WHEN i.status_actual != '{ferme_id}' THEN i.id END) as open_interventions_count,
                     COUNT(CASE WHEN i.status_actual != '{ferme_id}' AND i.priority = 'urgent' THEN i.id END) as urgent_count
                 FROM machine m
@@ -283,7 +283,7 @@ class EquipementRepository:
             cols = [desc[0] for desc in cur.description]
             equipements = [dict(zip(cols, row)) for row in rows]
 
-            # Enrichir avec health et restructurer equipment_class
+            # Enrichir avec health et restructurer equipement_class
             for equipement in equipements:
                 open_count = equipement.pop('open_interventions_count', 0) or 0
                 urgent_count = equipement.pop('urgent_count', 0) or 0
@@ -296,19 +296,19 @@ class EquipementRepository:
                 equipement['parent_id'] = equipement.pop(
                     'equipement_mere', None)
 
-                # Restructurer equipment_class
-                ec_id = equipement.pop('equipment_class_id', None)
-                ec_code = equipement.pop('equipment_class_code', None)
-                ec_label = equipement.pop('equipment_class_label', None)
+                # Restructurer equipement_class
+                ec_id = equipement.pop('equipement_class_id', None)
+                ec_code = equipement.pop('equipement_class_code', None)
+                ec_label = equipement.pop('equipement_class_label', None)
 
                 if ec_id:
-                    equipement['equipment_class'] = {
+                    equipement['equipement_class'] = {
                         'id': ec_id,
                         'code': ec_code,
                         'label': ec_label
                     }
                 else:
-                    equipement['equipment_class'] = None
+                    equipement['equipement_class'] = None
 
             return equipements
         except Exception as e:

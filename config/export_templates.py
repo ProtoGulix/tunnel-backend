@@ -264,7 +264,7 @@ def get_csv_filename(order_number):
 
     Contraintes :
         - Pas d'espaces (utiliser _ ou -)
-        - Pas de caractères spéciaux (é, è, /, \, :, etc.)
+        - Pas de caractères spéciaux (é, è, /, \\, :, etc.)
         - Extension .csv obligatoire
         - Maximum 255 caractères
 

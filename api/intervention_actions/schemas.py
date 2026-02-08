@@ -12,7 +12,7 @@ class InterventionActionIn(BaseModel):
     action_subcategory: int
     tech: UUID
     complexity_score: int
-    complexity_anotation: Optional[str] = Field(default=None)
+    complexity_factor: Optional[str] = Field(default=None)
     created_at: Optional[str] = Field(default=None)
 
     class Config:
@@ -50,7 +50,7 @@ class InterventionActionOut(BaseModel):
     subcategory: Optional[ActionSubcategoryDetail] = Field(default=None)
     tech: Optional[UUID] = Field(default=None)
     complexity_score: Optional[int] = Field(default=None)
-    complexity_anotation: Optional[dict] = Field(default=None)
+    complexity_factor: Optional[str] = Field(default=None)
     purchase_requests: List[Any] = Field(
         default_factory=list,
         description="Demandes d'achat liées (PurchaseRequestOut) via table de jonction"

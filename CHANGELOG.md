@@ -2,6 +2,20 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [1.4.0] - 8 février 2026
+
+### ⚠️ BREAKING CHANGES
+
+- **Renommage du champ de facteur de complexité** : Le champ `complexity_anotation` devient `complexity_factor`
+  - Impact sur les endpoints :
+    - `POST /intervention_actions/` - Entrée : utiliser `complexity_factor` au lieu de `complexity_anotation`
+    - `GET /interventions/{id}/actions` - Sortie : le champ `complexity_factor` remplace `complexity_anotation`
+    - `GET /intervention_actions/{id}` - Sortie : le champ `complexity_factor` remplace `complexity_anotation`
+  - Le type de sortie change de `object|null` à `string|null` (c'est maintenant une FK directe vers la table complexity_factor)
+  - Migration : les applications clientes doivent mettre à jour leurs appels API
+
+---
+
 ## [1.3.1] - 7 février 2026
 
 ### Nouveautés

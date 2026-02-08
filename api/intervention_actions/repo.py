@@ -125,7 +125,7 @@ class InterventionActionRepository:
                 """
                 SELECT
                     ia.id, ia.intervention_id, ia.description, ia.time_spent,
-                    ia.tech, ia.complexity_score, ia.complexity_anotation,
+                    ia.tech, ia.complexity_score, ia.complexity_factor,
                     ia.created_at, ia.updated_at,
                     sc.id as subcategory_id, sc.name as subcategory_name, sc.code as subcategory_code,
                     ac.id as category_id, ac.name as category_name, ac.code as category_code, ac.color
@@ -142,7 +142,8 @@ class InterventionActionRepository:
 
             results = []
             for row in rows:
-                action = self._map_action_with_subcategory(dict(zip(cols, row)))
+                action = self._map_action_with_subcategory(
+                    dict(zip(cols, row)))
                 action['purchase_requests'] = self._get_linked_purchase_requests(
                     str(action['id']), conn)
                 results.append(action)
@@ -161,7 +162,7 @@ class InterventionActionRepository:
                 """
                 SELECT
                     ia.id, ia.intervention_id, ia.description, ia.time_spent,
-                    ia.tech, ia.complexity_score, ia.complexity_anotation,
+                    ia.tech, ia.complexity_score, ia.complexity_factor,
                     ia.created_at, ia.updated_at,
                     sc.id as subcategory_id, sc.name as subcategory_name, sc.code as subcategory_code,
                     ac.id as category_id, ac.name as category_name, ac.code as category_code, ac.color
@@ -201,10 +202,6 @@ class InterventionActionRepository:
             cur = conn.cursor()
             action_id = str(uuid4())
             now = datetime.now()
-            # Persist complexity as JSON object {code: true} to match DB json type
-            # Si complexity_anotation est None, stocker None au lieu d'un objet JSON
-            complexity_anotation = validated_data.get('complexity_anotation')
-            complexity_json = {complexity_anotation: True} if complexity_anotation else None
 
             # Utilise created_at du validator (qui utilise now() si None)
             created_at = validated_data.get('created_at', now)
@@ -213,7 +210,7 @@ class InterventionActionRepository:
                 """
                 INSERT INTO intervention_action
                 (id, intervention_id, description, time_spent, action_subcategory,
-                 tech, complexity_score, complexity_anotation, created_at, updated_at)
+                 tech, complexity_score, complexity_factor, created_at, updated_at)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING *
                 """,
@@ -225,7 +222,7 @@ class InterventionActionRepository:
                     validated_data['action_subcategory'],
                     validated_data['tech'],
                     validated_data['complexity_score'],
-                    complexity_json,
+                    validated_data.get('complexity_factor'),
                     created_at,
                     now
                 )
