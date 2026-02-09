@@ -1034,7 +1034,24 @@ Query params:
           "status": {
             "color": "green|orange|red",
             "text": "string"
-          }
+          },
+          "evitable_breakdown": {
+            "hours_with_factor": "float (heures avec facteur de complexité renseigné)",
+            "hours_systemic": "float (heures de problèmes récurrents ≥3 fois)",
+            "hours_both": "float (heures avec les deux critères)",
+            "total_evitable": "float (total évitable = somme - doublon)"
+          },
+          "explanation": "string (diagnostic détaillé avec ventilation par critère)",
+          "top_causes": [
+            {
+              "code": "string (ACC, PCE, DOC, etc.)",
+              "label": "string|null",
+              "category": "string|null (Technique, Logistique, etc.)",
+              "hours": "float",
+              "percent": "float (% du dépannage évitable de cette classe)"
+            }
+          ],
+          "recommended_action": "string (action concrète recommandée pour cette classe spécifique)"
         }
       ]
     }

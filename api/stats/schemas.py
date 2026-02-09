@@ -100,6 +100,22 @@ class ComplexityFactorBreakdown(BaseModel):
     percent: float
 
 
+class EquipementClassCause(BaseModel):
+    code: str
+    label: str | None
+    category: str | None
+    hours: float
+    percent: float
+
+
+class EvitableBreakdown(BaseModel):
+    """Ventilation du dépannage évitable par critère"""
+    hours_with_factor: float  # Heures avec facteur de complexité renseigné
+    hours_systemic: float  # Heures de problèmes récurrents (≥3 fois)
+    hours_both: float  # Heures avec les deux critères
+    total_evitable: float  # Total évitable
+
+
 class EquipementClassBreakdown(BaseModel):
     equipement_class_id: str
     equipement_class_code: str
@@ -110,6 +126,10 @@ class EquipementClassBreakdown(BaseModel):
     charge_depannage_evitable: float
     taux_depannage_evitable: float
     status: StatusLabel
+    evitable_breakdown: EvitableBreakdown
+    explanation: str
+    top_causes: List[EquipementClassCause]
+    recommended_action: str
 
 
 class ChargeTechniquePeriod(BaseModel):

@@ -488,6 +488,13 @@ class StatsRepository:
                     SELECT
                         a.*,
                         CASE WHEN a.category_code = 'DEP' THEN 'DEP' ELSE 'CONSTRUCTIVE' END as charge_type,
+                        a.complexity_factor IS NOT NULL as has_factor,
+                        EXISTS (
+                            SELECT 1 FROM systemic sy
+                            WHERE sy.action_subcategory = a.action_subcategory
+                            AND (sy.equipement_class_id = a.equipement_class_id
+                                 OR (sy.equipement_class_id IS NULL AND a.equipement_class_id IS NULL))
+                        ) as is_systemic,
                         CASE
                             WHEN a.category_code = 'DEP' AND (
                                 a.complexity_factor IS NOT NULL
@@ -531,16 +538,59 @@ class StatsRepository:
                         COALESCE(SUM(time_spent), 0) as charge_totale,
                         COALESCE(SUM(CASE WHEN charge_type = 'DEP' THEN time_spent ELSE 0 END), 0) as charge_depannage,
                         COALESCE(SUM(CASE WHEN charge_type = 'CONSTRUCTIVE' THEN time_spent ELSE 0 END), 0) as charge_constructive,
-                        COALESCE(SUM(CASE WHEN charge_type = 'DEP' AND is_evitable THEN time_spent ELSE 0 END), 0) as charge_depannage_evitable
+                        COALESCE(SUM(CASE WHEN charge_type = 'DEP' AND is_evitable THEN time_spent ELSE 0 END), 0) as charge_depannage_evitable,
+                        COALESCE(SUM(CASE WHEN charge_type = 'DEP' AND has_factor THEN time_spent ELSE 0 END), 0) as hours_with_factor,
+                        COALESCE(SUM(CASE WHEN charge_type = 'DEP' AND is_systemic THEN time_spent ELSE 0 END), 0) as hours_systemic,
+                        COALESCE(SUM(CASE WHEN charge_type = 'DEP' AND has_factor AND is_systemic THEN time_spent ELSE 0 END), 0) as hours_both
                     FROM classified
                     WHERE equipement_class_id IS NOT NULL
                     GROUP BY equipement_class_id, equipement_class_code, equipement_class_label
                     ORDER BY charge_totale DESC
+                ),
+                causes_by_class AS (
+                    SELECT
+                        equipement_class_id,
+                        json_agg(
+                            json_build_object(
+                                'code', complexity_factor,
+                                'label', complexity_factor_label,
+                                'category', complexity_factor_category,
+                                'hours', hours,
+                                'action_count', action_count
+                            ) ORDER BY hours DESC
+                        ) as causes
+                    FROM (
+                        SELECT
+                            equipement_class_id,
+                            complexity_factor,
+                            complexity_factor_label,
+                            complexity_factor_category,
+                            SUM(time_spent) as hours,
+                            COUNT(*) as action_count
+                        FROM classified
+                        WHERE charge_type = 'DEP' AND is_evitable AND complexity_factor IS NOT NULL AND equipement_class_id IS NOT NULL
+                        GROUP BY equipement_class_id, complexity_factor, complexity_factor_label, complexity_factor_category
+                    ) sub
+                    GROUP BY equipement_class_id
                 )
                 SELECT
                     (SELECT row_to_json(global_agg.*) FROM global_agg) as global_charges,
                     (SELECT json_agg(row_to_json(cause_breakdown.*)) FROM cause_breakdown) as cause_breakdown,
-                    (SELECT json_agg(row_to_json(by_equipement_class.*)) FROM by_equipement_class) as by_equipement_class
+                    (SELECT json_agg(
+                        json_build_object(
+                            'equipement_class_id', ec.equipement_class_id,
+                            'equipement_class_code', ec.equipement_class_code,
+                            'equipement_class_label', ec.equipement_class_label,
+                            'charge_totale', ec.charge_totale,
+                            'charge_depannage', ec.charge_depannage,
+                            'charge_constructive', ec.charge_constructive,
+                            'charge_depannage_evitable', ec.charge_depannage_evitable,
+                            'hours_with_factor', ec.hours_with_factor,
+                            'hours_systemic', ec.hours_systemic,
+                            'hours_both', ec.hours_both,
+                            'causes', COALESCE(cbc.causes, '[]'::json)
+                        )
+                    ) FROM by_equipement_class ec LEFT JOIN causes_by_class cbc ON ec.equipement_class_id = cbc.equipement_class_id) as by_equipement_class
                 """,
                 (start_date, end_date),
             )
@@ -614,11 +664,49 @@ class StatsRepository:
         self, ec_data: List[Dict[str, Any]]
     ) -> List[EquipementClassBreakdown]:
         """Formate la ventilation par classe d'équipement"""
+        from api.stats.schemas import EquipementClassCause, EvitableBreakdown
+        
         results = []
         for item in ec_data:
             dep = item.get('charge_depannage', 0)
             evitable = item.get('charge_depannage_evitable', 0)
             taux = (evitable / dep * 100) if dep > 0 else 0
+            
+            # Ventilation du dépannage évitable
+            hours_with_factor = item.get('hours_with_factor', 0)
+            hours_systemic = item.get('hours_systemic', 0)
+            hours_both = item.get('hours_both', 0)
+            
+            evitable_breakdown = EvitableBreakdown(
+                hours_with_factor=round(hours_with_factor, 2),
+                hours_systemic=round(hours_systemic, 2),
+                hours_both=round(hours_both, 2),
+                total_evitable=round(evitable, 2),
+            )
+            
+            # Formater les causes pour cette classe
+            causes_raw = item.get('causes', [])
+            top_causes = []
+            for cause in causes_raw[:3]:  # Top 3
+                hours = cause.get('hours', 0)
+                percent = (hours / evitable * 100) if evitable > 0 else 0
+                top_causes.append(EquipementClassCause(
+                    code=cause['code'],
+                    label=cause.get('label'),
+                    category=cause.get('category'),
+                    hours=round(hours, 2),
+                    percent=round(percent, 1),
+                ))
+            
+            # Générer l'explication
+            explanation = self._generate_class_explanation(
+                taux, evitable, dep, top_causes, item['equipement_class_label'],
+                evitable_breakdown
+            )
+            
+            # Recommandation d'action
+            recommended_action = self._generate_class_recommendation(taux, top_causes)
+            
             results.append(
                 EquipementClassBreakdown(
                     equipement_class_id=str(item['equipement_class_id']),
@@ -630,9 +718,86 @@ class StatsRepository:
                     charge_depannage_evitable=round(evitable, 2),
                     taux_depannage_evitable=round(taux, 1),
                     status=self._get_taux_evitable_status(taux),
+                    evitable_breakdown=evitable_breakdown,
+                    explanation=explanation,
+                    top_causes=top_causes,
+                    recommended_action=recommended_action,
                 )
             )
         return results
+    
+    def _generate_class_explanation(
+        self, taux: float, evitable: float, depannage: float, 
+        top_causes: List, class_label: str, breakdown
+    ) -> str:
+        """Génère une explication du diagnostic pour cette classe"""
+        if depannage == 0:
+            return f"Aucun dépannage enregistré sur {class_label}."
+        
+        # Construire l'explication de base
+        base = f"{evitable:.1f}h de dépannage évitable sur {depannage:.1f}h total ({taux:.1f}%)."
+        
+        # Ajouter la ventilation par critère
+        only_factor = breakdown.hours_with_factor - breakdown.hours_both
+        only_systemic = breakdown.hours_systemic - breakdown.hours_both
+        both = breakdown.hours_both
+        
+        criteria_parts = []
+        if only_factor > 0:
+            criteria_parts.append(f"{only_factor:.1f}h avec facteur de complexité")
+        if only_systemic > 0:
+            criteria_parts.append(f"{only_systemic:.1f}h de problèmes récurrents (≥3 fois)")
+        if both > 0:
+            criteria_parts.append(f"{both:.1f}h avec les deux critères")
+        
+        if criteria_parts:
+            criteria_text = " : " + ", ".join(criteria_parts) + "."
+        else:
+            criteria_text = ""
+        
+        if taux < 20:
+            return f"{base} Peu de marge d'amélioration identifiable{criteria_text}"
+        
+        # Construire le texte des causes principales
+        if top_causes:
+            causes_text = " Causes principales : " + ", ".join([
+                f"{c.label or c.code} ({c.percent:.0f}%)" for c in top_causes[:2]
+            ]) + "."
+        else:
+            causes_text = ""
+        
+        if taux <= 40:
+            return f"{base}{criteria_text}{causes_text} Gains possibles par standardisation."
+        
+        return f"{base}{criteria_text}{causes_text} Problème systémique à traiter en priorité."
+    
+    def _generate_class_recommendation(self, taux: float, top_causes: List) -> str:
+        """Génère une recommandation d'action pour cette classe"""
+        if taux < 20:
+            return "Maintenir la surveillance. Le levier d'amélioration est limité."
+        
+        if not top_causes:
+            return "Commencer par annoter les actions avec des facteurs de complexité pour identifier les causes."
+        
+        main_cause = top_causes[0]
+        category = main_cause.category or "Divers"
+        
+        actions_map = {
+            "Ressources": "Assurer la disponibilité des outillages et équipements nécessaires",
+            "Technique": "Renforcer l'accessibilité et la conception des équipements",
+            "Information": "Améliorer la documentation technique et les schémas",
+            "Logistique": "Optimiser la gestion des pièces de rechange (stock, qualité, délais)",
+            "Environnement": "Adapter les conditions de travail (température, bruit, sécurité)",
+            "Organisation": "Revoir la planification et la synchronisation des interventions",
+            "Compétence": "Former les équipes ou redistribuer les tâches selon les compétences",
+        }
+        
+        base_action = actions_map.get(category, "Analyser les causes et mettre en place des actions correctives")
+        
+        if taux > 40:
+            return f"URGENT - {base_action}. Le problème est systémique."
+        
+        return base_action
 
     def _empty_charge_technique_period(
         self, start_date: date, end_date: date
