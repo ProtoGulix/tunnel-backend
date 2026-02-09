@@ -1,0 +1,14 @@
+
+services:
+  # API Backend
+  api:
+    build: .
+    container_name: tunnel-api
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./api:/app/api
+      - ./config:/app/config
+    network_mode: "host"

@@ -25,7 +25,35 @@ Cette API fournit les données pour l'interface Tunnel GMAO :
 
 PME industrielles avec 10 à 100 machines et équipes de maintenance de 1 à 10 personnes qui veulent structurer leur maintenance sans logiciel lourd et coûteux.
 
-## 📄 Licence
+## � Démarrage
+
+### Option 1 : Docker (Recommandé)
+
+```bash
+# Démarrer tous les services (PostgreSQL + Directus + API)
+docker-compose up -d
+
+# Accès
+# API: http://localhost:8000/docs
+# Directus: http://localhost:8055 (admin@tunnel.local / admin)
+```
+
+### Option 2 : Local (Python 3.12)
+
+```bash
+# Windows
+.\run.bat
+
+# Linux/Mac
+./run.sh
+
+# Accès
+# API: http://localhost:8000/docs
+```
+
+**Note** : En local, PostgreSQL et Directus doivent être démarrés séparément ou via Docker.
+
+## �📄 Licence
 
 **AGPL-3.0** - Conformément au projet Tunnel GMAO
 

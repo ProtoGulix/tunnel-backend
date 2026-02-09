@@ -23,10 +23,25 @@ class Settings(BaseSettings):
 
     # API
     API_TITLE: str = "GMAO API"
-    API_VERSION: str = "1.5.1"
+    API_VERSION: str = "1.5.2"
     API_ENV: str = os.getenv("API_ENV", "development")
     AUTH_DISABLED: bool = os.getenv("AUTH_DISABLED", "false").lower() == "true"
     FRONTEND_URL: str = os.getenv("FRONTEND_URL", "http://localhost:5173")
+    
+    @property
+    def CORS_ORIGINS(self) -> list[str]:
+        """Liste des origines autorisées pour CORS"""
+        if self.API_ENV == "development":
+            # En dev: autorise localhost sur plusieurs ports communs
+            return [
+                "http://localhost:5173",
+                "http://localhost:3000",
+                "http://127.0.0.1:5173",
+                "http://127.0.0.1:3000",
+                self.FRONTEND_URL
+            ]
+        # En prod: uniquement l'origine configurée
+        return [self.FRONTEND_URL]
 
     def get_db_connection(self):
         """Créé une connexion PostgreSQL"""

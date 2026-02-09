@@ -21,6 +21,10 @@ class JWTMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next):
         try:
+            # Requêtes OPTIONS (CORS preflight) : laisser passer sans auth
+            if request.method == "OPTIONS":
+                return await call_next(request)
+            
             # Routes publiques : laisser passer sans auth
             if request.url.path in self.PUBLIC_ROUTES or request.url.path.startswith("/static"):
                 return await call_next(request)

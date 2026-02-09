@@ -2,6 +2,25 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [1.5.2] - 9 février 2026
+
+### Corrections
+
+- **CORS** : Correction des erreurs CORS Missing Allow Origin
+  - Ajout de `CORS_ORIGINS` property avec support multi-origines en développement (localhost:5173, localhost:3000, 127.0.0.1:5173, 127.0.0.1:3000)
+  - Ajout de `expose_headers=["*"]` dans CORSMiddleware
+  - Middleware JWT : bypass des requêtes OPTIONS (CORS preflight) avant vérification d'authentification
+
+### Nouveautés
+
+- **Docker** : Ajout de configuration Docker et docker-compose
+  - `Dockerfile` : Image Python 3.12 avec hot-reload pour développement
+  - `docker-compose.yml` : Configuration minimaliste pour l'API seule
+  - `.dockerignore` : Exclusions optimisées du build
+  - Mise à jour du README avec instructions de démarrage Docker
+
+---
+
 ## [1.5.1] - 8 février 2026
 
 ### Améliorations
