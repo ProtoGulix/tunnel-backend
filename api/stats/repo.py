@@ -17,6 +17,9 @@ from api.stats.schemas import (
     ChargeTechniqueResponse,
     ChargeTechniqueParams,
     ChargeTechniquePeriod,
+    ChargeTechniqueGuide,
+    TauxEvitableSeuil,
+    CategoryAction,
     ChargeBreakdown,
     TauxDepannageEvitable,
     ComplexityFactorBreakdown,
@@ -326,6 +329,65 @@ class StatsRepository:
 
     # ── Charge Technique ──────────────────────────────────────────────
 
+    CHARGE_TECHNIQUE_GUIDE = ChargeTechniqueGuide(
+        objectif=(
+            "Identifier où passe le temps du service maintenance "
+            "et quelle part est récupérable pour d'autres activités "
+            "(fabrication, amélioration, développement)."
+        ),
+        seuils_taux_evitable=[
+            TauxEvitableSeuil(
+                min=0, max=20, color="green",
+                label="Levier limité",
+                action="Dépannage majoritairement subi, difficile à réduire",
+            ),
+            TauxEvitableSeuil(
+                min=20, max=40, color="orange",
+                label="Standardisation rentable",
+                action="Investir dans les standards et l'amélioration est rentable",
+            ),
+            TauxEvitableSeuil(
+                min=40, max=None, color="red",
+                label="Défaut système",
+                action="La conception ou l'organisation est à revoir en profondeur",
+            ),
+        ],
+        actions_par_categorie=[
+            CategoryAction(
+                category="Ressources", color="#ef4444",
+                action="Homogénéiser l'architecture et les outils",
+            ),
+            CategoryAction(
+                category="Technique", color="#3b82f6",
+                action="Modifier la conception ou améliorer l'accessibilité",
+            ),
+            CategoryAction(
+                category="Information", color="#8b5cf6",
+                action="Capitaliser : documentation, méthodes, fiches",
+            ),
+            CategoryAction(
+                category="Organisation", color="#f97316",
+                action="Clarifier processus et consignes",
+            ),
+            CategoryAction(
+                category="Environnement", color="#22c55e",
+                action="Agir sur les systèmes primaires (air, eau, etc.)",
+            ),
+            CategoryAction(
+                category="Logistique", color="#06b6d4",
+                action="Créer ou renforcer les standards pièces",
+            ),
+            CategoryAction(
+                category="Compétence", color="#eab308",
+                action="Former et accompagner les équipes",
+            ),
+            CategoryAction(
+                category="Divers", color="#6b7280",
+                action="Analyser au cas par cas",
+            ),
+        ],
+    )
+
     def get_charge_technique(
         self, start_date: date, end_date: date, period_type: str = "custom"
     ) -> ChargeTechniqueResponse:
@@ -341,6 +403,7 @@ class StatsRepository:
                 end_date=end_date.isoformat(),
                 period_type=period_type,
             ),
+            guide=self.CHARGE_TECHNIQUE_GUIDE,
             periods=results,
         )
 
@@ -398,6 +461,8 @@ class StatsRepository:
                         ia.id,
                         ia.time_spent,
                         ia.complexity_factor,
+                        cf.label as complexity_factor_label,
+                        cf.category as complexity_factor_category,
                         ia.action_subcategory,
                         c.code as category_code,
                         ec.id as equipement_class_id,
@@ -409,6 +474,7 @@ class StatsRepository:
                     LEFT JOIN action_category c ON s.category_id = c.id
                     LEFT JOIN machine m ON i.machine_id = m.id
                     LEFT JOIN equipement_class ec ON m.equipement_class_id = ec.id
+                    LEFT JOIN complexity_factor cf ON ia.complexity_factor = cf.code
                     WHERE ia.created_at >= %s AND ia.created_at <= %s
                 ),
                 systemic AS (
@@ -448,11 +514,13 @@ class StatsRepository:
                 cause_breakdown AS (
                     SELECT
                         complexity_factor,
+                        complexity_factor_label,
+                        complexity_factor_category,
                         SUM(time_spent) as hours,
                         COUNT(*) as action_count
                     FROM classified
                     WHERE charge_type = 'DEP' AND is_evitable AND complexity_factor IS NOT NULL
-                    GROUP BY complexity_factor
+                    GROUP BY complexity_factor, complexity_factor_label, complexity_factor_category
                     ORDER BY hours DESC
                 ),
                 by_equipement_class AS (
@@ -521,10 +589,10 @@ class StatsRepository:
     def _get_taux_evitable_status(self, taux: float) -> StatusLabel:
         """Statut couleur du taux de dépannage évitable"""
         if taux < 20:
-            return self._status('green', 'Faible levier')
+            return self._status('green', 'Levier limité')
         if taux <= 40:
-            return self._status('orange', 'Levier de standardisation')
-        return self._status('red', 'Problème systémique')
+            return self._status('orange', 'Standardisation rentable')
+        return self._status('red', 'Défaut système')
 
     def _format_cause_breakdown(
         self, cause_data: List[Dict[str, Any]], total_evitable: float
@@ -533,6 +601,8 @@ class StatsRepository:
         return [
             ComplexityFactorBreakdown(
                 code=item['complexity_factor'],
+                label=item.get('complexity_factor_label'),
+                category=item.get('complexity_factor_category'),
                 hours=round(item['hours'], 2),
                 action_count=item['action_count'],
                 percent=round((item['hours'] / total_evitable * 100), 1) if total_evitable > 0 else 0,

@@ -93,6 +93,8 @@ class TauxDepannageEvitable(BaseModel):
 
 class ComplexityFactorBreakdown(BaseModel):
     code: str
+    label: str | None
+    category: str | None
     hours: float
     action_count: int
     percent: float
@@ -118,8 +120,29 @@ class ChargeTechniquePeriod(BaseModel):
     by_equipement_class: List[EquipementClassBreakdown]
 
 
+class TauxEvitableSeuil(BaseModel):
+    min: float
+    max: float | None
+    color: str
+    label: str
+    action: str
+
+
+class CategoryAction(BaseModel):
+    category: str
+    color: str
+    action: str
+
+
+class ChargeTechniqueGuide(BaseModel):
+    objectif: str
+    seuils_taux_evitable: List[TauxEvitableSeuil]
+    actions_par_categorie: List[CategoryAction]
+
+
 class ChargeTechniqueResponse(BaseModel):
     params: ChargeTechniqueParams
+    guide: ChargeTechniqueGuide
     periods: List[ChargeTechniquePeriod]
 
     class Config:

@@ -1,6 +1,6 @@
 # API Manifest
 
-Last updated: 2026-02-08 (v1.5.0)
+Last updated: 2026-02-08 (v1.5.1)
 
 ## Endpoints
 
@@ -971,6 +971,25 @@ Query params:
     "end_date": "date",
     "period_type": "month|week|quarter|custom"
   },
+  "guide": {
+    "objectif": "string (description de l'objectif de l'analyse)",
+    "seuils_taux_evitable": [
+      {
+        "min": "float",
+        "max": "float|null",
+        "color": "green|orange|red",
+        "label": "string",
+        "action": "string (recommandation d'action)"
+      }
+    ],
+    "actions_par_categorie": [
+      {
+        "category": "string (Ressources, Technique, Information, Organisation, Environnement, Logistique, Compétence, Divers)",
+        "color": "string (hex color)",
+        "action": "string (recommandation d'action)"
+      }
+    ]
+  },
   "periods": [
     {
       "period": {
@@ -994,7 +1013,9 @@ Query params:
       },
       "cause_breakdown": [
         {
-          "code": "string (PCE, ACC, DOC, OUT, ENV, AUT...)",
+          "code": "string (ACC, AUT, CMP, COM, DIAG, DOC, OUT, PCE, PCS, PRD, RCH, TEM, VIE)",
+          "label": "string|null",
+          "category": "string|null (Environnement, Divers, Compétence, Organisation, Technique, Information, Ressources, Logistique)",
           "hours": "float",
           "action_count": "int",
           "percent": "float"

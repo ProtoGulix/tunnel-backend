@@ -2,6 +2,16 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [1.5.1] - 8 février 2026
+
+### Améliorations
+
+- **Guide de lecture charge technique** : Alignement des textes avec les règles métier (REGLES_METIER.md)
+  - Seuils du taux évitable : labels et actions corrigés pour correspondre au document de référence
+  - Actions par catégorie de complexité : recalées sur le mapping réel des facteurs (PCE→Logistique, ACC→Technique, DOC→Information, OUT→Ressources, ENV→Environnement)
+
+---
+
 ## [1.5.0] - 8 février 2026
 
 ### Nouveautés
@@ -20,6 +30,7 @@ Toutes les modifications importantes de l'API sont documentées ici.
   - Ventilation par facteur de complexité (PCE, ACC, DOC, OUT, ENV, AUT...)
   - Ventilation par classe d'équipement avec taux individuel
   - Analyse toujours par classe d'équipement, jamais par machine isolée ni par technicien
+  - **Guide de lecture** intégré dans la réponse (`guide`) : l'API fournit l'objectif, les seuils d'interprétation du taux évitable, et les actions recommandées par catégorie de complexité
 
 ---
 
