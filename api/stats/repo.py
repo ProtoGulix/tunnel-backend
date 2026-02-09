@@ -952,8 +952,10 @@ class StatsRepository:
                 FROM intervention_action ia
                 JOIN intervention i ON ia.intervention_id = i.id
                 LEFT JOIN action_subcategory s ON ia.action_subcategory = s.id
+                LEFT JOIN action_category c ON s.category_id = c.id
                 LEFT JOIN machine m ON i.machine_id = m.id
                 WHERE ia.created_at >= %s AND ia.created_at <= %s
+                  AND (c.code IS NULL OR c.code != 'PREV')
                 GROUP BY s.code, s.name, m.id, m.name, TO_CHAR(ia.created_at, 'YYYY-MM')
                 HAVING COUNT(*) > %s
                 ORDER BY cnt DESC
@@ -1010,8 +1012,10 @@ class StatsRepository:
                     COUNT(DISTINCT ia.intervention_id) as intervention_count
                 FROM intervention_action ia
                 LEFT JOIN action_subcategory s ON ia.action_subcategory = s.id
+                LEFT JOIN action_category c ON s.category_id = c.id
                 WHERE ia.created_at >= %s AND ia.created_at <= %s
                   AND ia.time_spent < %s
+                  AND (c.code IS NULL OR c.code != 'PREV')
                 GROUP BY s.code, s.name
                 HAVING COUNT(*) >= %s
                 ORDER BY cnt DESC
@@ -1209,9 +1213,11 @@ class StatsRepository:
                 FROM intervention_action ia
                 JOIN intervention i ON ia.intervention_id = i.id
                 LEFT JOIN action_subcategory s ON ia.action_subcategory = s.id
+                LEFT JOIN action_category c ON s.category_id = c.id
                 LEFT JOIN machine m ON i.machine_id = m.id
                 LEFT JOIN directus_users u ON ia.tech = u.id
                 WHERE ia.created_at >= %s AND ia.created_at <= %s
+                  AND (c.code IS NULL OR c.code != 'PREV')
                 ORDER BY ia.tech, ia.intervention_id, ia.created_at ASC
                 """,
                 (start_date, end_date),

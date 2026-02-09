@@ -2,6 +2,17 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [1.6.1] - 9 février 2026
+
+### Corrections
+
+- **Exclusion du préventif des anomalies** : Les actions de catégorie PREV sont exclues des détections où elles créaient des faux positifs
+  - Type A (répétitives) : les actions préventives récurrentes (nettoyage filtres, etc.) ne remontent plus
+  - Type B (fragmentées) : les actions préventives courtes (0.25h, 0.5h) ne remontent plus
+  - Type E (back-to-back) : les actions préventives quotidiennes consécutives ne remontent plus
+
+---
+
 ## [1.6.0] - 9 février 2026
 
 ### Nouveautés
