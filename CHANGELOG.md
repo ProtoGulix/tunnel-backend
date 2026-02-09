@@ -2,6 +2,24 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [1.6.0] - 9 février 2026
+
+### Nouveautés
+
+- **Détection des anomalies de saisie** : Nouvel endpoint d'analyse qualité des actions d'intervention
+  - `GET /stats/anomalies-saisie` - Analyse la qualité des saisies et détecte 6 types d'anomalies
+  - **Actions répétitives** (too_repetitive) : Même sous-catégorie + même machine > 3 fois/mois
+  - **Actions fragmentées** (too_fragmented) : Actions courtes (< 1h) apparaissant 5+ fois sur une même sous-catégorie
+  - **Actions trop longues** (too_long_for_category) : Actions > 4h sur des catégories normalement rapides (BAT_NET, BAT_RAN, BAT_DIV, LOG_MAG, LOG_REC, LOG_INV)
+  - **Mauvaise classification** (bad_classification) : Actions BAT_NET contenant des mots-clés techniques suspects (mécanique, hydraulique, roulement, vérin, etc.)
+  - **Retours back-to-back** (back_to_back) : Même technicien + même intervention, deux actions consécutives espacées de moins de 24h
+  - **Faible valeur / charge élevée** (low_value_high_load) : Catégories à faible valeur ajoutée avec temps cumulé > 30h
+  - Chaque anomalie a une sévérité `high` ou `medium` selon des seuils configurables
+  - Messages pré-formatés en français pour affichage direct dans les tableaux
+  - Bloc `config` dans la réponse avec les seuils et listes appliqués pour transparence côté frontend
+
+---
+
 ## [1.5.2] - 9 février 2026
 
 ### Corrections

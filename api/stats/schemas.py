@@ -167,3 +167,178 @@ class ChargeTechniqueResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# --- Anomalies Saisie ---
+
+class AnomaliesSaisieParams(BaseModel):
+    start_date: str | None
+    end_date: str | None
+
+
+class RepetitiveAnomaly(BaseModel):
+    category: str
+    categoryName: str
+    machine: str
+    machineId: str
+    month: str
+    count: int
+    interventionCount: int
+    severity: str
+    message: str
+
+
+class FragmentedAnomaly(BaseModel):
+    category: str
+    categoryName: str
+    count: int
+    totalTime: float
+    avgTime: float
+    interventionCount: int
+    severity: str
+    message: str
+
+
+class TooLongAnomaly(BaseModel):
+    actionId: str
+    category: str
+    categoryName: str
+    time: float
+    intervention: str
+    interventionId: str
+    interventionTitle: str
+    machine: str
+    tech: str
+    date: str
+    severity: str
+    message: str
+
+
+class BadClassificationAnomaly(BaseModel):
+    actionId: str
+    category: str
+    categoryName: str
+    foundKeywords: List[str]
+    description: str
+    intervention: str
+    interventionId: str
+    interventionTitle: str
+    machine: str
+    tech: str
+    date: str
+    severity: str
+    message: str
+
+
+class BackToBackAnomaly(BaseModel):
+    tech: str
+    techId: str
+    intervention: str
+    interventionId: str
+    interventionTitle: str
+    machine: str
+    daysDiff: float
+    date1: str
+    date2: str
+    category1: str
+    category2: str
+    severity: str
+    message: str
+
+
+class LowValueHighLoadAnomaly(BaseModel):
+    category: str
+    categoryName: str
+    totalTime: float
+    count: int
+    avgTime: float
+    interventionCount: int
+    machineCount: int
+    techCount: int
+    severity: str
+    message: str
+
+
+class AnomaliesByType(BaseModel):
+    too_repetitive: int
+    too_fragmented: int
+    too_long_for_category: int
+    bad_classification: int
+    back_to_back: int
+    low_value_high_load: int
+
+
+class AnomaliesBySeverity(BaseModel):
+    high: int
+    medium: int
+
+
+class AnomaliesSummary(BaseModel):
+    total_anomalies: int
+    by_type: AnomaliesByType
+    by_severity: AnomaliesBySeverity
+
+
+class AnomaliesDetail(BaseModel):
+    too_repetitive: List[RepetitiveAnomaly]
+    too_fragmented: List[FragmentedAnomaly]
+    too_long_for_category: List[TooLongAnomaly]
+    bad_classification: List[BadClassificationAnomaly]
+    back_to_back: List[BackToBackAnomaly]
+    low_value_high_load: List[LowValueHighLoadAnomaly]
+
+
+class RepetitiveThresholds(BaseModel):
+    monthly_count: int
+    high_severity_count: int
+
+
+class FragmentedThresholds(BaseModel):
+    max_duration: float
+    min_occurrences: int
+    high_severity_count: int
+
+
+class TooLongThresholds(BaseModel):
+    max_duration: float
+    high_severity_duration: float
+
+
+class BadClassificationThresholds(BaseModel):
+    high_severity_keywords: int
+
+
+class BackToBackThresholds(BaseModel):
+    max_days_diff: float
+    high_severity_days: float
+
+
+class LowValueHighLoadThresholds(BaseModel):
+    min_total_hours: float
+    high_severity_hours: float
+
+
+class AnomaliesThresholds(BaseModel):
+    repetitive: RepetitiveThresholds
+    fragmented: FragmentedThresholds
+    too_long: TooLongThresholds
+    bad_classification: BadClassificationThresholds
+    back_to_back: BackToBackThresholds
+    low_value_high_load: LowValueHighLoadThresholds
+
+
+class AnomaliesConfig(BaseModel):
+    thresholds: AnomaliesThresholds
+    simple_categories: List[str]
+    low_value_categories: List[str]
+    suspicious_keywords: List[str]
+
+
+class AnomaliesSaisieResponse(BaseModel):
+    params: AnomaliesSaisieParams
+    summary: AnomaliesSummary
+    anomalies: AnomaliesDetail
+    config: AnomaliesConfig
+
+    class Config:
+        from_attributes = True

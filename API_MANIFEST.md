@@ -1,6 +1,6 @@
 # API Manifest
 
-Last updated: 2026-02-08 (v1.5.1)
+Last updated: 2026-02-09 (v1.6.0)
 
 ## Endpoints
 
@@ -338,6 +338,21 @@ Data mapping: table `equipement_class`, column `machine.equipement_class_id`.
     - Une action DEP est **évitable** si : `complexity_factor IS NOT NULL` OU action répétée ≥3 fois (même `action_subcategory` + même `equipement_class`) sur la période
     - Taux de dépannage évitable : <20% vert, 20-40% orange, >40% rouge
   - Returns: `ChargeTechniqueResponse`
+
+- `GET /stats/anomalies-saisie` - Détection des anomalies de saisie des actions d'intervention (Auth: Optional if AUTH_DISABLED)
+  - Query params:
+    - `start_date` (YYYY-MM-DD, default: 3 months ago)
+    - `end_date` (YYYY-MM-DD, default: today)
+  - Description: Analyse la qualité des saisies d'actions et détecte 6 types d'anomalies :
+    - **too_repetitive** : Même sous-catégorie + même machine répétée plus de 3 fois dans un mois
+    - **too_fragmented** : Actions courtes (< 1h) sur une même sous-catégorie apparaissant 5+ fois
+    - **too_long_for_category** : Actions > 4h sur des catégories normalement rapides (BAT_NET, BAT_RAN, etc.)
+    - **bad_classification** : Actions BAT_NET dont la description contient des mots-clés techniques suspects (mécanique, hydraulique, etc.)
+    - **back_to_back** : Même technicien + même intervention avec deux actions consécutives espacées de moins de 24h
+    - **low_value_high_load** : Catégories à faible valeur ajoutée dont le temps cumulé dépasse 30h
+  - Chaque anomalie a une sévérité `high` ou `medium` selon des seuils configurables
+  - La réponse inclut un bloc `config` avec les seuils et listes appliqués
+  - Returns: `AnomaliesSaisieResponse`
 
 ### Purchase Requests
 
@@ -1056,6 +1071,136 @@ Query params:
       ]
     }
   ]
+}
+```
+
+### AnomaliesSaisieResponse
+
+```json
+{
+  "params": {
+    "start_date": "date|null",
+    "end_date": "date|null"
+  },
+  "summary": {
+    "total_anomalies": "int",
+    "by_type": {
+      "too_repetitive": "int",
+      "too_fragmented": "int",
+      "too_long_for_category": "int",
+      "bad_classification": "int",
+      "back_to_back": "int",
+      "low_value_high_load": "int"
+    },
+    "by_severity": {
+      "high": "int",
+      "medium": "int"
+    }
+  },
+  "anomalies": {
+    "too_repetitive": [
+      {
+        "category": "string (subcategory code)",
+        "categoryName": "string",
+        "machine": "string",
+        "machineId": "string",
+        "month": "string (YYYY-MM)",
+        "count": "int",
+        "interventionCount": "int",
+        "severity": "high|medium",
+        "message": "string"
+      }
+    ],
+    "too_fragmented": [
+      {
+        "category": "string",
+        "categoryName": "string",
+        "count": "int",
+        "totalTime": "float",
+        "avgTime": "float",
+        "interventionCount": "int",
+        "severity": "high|medium",
+        "message": "string"
+      }
+    ],
+    "too_long_for_category": [
+      {
+        "actionId": "string",
+        "category": "string",
+        "categoryName": "string",
+        "time": "float",
+        "intervention": "string",
+        "interventionId": "string",
+        "interventionTitle": "string",
+        "machine": "string",
+        "tech": "string (Prénom Nom)",
+        "date": "string (ISO 8601)",
+        "severity": "high|medium",
+        "message": "string"
+      }
+    ],
+    "bad_classification": [
+      {
+        "actionId": "string",
+        "category": "string",
+        "categoryName": "string",
+        "foundKeywords": ["string"],
+        "description": "string",
+        "intervention": "string",
+        "interventionId": "string",
+        "interventionTitle": "string",
+        "machine": "string",
+        "tech": "string",
+        "date": "string (ISO 8601)",
+        "severity": "high|medium",
+        "message": "string"
+      }
+    ],
+    "back_to_back": [
+      {
+        "tech": "string",
+        "techId": "string",
+        "intervention": "string",
+        "interventionId": "string",
+        "interventionTitle": "string",
+        "machine": "string",
+        "daysDiff": "float",
+        "date1": "string (ISO 8601)",
+        "date2": "string (ISO 8601)",
+        "category1": "string",
+        "category2": "string",
+        "severity": "high|medium",
+        "message": "string"
+      }
+    ],
+    "low_value_high_load": [
+      {
+        "category": "string",
+        "categoryName": "string",
+        "totalTime": "float",
+        "count": "int",
+        "avgTime": "float",
+        "interventionCount": "int",
+        "machineCount": "int",
+        "techCount": "int",
+        "severity": "high|medium",
+        "message": "string"
+      }
+    ]
+  },
+  "config": {
+    "thresholds": {
+      "repetitive": { "monthly_count": 3, "high_severity_count": 6 },
+      "fragmented": { "max_duration": 1.0, "min_occurrences": 5, "high_severity_count": 10 },
+      "too_long": { "max_duration": 4.0, "high_severity_duration": 8.0 },
+      "bad_classification": { "high_severity_keywords": 2 },
+      "back_to_back": { "max_days_diff": 1.0, "high_severity_days": 0.5 },
+      "low_value_high_load": { "min_total_hours": 30.0, "high_severity_hours": 60.0 }
+    },
+    "simple_categories": ["BAT_NET", "BAT_RAN", "BAT_DIV", "LOG_MAG", "LOG_REC", "LOG_INV"],
+    "low_value_categories": ["BAT_NET", "BAT_RAN", "BAT_DIV", "LOG_MAG", "LOG_REC"],
+    "suspicious_keywords": ["mécanique", "hydraulique", "électrique", "..."]
+  }
 }
 ```
 

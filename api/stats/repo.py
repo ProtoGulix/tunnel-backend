@@ -24,6 +24,26 @@ from api.stats.schemas import (
     TauxDepannageEvitable,
     ComplexityFactorBreakdown,
     EquipementClassBreakdown,
+    AnomaliesSaisieResponse,
+    AnomaliesSaisieParams,
+    AnomaliesSummary,
+    AnomaliesByType,
+    AnomaliesBySeverity,
+    AnomaliesDetail,
+    AnomaliesConfig,
+    AnomaliesThresholds,
+    RepetitiveThresholds,
+    FragmentedThresholds,
+    TooLongThresholds,
+    BadClassificationThresholds,
+    BackToBackThresholds,
+    LowValueHighLoadThresholds,
+    RepetitiveAnomaly,
+    FragmentedAnomaly,
+    TooLongAnomaly,
+    BadClassificationAnomaly,
+    BackToBackAnomaly,
+    LowValueHighLoadAnomaly,
 )
 
 
@@ -824,3 +844,486 @@ class StatsRepository:
             cause_breakdown=[],
             by_equipement_class=[],
         )
+
+    # ── Anomalies Saisie ───────────────────────────────────────────────
+
+    ANOMALIES_THRESHOLDS = {
+        "repetitive": {"monthly_count": 3, "high_severity_count": 6},
+        "fragmented": {"max_duration": 1.0, "min_occurrences": 5, "high_severity_count": 10},
+        "too_long": {"max_duration": 4.0, "high_severity_duration": 8.0},
+        "bad_classification": {"high_severity_keywords": 2},
+        "back_to_back": {"max_days_diff": 1.0, "high_severity_days": 0.5},
+        "low_value_high_load": {"min_total_hours": 30.0, "high_severity_hours": 60.0},
+    }
+
+    SIMPLE_CATEGORIES = ["BAT_NET", "BAT_RAN", "BAT_DIV", "LOG_MAG", "LOG_REC", "LOG_INV"]
+    LOW_VALUE_CATEGORIES = ["BAT_NET", "BAT_RAN", "BAT_DIV", "LOG_MAG", "LOG_REC"]
+
+    SUSPICIOUS_KEYWORDS = [
+        "mécanique", "hydraulique", "électrique", "pneumatique", "soudure",
+        "roulement", "vérin", "moteur", "pompe", "capteur", "automate",
+        "variateur", "réducteur", "courroie", "chaîne", "graissage",
+        "lubrification", "alignement", "vibration", "fuite",
+    ]
+
+    def get_anomalies_saisie(
+        self, start_date: date, end_date: date
+    ) -> AnomaliesSaisieResponse:
+        """Détecte les 6 types d'anomalies de saisie sur la période"""
+        too_repetitive = self._detect_repetitive(start_date, end_date)
+        too_fragmented = self._detect_fragmented(start_date, end_date)
+        too_long = self._detect_too_long(start_date, end_date)
+        bad_classification = self._detect_bad_classification(start_date, end_date)
+        back_to_back = self._detect_back_to_back(start_date, end_date)
+        low_value = self._detect_low_value_high_load(start_date, end_date)
+
+        all_anomalies = (
+            too_repetitive + too_fragmented + too_long
+            + bad_classification + back_to_back + low_value
+        )
+        high_count = sum(1 for a in all_anomalies if a.severity == "high")
+        medium_count = sum(1 for a in all_anomalies if a.severity == "medium")
+
+        thresholds = self.ANOMALIES_THRESHOLDS
+        return AnomaliesSaisieResponse(
+            params=AnomaliesSaisieParams(
+                start_date=start_date.isoformat(),
+                end_date=end_date.isoformat(),
+            ),
+            summary=AnomaliesSummary(
+                total_anomalies=len(all_anomalies),
+                by_type=AnomaliesByType(
+                    too_repetitive=len(too_repetitive),
+                    too_fragmented=len(too_fragmented),
+                    too_long_for_category=len(too_long),
+                    bad_classification=len(bad_classification),
+                    back_to_back=len(back_to_back),
+                    low_value_high_load=len(low_value),
+                ),
+                by_severity=AnomaliesBySeverity(
+                    high=high_count,
+                    medium=medium_count,
+                ),
+            ),
+            anomalies=AnomaliesDetail(
+                too_repetitive=too_repetitive,
+                too_fragmented=too_fragmented,
+                too_long_for_category=too_long,
+                bad_classification=bad_classification,
+                back_to_back=back_to_back,
+                low_value_high_load=low_value,
+            ),
+            config=AnomaliesConfig(
+                thresholds=AnomaliesThresholds(
+                    repetitive=RepetitiveThresholds(**thresholds["repetitive"]),
+                    fragmented=FragmentedThresholds(**thresholds["fragmented"]),
+                    too_long=TooLongThresholds(**thresholds["too_long"]),
+                    bad_classification=BadClassificationThresholds(**thresholds["bad_classification"]),
+                    back_to_back=BackToBackThresholds(**thresholds["back_to_back"]),
+                    low_value_high_load=LowValueHighLoadThresholds(**thresholds["low_value_high_load"]),
+                ),
+                simple_categories=self.SIMPLE_CATEGORIES,
+                low_value_categories=self.LOW_VALUE_CATEGORIES,
+                suspicious_keywords=self.SUSPICIOUS_KEYWORDS,
+            ),
+        )
+
+    # -- Type A : Actions répétitives --
+
+    def _detect_repetitive(
+        self, start_date: date, end_date: date
+    ) -> List[RepetitiveAnomaly]:
+        threshold = self.ANOMALIES_THRESHOLDS["repetitive"]["monthly_count"]
+        high_threshold = self.ANOMALIES_THRESHOLDS["repetitive"]["high_severity_count"]
+
+        conn = self._get_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                SELECT
+                    s.code as subcategory_code,
+                    s.name as subcategory_name,
+                    m.id as machine_id,
+                    m.name as machine_name,
+                    TO_CHAR(ia.created_at, 'YYYY-MM') as month,
+                    COUNT(*) as cnt,
+                    COUNT(DISTINCT ia.intervention_id) as intervention_count
+                FROM intervention_action ia
+                JOIN intervention i ON ia.intervention_id = i.id
+                LEFT JOIN action_subcategory s ON ia.action_subcategory = s.id
+                LEFT JOIN machine m ON i.machine_id = m.id
+                WHERE ia.created_at >= %s AND ia.created_at <= %s
+                GROUP BY s.code, s.name, m.id, m.name, TO_CHAR(ia.created_at, 'YYYY-MM')
+                HAVING COUNT(*) > %s
+                ORDER BY cnt DESC
+                """,
+                (start_date, end_date, threshold),
+            )
+            rows = cur.fetchall()
+            cols = [desc[0] for desc in cur.description]
+            results = []
+            for row in rows:
+                r = dict(zip(cols, row))
+                cnt = r["cnt"]
+                severity = "high" if cnt >= high_threshold else "medium"
+                results.append(RepetitiveAnomaly(
+                    category=r["subcategory_code"] or "",
+                    categoryName=r["subcategory_name"] or "",
+                    machine=r["machine_name"] or "",
+                    machineId=str(r["machine_id"] or ""),
+                    month=r["month"],
+                    count=cnt,
+                    interventionCount=r["intervention_count"],
+                    severity=severity,
+                    message=(
+                        f"{r['subcategory_code'] or '?'} sur {r['machine_name'] or '?'} : "
+                        f"{cnt} fois ce mois ({r['intervention_count']} interventions)"
+                    ),
+                ))
+            return results
+        except Exception as e:
+            raise DatabaseError(f"Erreur base de données: {str(e)}")
+        finally:
+            conn.close()
+
+    # -- Type B : Actions fragmentées --
+
+    def _detect_fragmented(
+        self, start_date: date, end_date: date
+    ) -> List[FragmentedAnomaly]:
+        max_dur = self.ANOMALIES_THRESHOLDS["fragmented"]["max_duration"]
+        min_occ = self.ANOMALIES_THRESHOLDS["fragmented"]["min_occurrences"]
+        high_threshold = self.ANOMALIES_THRESHOLDS["fragmented"]["high_severity_count"]
+
+        conn = self._get_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                SELECT
+                    s.code as subcategory_code,
+                    s.name as subcategory_name,
+                    COUNT(*) as cnt,
+                    SUM(ia.time_spent) as total_time,
+                    ROUND(AVG(ia.time_spent)::numeric, 2)::float as avg_time,
+                    COUNT(DISTINCT ia.intervention_id) as intervention_count
+                FROM intervention_action ia
+                LEFT JOIN action_subcategory s ON ia.action_subcategory = s.id
+                WHERE ia.created_at >= %s AND ia.created_at <= %s
+                  AND ia.time_spent < %s
+                GROUP BY s.code, s.name
+                HAVING COUNT(*) >= %s
+                ORDER BY cnt DESC
+                """,
+                (start_date, end_date, max_dur, min_occ),
+            )
+            rows = cur.fetchall()
+            cols = [desc[0] for desc in cur.description]
+            results = []
+            for row in rows:
+                r = dict(zip(cols, row))
+                cnt = r["cnt"]
+                severity = "high" if cnt >= high_threshold else "medium"
+                results.append(FragmentedAnomaly(
+                    category=r["subcategory_code"] or "",
+                    categoryName=r["subcategory_name"] or "",
+                    count=cnt,
+                    totalTime=round(r["total_time"], 2),
+                    avgTime=r["avg_time"],
+                    interventionCount=r["intervention_count"],
+                    severity=severity,
+                    message=(
+                        f"{r['subcategory_code'] or '?'} : {cnt} actions < {max_dur}h "
+                        f"(total: {round(r['total_time'], 1)}h, {r['intervention_count']} interventions)"
+                    ),
+                ))
+            return results
+        except Exception as e:
+            raise DatabaseError(f"Erreur base de données: {str(e)}")
+        finally:
+            conn.close()
+
+    # -- Type C : Actions trop longues pour leur catégorie --
+
+    def _detect_too_long(
+        self, start_date: date, end_date: date
+    ) -> List[TooLongAnomaly]:
+        max_dur = self.ANOMALIES_THRESHOLDS["too_long"]["max_duration"]
+        high_dur = self.ANOMALIES_THRESHOLDS["too_long"]["high_severity_duration"]
+        simple_cats = self.SIMPLE_CATEGORIES
+
+        conn = self._get_connection()
+        try:
+            cur = conn.cursor()
+            placeholders = ",".join(["%s"] * len(simple_cats))
+            cur.execute(
+                f"""
+                SELECT
+                    ia.id as action_id,
+                    s.code as subcategory_code,
+                    s.name as subcategory_name,
+                    ia.time_spent,
+                    i.code as intervention_code,
+                    i.id as intervention_id,
+                    i.title as intervention_title,
+                    m.name as machine_name,
+                    u.first_name,
+                    u.last_name,
+                    ia.created_at
+                FROM intervention_action ia
+                JOIN intervention i ON ia.intervention_id = i.id
+                LEFT JOIN action_subcategory s ON ia.action_subcategory = s.id
+                LEFT JOIN machine m ON i.machine_id = m.id
+                LEFT JOIN directus_users u ON ia.tech = u.id
+                WHERE ia.created_at >= %s AND ia.created_at <= %s
+                  AND ia.time_spent > %s
+                  AND s.code IN ({placeholders})
+                ORDER BY ia.time_spent DESC
+                """,
+                (start_date, end_date, max_dur, *simple_cats),
+            )
+            rows = cur.fetchall()
+            cols = [desc[0] for desc in cur.description]
+            results = []
+            for row in rows:
+                r = dict(zip(cols, row))
+                time_spent = r["time_spent"]
+                severity = "high" if time_spent >= high_dur else "medium"
+                tech_name = f"{r['first_name'] or ''} {r['last_name'] or ''}".strip()
+                results.append(TooLongAnomaly(
+                    actionId=str(r["action_id"]),
+                    category=r["subcategory_code"] or "",
+                    categoryName=r["subcategory_name"] or "",
+                    time=time_spent,
+                    intervention=r["intervention_code"] or "",
+                    interventionId=str(r["intervention_id"]),
+                    interventionTitle=r["intervention_title"] or "",
+                    machine=r["machine_name"] or "",
+                    tech=tech_name,
+                    date=r["created_at"].isoformat() if r["created_at"] else "",
+                    severity=severity,
+                    message=(
+                        f"{time_spent}h sur {r['subcategory_code'] or '?'} "
+                        f"(intervention {r['intervention_code'] or '?'})"
+                    ),
+                ))
+            return results
+        except Exception as e:
+            raise DatabaseError(f"Erreur base de données: {str(e)}")
+        finally:
+            conn.close()
+
+    # -- Type D : Mauvaise classification --
+
+    def _detect_bad_classification(
+        self, start_date: date, end_date: date
+    ) -> List[BadClassificationAnomaly]:
+        high_kw_threshold = self.ANOMALIES_THRESHOLDS["bad_classification"]["high_severity_keywords"]
+        keywords = self.SUSPICIOUS_KEYWORDS
+
+        conn = self._get_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                SELECT
+                    ia.id as action_id,
+                    s.code as subcategory_code,
+                    s.name as subcategory_name,
+                    ia.description,
+                    i.code as intervention_code,
+                    i.id as intervention_id,
+                    i.title as intervention_title,
+                    m.name as machine_name,
+                    u.first_name,
+                    u.last_name,
+                    ia.created_at
+                FROM intervention_action ia
+                JOIN intervention i ON ia.intervention_id = i.id
+                LEFT JOIN action_subcategory s ON ia.action_subcategory = s.id
+                LEFT JOIN machine m ON i.machine_id = m.id
+                LEFT JOIN directus_users u ON ia.tech = u.id
+                WHERE ia.created_at >= %s AND ia.created_at <= %s
+                  AND s.code = 'BAT_NET'
+                ORDER BY ia.created_at DESC
+                """,
+                (start_date, end_date),
+            )
+            rows = cur.fetchall()
+            cols = [desc[0] for desc in cur.description]
+            results = []
+            for row in rows:
+                r = dict(zip(cols, row))
+                desc_lower = (r["description"] or "").lower()
+                found = [kw for kw in keywords if kw in desc_lower]
+                if not found:
+                    continue
+                severity = "high" if len(found) > high_kw_threshold else "medium"
+                tech_name = f"{r['first_name'] or ''} {r['last_name'] or ''}".strip()
+                results.append(BadClassificationAnomaly(
+                    actionId=str(r["action_id"]),
+                    category=r["subcategory_code"] or "",
+                    categoryName=r["subcategory_name"] or "",
+                    foundKeywords=found,
+                    description=r["description"] or "",
+                    intervention=r["intervention_code"] or "",
+                    interventionId=str(r["intervention_id"]),
+                    interventionTitle=r["intervention_title"] or "",
+                    machine=r["machine_name"] or "",
+                    tech=tech_name,
+                    date=r["created_at"].isoformat() if r["created_at"] else "",
+                    severity=severity,
+                    message=f"BAT_NET mais contient: {', '.join(found)}",
+                ))
+            return results
+        except Exception as e:
+            raise DatabaseError(f"Erreur base de données: {str(e)}")
+        finally:
+            conn.close()
+
+    # -- Type E : Retours back-to-back --
+
+    def _detect_back_to_back(
+        self, start_date: date, end_date: date
+    ) -> List[BackToBackAnomaly]:
+        max_days = self.ANOMALIES_THRESHOLDS["back_to_back"]["max_days_diff"]
+        high_days = self.ANOMALIES_THRESHOLDS["back_to_back"]["high_severity_days"]
+
+        conn = self._get_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                SELECT
+                    ia.id as action_id,
+                    ia.tech,
+                    u.first_name,
+                    u.last_name,
+                    ia.intervention_id,
+                    i.code as intervention_code,
+                    i.title as intervention_title,
+                    m.name as machine_name,
+                    s.name as subcategory_name,
+                    ia.created_at
+                FROM intervention_action ia
+                JOIN intervention i ON ia.intervention_id = i.id
+                LEFT JOIN action_subcategory s ON ia.action_subcategory = s.id
+                LEFT JOIN machine m ON i.machine_id = m.id
+                LEFT JOIN directus_users u ON ia.tech = u.id
+                WHERE ia.created_at >= %s AND ia.created_at <= %s
+                ORDER BY ia.tech, ia.intervention_id, ia.created_at ASC
+                """,
+                (start_date, end_date),
+            )
+            rows = cur.fetchall()
+            cols = [desc[0] for desc in cur.description]
+            actions = [dict(zip(cols, row)) for row in rows]
+
+            results = []
+            seen_pairs = set()
+            for i in range(len(actions) - 1):
+                a1 = actions[i]
+                a2 = actions[i + 1]
+                if a1["tech"] != a2["tech"]:
+                    continue
+                if a1["intervention_id"] != a2["intervention_id"]:
+                    continue
+                if not a1["created_at"] or not a2["created_at"]:
+                    continue
+                diff = (a2["created_at"] - a1["created_at"]).total_seconds() / 86400.0
+                if diff > max_days:
+                    continue
+                pair_key = (str(a1["action_id"]), str(a2["action_id"]))
+                if pair_key in seen_pairs:
+                    continue
+                seen_pairs.add(pair_key)
+                severity = "high" if diff <= high_days else "medium"
+                tech_name = f"{a1['first_name'] or ''} {a1['last_name'] or ''}".strip()
+                days_diff = round(diff, 1)
+                results.append(BackToBackAnomaly(
+                    tech=tech_name,
+                    techId=str(a1["tech"] or ""),
+                    intervention=a1["intervention_code"] or "",
+                    interventionId=str(a1["intervention_id"]),
+                    interventionTitle=a1["intervention_title"] or "",
+                    machine=a1["machine_name"] or "",
+                    daysDiff=days_diff,
+                    date1=a1["created_at"].isoformat() if a1["created_at"] else "",
+                    date2=a2["created_at"].isoformat() if a2["created_at"] else "",
+                    category1=a1["subcategory_name"] or "",
+                    category2=a2["subcategory_name"] or "",
+                    severity=severity,
+                    message=(
+                        f"{a1['intervention_code'] or '?'} : retour après {days_diff}j "
+                        f"({a1['subcategory_name'] or '?'} → {a2['subcategory_name'] or '?'})"
+                    ),
+                ))
+            return results
+        except Exception as e:
+            raise DatabaseError(f"Erreur base de données: {str(e)}")
+        finally:
+            conn.close()
+
+    # -- Type F : Faible valeur / charge élevée --
+
+    def _detect_low_value_high_load(
+        self, start_date: date, end_date: date
+    ) -> List[LowValueHighLoadAnomaly]:
+        min_hours = self.ANOMALIES_THRESHOLDS["low_value_high_load"]["min_total_hours"]
+        high_hours = self.ANOMALIES_THRESHOLDS["low_value_high_load"]["high_severity_hours"]
+        low_value_cats = self.LOW_VALUE_CATEGORIES
+
+        conn = self._get_connection()
+        try:
+            cur = conn.cursor()
+            placeholders = ",".join(["%s"] * len(low_value_cats))
+            cur.execute(
+                f"""
+                SELECT
+                    s.code as subcategory_code,
+                    s.name as subcategory_name,
+                    SUM(ia.time_spent) as total_time,
+                    COUNT(*) as cnt,
+                    ROUND(AVG(ia.time_spent)::numeric, 2)::float as avg_time,
+                    COUNT(DISTINCT ia.intervention_id) as intervention_count,
+                    COUNT(DISTINCT i.machine_id) as machine_count,
+                    COUNT(DISTINCT ia.tech) as tech_count
+                FROM intervention_action ia
+                JOIN intervention i ON ia.intervention_id = i.id
+                LEFT JOIN action_subcategory s ON ia.action_subcategory = s.id
+                WHERE ia.created_at >= %s AND ia.created_at <= %s
+                  AND s.code IN ({placeholders})
+                GROUP BY s.code, s.name
+                HAVING SUM(ia.time_spent) >= %s
+                ORDER BY total_time DESC
+                """,
+                (start_date, end_date, *low_value_cats, min_hours),
+            )
+            rows = cur.fetchall()
+            cols = [desc[0] for desc in cur.description]
+            results = []
+            for row in rows:
+                r = dict(zip(cols, row))
+                total_time = round(r["total_time"], 2)
+                severity = "high" if total_time >= high_hours else "medium"
+                results.append(LowValueHighLoadAnomaly(
+                    category=r["subcategory_code"] or "",
+                    categoryName=r["subcategory_name"] or "",
+                    totalTime=total_time,
+                    count=r["cnt"],
+                    avgTime=r["avg_time"],
+                    interventionCount=r["intervention_count"],
+                    machineCount=r["machine_count"],
+                    techCount=r["tech_count"],
+                    severity=severity,
+                    message=(
+                        f"{r['subcategory_code'] or '?'} : {total_time}h cumulées "
+                        f"({r['cnt']} actions, {r['intervention_count']} interventions)"
+                    ),
+                ))
+            return results
+        except Exception as e:
+            raise DatabaseError(f"Erreur base de données: {str(e)}")
+        finally:
+            conn.close()

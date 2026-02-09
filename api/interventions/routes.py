@@ -34,7 +34,7 @@ async def list_interventions(
         None, description="Ex: -priority,-reported_date ou -reported_date"),
     include: str | None = Query(None, description="Ex: stats"),
     printed: bool | None = Query(
-        None, description="Filtre interventions imprimées"),
+        False, description="Filtre par statut d'impression/archivage. false=actives (défaut), true=archivées, null=toutes"),
 ):
     """Liste interventions avec filtres/sort et stats optionnelles (sans actions)"""
     intervention_repo = InterventionRepository()
