@@ -1375,7 +1375,6 @@ class StatsRepository:
             ("intervention", "intervention_fermee_sans_action", self._qd_intervention_fermee_sans_action),
             ("intervention", "intervention_sans_type", self._qd_intervention_sans_type),
             ("intervention", "intervention_en_cours_inactive", self._qd_intervention_en_cours_inactive),
-            ("stock_item", "stock_sans_seuil_min", self._qd_stock_sans_seuil_min),
             ("stock_item", "stock_sans_fournisseur", self._qd_stock_sans_fournisseur),
             ("purchase_request", "demande_sans_stock_item", self._qd_demande_sans_stock_item),
         ]
@@ -1668,14 +1667,14 @@ class StatsRepository:
         try:
             cur = conn.cursor()
             cur.execute("""
-                SELECT i.id, i.code, i.created_at
+                SELECT i.id, i.code, i.reported_date AS created_at
                 FROM intervention i
                 WHERE i.status_actual = 'ferme'
                   AND NOT EXISTS (
                       SELECT 1 FROM intervention_action ia
                       WHERE ia.intervention_id = i.id
                   )
-                ORDER BY i.created_at DESC
+                ORDER BY i.reported_date DESC
             """)
             rows = cur.fetchall()
             cols = [d[0] for d in cur.description]
@@ -1700,10 +1699,10 @@ class StatsRepository:
         try:
             cur = conn.cursor()
             cur.execute("""
-                SELECT i.id, i.code, i.created_at
+                SELECT i.id, i.code, i.reported_date AS created_at
                 FROM intervention i
                 WHERE i.type_inter IS NULL
-                ORDER BY i.created_at DESC
+                ORDER BY i.reported_date DESC
             """)
             rows = cur.fetchall()
             cols = [d[0] for d in cur.description]
@@ -1728,15 +1727,15 @@ class StatsRepository:
         try:
             cur = conn.cursor()
             cur.execute("""
-                SELECT i.id, i.code, i.created_at
+                SELECT i.id, i.code, i.reported_date AS created_at
                 FROM intervention i
                 WHERE i.status_actual = 'en_cours'
                   AND COALESCE(
                       (SELECT MAX(ia.created_at) FROM intervention_action ia
                        WHERE ia.intervention_id = i.id),
-                      i.updated_at
+                      i.reported_date
                   ) < NOW() - INTERVAL '14 days'
-                ORDER BY i.created_at DESC
+                ORDER BY i.reported_date DESC
             """)
             rows = cur.fetchall()
             cols = [d[0] for d in cur.description]
