@@ -44,6 +44,10 @@ from api.stats.schemas import (
     BadClassificationAnomaly,
     BackToBackAnomaly,
     LowValueHighLoadAnomaly,
+    QualiteDonneesResponse,
+    QualiteDonneesProbleme,
+    QualiteDonneesContexte,
+    QualiteDonneesParSeverite,
 )
 
 
@@ -1329,6 +1333,515 @@ class StatsRepository:
                     ),
                 ))
             return results
+        except Exception as e:
+            raise DatabaseError(f"Erreur base de données: {str(e)}")
+        finally:
+            conn.close()
+
+    # ── Qualité Données ───────────────────────────────────────────────
+
+    QUALITE_MESSAGES = {
+        "action_time_null": "Action sans temps saisi",
+        "action_complexity_sans_facteur": "Score complexité > 5 sans facteur renseigné",
+        "action_subcategory_null": "Action sans sous-catégorie",
+        "action_tech_null": "Action sans technicien",
+        "action_description_vide": "Action sans description exploitable",
+        "action_time_suspect": "Action avec temps suspect (> 8h)",
+        "action_sur_intervention_fermee": "Action créée après fermeture de l'intervention",
+        "intervention_fermee_sans_action": "Intervention fermée sans aucune action",
+        "intervention_sans_type": "Intervention sans type renseigné",
+        "intervention_en_cours_inactive": "Intervention en cours sans activité depuis 14 jours",
+        "stock_sans_seuil_min": "Article sans seuil de stock minimum",
+        "stock_sans_fournisseur": "Article sans fournisseur référencé",
+        "demande_sans_stock_item": "Demande d'achat sans article de stock lié",
+    }
+
+    def get_qualite_donnees(
+        self,
+        severite: str | None = None,
+        entite: str | None = None,
+        code: str | None = None,
+    ) -> QualiteDonneesResponse:
+        """Détecte les problèmes de complétude et cohérence des données"""
+
+        detectors = [
+            ("intervention_action", "action_time_null", self._qd_action_time_null),
+            ("intervention_action", "action_complexity_sans_facteur", self._qd_action_complexity_sans_facteur),
+            ("intervention_action", "action_subcategory_null", self._qd_action_subcategory_null),
+            ("intervention_action", "action_tech_null", self._qd_action_tech_null),
+            ("intervention_action", "action_description_vide", self._qd_action_description_vide),
+            ("intervention_action", "action_time_suspect", self._qd_action_time_suspect),
+            ("intervention_action", "action_sur_intervention_fermee", self._qd_action_sur_intervention_fermee),
+            ("intervention", "intervention_fermee_sans_action", self._qd_intervention_fermee_sans_action),
+            ("intervention", "intervention_sans_type", self._qd_intervention_sans_type),
+            ("intervention", "intervention_en_cours_inactive", self._qd_intervention_en_cours_inactive),
+            ("stock_item", "stock_sans_seuil_min", self._qd_stock_sans_seuil_min),
+            ("stock_item", "stock_sans_fournisseur", self._qd_stock_sans_fournisseur),
+            ("purchase_request", "demande_sans_stock_item", self._qd_demande_sans_stock_item),
+        ]
+
+        problemes: List[QualiteDonneesProbleme] = []
+
+        for det_entite, det_code, detector in detectors:
+            if entite and det_entite != entite:
+                continue
+            if code and det_code != code:
+                continue
+
+            results = detector()
+
+            if severite:
+                results = [r for r in results if r.severite == severite]
+
+            problemes.extend(results)
+
+        # Tri : high d'abord, puis medium, puis par entité, puis created_at DESC
+        severity_order = {"high": 0, "medium": 1}
+        problemes.sort(key=lambda p: p.contexte.created_at or "", reverse=True)
+        problemes.sort(key=lambda p: (
+            severity_order.get(p.severite, 2),
+            p.entite,
+        ))
+
+        high = sum(1 for p in problemes if p.severite == "high")
+        medium = sum(1 for p in problemes if p.severite == "medium")
+
+        return QualiteDonneesResponse(
+            total=len(problemes),
+            par_severite=QualiteDonneesParSeverite(high=high, medium=medium),
+            problemes=problemes,
+        )
+
+    # -- Helpers contexte --
+
+    def _qd_action_context(self, row: Dict[str, Any]) -> QualiteDonneesContexte:
+        return QualiteDonneesContexte(
+            intervention_id=str(row.get("intervention_id") or ""),
+            intervention_code=row.get("intervention_code") or None,
+            created_at=row["created_at"].isoformat() if row.get("created_at") else None,
+        )
+
+    def _qd_intervention_context(self, row: Dict[str, Any]) -> QualiteDonneesContexte:
+        return QualiteDonneesContexte(
+            intervention_id=str(row.get("id") or ""),
+            intervention_code=row.get("code") or None,
+            created_at=row["created_at"].isoformat() if row.get("created_at") else None,
+        )
+
+    def _qd_stock_context(self, row: Dict[str, Any]) -> QualiteDonneesContexte:
+        return QualiteDonneesContexte(
+            stock_item_ref=row.get("ref") or None,
+            stock_item_name=row.get("name") or None,
+        )
+
+    def _qd_purchase_context(self, row: Dict[str, Any]) -> QualiteDonneesContexte:
+        return QualiteDonneesContexte(
+            purchase_request_id=str(row.get("id") or ""),
+            created_at=row["created_at"].isoformat() if row.get("created_at") else None,
+        )
+
+    # -- Détecteurs intervention_action --
+
+    def _qd_action_time_null(self) -> List[QualiteDonneesProbleme]:
+        conn = self._get_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT ia.id, ia.intervention_id, ia.created_at,
+                       i.code as intervention_code
+                FROM intervention_action ia
+                JOIN intervention i ON ia.intervention_id = i.id
+                WHERE ia.time_spent IS NULL OR ia.time_spent = 0
+                ORDER BY ia.created_at DESC
+            """)
+            rows = cur.fetchall()
+            cols = [d[0] for d in cur.description]
+            return [
+                QualiteDonneesProbleme(
+                    code="action_time_null",
+                    severite="high",
+                    entite="intervention_action",
+                    entite_id=str(r["id"]),
+                    message=self.QUALITE_MESSAGES["action_time_null"],
+                    contexte=self._qd_action_context(r),
+                )
+                for r in (dict(zip(cols, row)) for row in rows)
+            ]
+        except Exception as e:
+            raise DatabaseError(f"Erreur base de données: {str(e)}")
+        finally:
+            conn.close()
+
+    def _qd_action_complexity_sans_facteur(self) -> List[QualiteDonneesProbleme]:
+        conn = self._get_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT ia.id, ia.intervention_id, ia.created_at,
+                       i.code as intervention_code
+                FROM intervention_action ia
+                JOIN intervention i ON ia.intervention_id = i.id
+                WHERE ia.complexity_score > 5
+                  AND ia.complexity_factor IS NULL
+                ORDER BY ia.created_at DESC
+            """)
+            rows = cur.fetchall()
+            cols = [d[0] for d in cur.description]
+            return [
+                QualiteDonneesProbleme(
+                    code="action_complexity_sans_facteur",
+                    severite="high",
+                    entite="intervention_action",
+                    entite_id=str(r["id"]),
+                    message=self.QUALITE_MESSAGES["action_complexity_sans_facteur"],
+                    contexte=self._qd_action_context(r),
+                )
+                for r in (dict(zip(cols, row)) for row in rows)
+            ]
+        except Exception as e:
+            raise DatabaseError(f"Erreur base de données: {str(e)}")
+        finally:
+            conn.close()
+
+    def _qd_action_subcategory_null(self) -> List[QualiteDonneesProbleme]:
+        conn = self._get_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT ia.id, ia.intervention_id, ia.created_at,
+                       i.code as intervention_code
+                FROM intervention_action ia
+                JOIN intervention i ON ia.intervention_id = i.id
+                WHERE ia.action_subcategory IS NULL
+                ORDER BY ia.created_at DESC
+            """)
+            rows = cur.fetchall()
+            cols = [d[0] for d in cur.description]
+            return [
+                QualiteDonneesProbleme(
+                    code="action_subcategory_null",
+                    severite="high",
+                    entite="intervention_action",
+                    entite_id=str(r["id"]),
+                    message=self.QUALITE_MESSAGES["action_subcategory_null"],
+                    contexte=self._qd_action_context(r),
+                )
+                for r in (dict(zip(cols, row)) for row in rows)
+            ]
+        except Exception as e:
+            raise DatabaseError(f"Erreur base de données: {str(e)}")
+        finally:
+            conn.close()
+
+    def _qd_action_tech_null(self) -> List[QualiteDonneesProbleme]:
+        conn = self._get_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT ia.id, ia.intervention_id, ia.created_at,
+                       i.code as intervention_code
+                FROM intervention_action ia
+                JOIN intervention i ON ia.intervention_id = i.id
+                WHERE ia.tech IS NULL
+                ORDER BY ia.created_at DESC
+            """)
+            rows = cur.fetchall()
+            cols = [d[0] for d in cur.description]
+            return [
+                QualiteDonneesProbleme(
+                    code="action_tech_null",
+                    severite="medium",
+                    entite="intervention_action",
+                    entite_id=str(r["id"]),
+                    message=self.QUALITE_MESSAGES["action_tech_null"],
+                    contexte=self._qd_action_context(r),
+                )
+                for r in (dict(zip(cols, row)) for row in rows)
+            ]
+        except Exception as e:
+            raise DatabaseError(f"Erreur base de données: {str(e)}")
+        finally:
+            conn.close()
+
+    def _qd_action_description_vide(self) -> List[QualiteDonneesProbleme]:
+        conn = self._get_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT ia.id, ia.intervention_id, ia.created_at,
+                       i.code as intervention_code
+                FROM intervention_action ia
+                JOIN intervention i ON ia.intervention_id = i.id
+                WHERE ia.description IS NULL
+                   OR LENGTH(TRIM(ia.description)) < 5
+                ORDER BY ia.created_at DESC
+            """)
+            rows = cur.fetchall()
+            cols = [d[0] for d in cur.description]
+            return [
+                QualiteDonneesProbleme(
+                    code="action_description_vide",
+                    severite="medium",
+                    entite="intervention_action",
+                    entite_id=str(r["id"]),
+                    message=self.QUALITE_MESSAGES["action_description_vide"],
+                    contexte=self._qd_action_context(r),
+                )
+                for r in (dict(zip(cols, row)) for row in rows)
+            ]
+        except Exception as e:
+            raise DatabaseError(f"Erreur base de données: {str(e)}")
+        finally:
+            conn.close()
+
+    def _qd_action_time_suspect(self) -> List[QualiteDonneesProbleme]:
+        conn = self._get_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT ia.id, ia.intervention_id, ia.created_at,
+                       i.code as intervention_code
+                FROM intervention_action ia
+                JOIN intervention i ON ia.intervention_id = i.id
+                WHERE ia.time_spent > 8
+                ORDER BY ia.created_at DESC
+            """)
+            rows = cur.fetchall()
+            cols = [d[0] for d in cur.description]
+            return [
+                QualiteDonneesProbleme(
+                    code="action_time_suspect",
+                    severite="medium",
+                    entite="intervention_action",
+                    entite_id=str(r["id"]),
+                    message=self.QUALITE_MESSAGES["action_time_suspect"],
+                    contexte=self._qd_action_context(r),
+                )
+                for r in (dict(zip(cols, row)) for row in rows)
+            ]
+        except Exception as e:
+            raise DatabaseError(f"Erreur base de données: {str(e)}")
+        finally:
+            conn.close()
+
+    def _qd_action_sur_intervention_fermee(self) -> List[QualiteDonneesProbleme]:
+        conn = self._get_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT ia.id, ia.intervention_id, ia.created_at,
+                       i.code as intervention_code
+                FROM intervention_action ia
+                JOIN intervention i ON ia.intervention_id = i.id
+                WHERE i.status_actual IN ('ferme', 'annule')
+                  AND ia.created_at > (
+                      SELECT MAX(isl.date)
+                      FROM intervention_status_log isl
+                      JOIN intervention_status_ref sr ON isl.status_to = sr.id
+                      WHERE isl.intervention_id = i.id
+                        AND sr.code IN ('ferme', 'annule')
+                  )
+                ORDER BY ia.created_at DESC
+            """)
+            rows = cur.fetchall()
+            cols = [d[0] for d in cur.description]
+            return [
+                QualiteDonneesProbleme(
+                    code="action_sur_intervention_fermee",
+                    severite="high",
+                    entite="intervention_action",
+                    entite_id=str(r["id"]),
+                    message=self.QUALITE_MESSAGES["action_sur_intervention_fermee"],
+                    contexte=self._qd_action_context(r),
+                )
+                for r in (dict(zip(cols, row)) for row in rows)
+            ]
+        except Exception as e:
+            raise DatabaseError(f"Erreur base de données: {str(e)}")
+        finally:
+            conn.close()
+
+    # -- Détecteurs intervention --
+
+    def _qd_intervention_fermee_sans_action(self) -> List[QualiteDonneesProbleme]:
+        conn = self._get_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT i.id, i.code, i.created_at
+                FROM intervention i
+                WHERE i.status_actual = 'ferme'
+                  AND NOT EXISTS (
+                      SELECT 1 FROM intervention_action ia
+                      WHERE ia.intervention_id = i.id
+                  )
+                ORDER BY i.created_at DESC
+            """)
+            rows = cur.fetchall()
+            cols = [d[0] for d in cur.description]
+            return [
+                QualiteDonneesProbleme(
+                    code="intervention_fermee_sans_action",
+                    severite="high",
+                    entite="intervention",
+                    entite_id=str(r["id"]),
+                    message=self.QUALITE_MESSAGES["intervention_fermee_sans_action"],
+                    contexte=self._qd_intervention_context(r),
+                )
+                for r in (dict(zip(cols, row)) for row in rows)
+            ]
+        except Exception as e:
+            raise DatabaseError(f"Erreur base de données: {str(e)}")
+        finally:
+            conn.close()
+
+    def _qd_intervention_sans_type(self) -> List[QualiteDonneesProbleme]:
+        conn = self._get_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT i.id, i.code, i.created_at
+                FROM intervention i
+                WHERE i.type_inter IS NULL
+                ORDER BY i.created_at DESC
+            """)
+            rows = cur.fetchall()
+            cols = [d[0] for d in cur.description]
+            return [
+                QualiteDonneesProbleme(
+                    code="intervention_sans_type",
+                    severite="medium",
+                    entite="intervention",
+                    entite_id=str(r["id"]),
+                    message=self.QUALITE_MESSAGES["intervention_sans_type"],
+                    contexte=self._qd_intervention_context(r),
+                )
+                for r in (dict(zip(cols, row)) for row in rows)
+            ]
+        except Exception as e:
+            raise DatabaseError(f"Erreur base de données: {str(e)}")
+        finally:
+            conn.close()
+
+    def _qd_intervention_en_cours_inactive(self) -> List[QualiteDonneesProbleme]:
+        conn = self._get_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT i.id, i.code, i.created_at
+                FROM intervention i
+                WHERE i.status_actual = 'en_cours'
+                  AND COALESCE(
+                      (SELECT MAX(ia.created_at) FROM intervention_action ia
+                       WHERE ia.intervention_id = i.id),
+                      i.updated_at
+                  ) < NOW() - INTERVAL '14 days'
+                ORDER BY i.created_at DESC
+            """)
+            rows = cur.fetchall()
+            cols = [d[0] for d in cur.description]
+            return [
+                QualiteDonneesProbleme(
+                    code="intervention_en_cours_inactive",
+                    severite="medium",
+                    entite="intervention",
+                    entite_id=str(r["id"]),
+                    message=self.QUALITE_MESSAGES["intervention_en_cours_inactive"],
+                    contexte=self._qd_intervention_context(r),
+                )
+                for r in (dict(zip(cols, row)) for row in rows)
+            ]
+        except Exception as e:
+            raise DatabaseError(f"Erreur base de données: {str(e)}")
+        finally:
+            conn.close()
+
+    # -- Détecteurs stock_item --
+
+    def _qd_stock_sans_seuil_min(self) -> List[QualiteDonneesProbleme]:
+        conn = self._get_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT id, ref, name
+                FROM stock_item
+                WHERE stock_min IS NULL
+                ORDER BY name ASC
+            """)
+            rows = cur.fetchall()
+            cols = [d[0] for d in cur.description]
+            return [
+                QualiteDonneesProbleme(
+                    code="stock_sans_seuil_min",
+                    severite="medium",
+                    entite="stock_item",
+                    entite_id=str(r["id"]),
+                    message=self.QUALITE_MESSAGES["stock_sans_seuil_min"],
+                    contexte=self._qd_stock_context(r),
+                )
+                for r in (dict(zip(cols, row)) for row in rows)
+            ]
+        except Exception as e:
+            raise DatabaseError(f"Erreur base de données: {str(e)}")
+        finally:
+            conn.close()
+
+    def _qd_stock_sans_fournisseur(self) -> List[QualiteDonneesProbleme]:
+        conn = self._get_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT si.id, si.ref, si.name
+                FROM stock_item si
+                WHERE NOT EXISTS (
+                    SELECT 1 FROM stock_item_supplier sis
+                    WHERE sis.stock_item_id = si.id
+                )
+                ORDER BY si.name ASC
+            """)
+            rows = cur.fetchall()
+            cols = [d[0] for d in cur.description]
+            return [
+                QualiteDonneesProbleme(
+                    code="stock_sans_fournisseur",
+                    severite="medium",
+                    entite="stock_item",
+                    entite_id=str(r["id"]),
+                    message=self.QUALITE_MESSAGES["stock_sans_fournisseur"],
+                    contexte=self._qd_stock_context(r),
+                )
+                for r in (dict(zip(cols, row)) for row in rows)
+            ]
+        except Exception as e:
+            raise DatabaseError(f"Erreur base de données: {str(e)}")
+        finally:
+            conn.close()
+
+    # -- Détecteur purchase_request --
+
+    def _qd_demande_sans_stock_item(self) -> List[QualiteDonneesProbleme]:
+        conn = self._get_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT id, created_at
+                FROM purchase_request
+                WHERE stock_item_id IS NULL
+                ORDER BY created_at DESC
+            """)
+            rows = cur.fetchall()
+            cols = [d[0] for d in cur.description]
+            return [
+                QualiteDonneesProbleme(
+                    code="demande_sans_stock_item",
+                    severite="medium",
+                    entite="purchase_request",
+                    entite_id=str(r["id"]),
+                    message=self.QUALITE_MESSAGES["demande_sans_stock_item"],
+                    contexte=self._qd_purchase_context(r),
+                )
+                for r in (dict(zip(cols, row)) for row in rows)
+            ]
         except Exception as e:
             raise DatabaseError(f"Erreur base de données: {str(e)}")
         finally:

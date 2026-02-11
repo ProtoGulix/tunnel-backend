@@ -2,6 +2,29 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [1.7.0] - 11 février 2026
+
+### Nouveautés
+
+- **Qualité des données** : Nouvel endpoint de détection des problèmes de complétude et cohérence
+  - `GET /stats/qualite-donnees` - Identifie les données manquantes ou incohérentes avec les règles métier
+  - 13 règles de détection sur 4 entités :
+    - **intervention_action** (7 règles) : temps non saisi, complexité sans facteur, sous-catégorie manquante, technicien manquant, description vide, temps suspect (> 8h), action créée après fermeture de l'intervention
+    - **intervention** (3 règles) : fermée sans action, sans type, en cours inactive (> 14 jours)
+    - **stock_item** (2 règles) : sans seuil minimum, sans fournisseur référencé
+    - **purchase_request** (1 règle) : sans article de stock lié
+  - Chaque problème remonte avec sévérité (`high` / `medium`), message en français et contexte de navigation
+  - Filtrage par `severite`, `entite` ou `code` anomalie via query params
+  - Requêtes SQL indépendantes par règle (pas de mega-jointure)
+
+### Changements
+
+- **Passage en beta** : Les endpoints suivants sont considérés beta car ils ne respectent pas encore la philosophie de l'API (requêtes SQL directes indépendantes, pas de chargement mémoire, format de réponse normalisé)
+  - `GET /stats/anomalies-saisie` — Détection des anomalies de saisie (beta)
+  - `GET /stats/charge-technique` — Analyse de la charge technique (beta)
+
+---
+
 ## [1.6.1] - 9 février 2026
 
 ### Corrections

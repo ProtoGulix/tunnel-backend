@@ -1,6 +1,6 @@
 # API Manifest
 
-Last updated: 2026-02-09 (v1.6.0)
+Last updated: 2026-02-11 (v1.7.0)
 
 ## Endpoints
 
@@ -328,7 +328,7 @@ Data mapping: table `equipement_class`, column `machine.equipement_class_id`.
   - Query params: `start_date` (YYYY-MM-DD, default: 3 months ago), `end_date` (YYYY-MM-DD, default: today)
   - Returns: charge, fragmentation, pilotage capacity, top 10 causes, site consumption
 
-- `GET /stats/charge-technique` - Analyse de la charge technique (Auth: Optional if AUTH_DISABLED)
+- `GET /stats/charge-technique` - [BETA] Analyse de la charge technique (Auth: Optional if AUTH_DISABLED)
   - Query params:
     - `start_date` (YYYY-MM-DD, default: 3 months ago)
     - `end_date` (YYYY-MM-DD, default: today)
@@ -339,7 +339,7 @@ Data mapping: table `equipement_class`, column `machine.equipement_class_id`.
     - Taux de dépannage évitable : <20% vert, 20-40% orange, >40% rouge
   - Returns: `ChargeTechniqueResponse`
 
-- `GET /stats/anomalies-saisie` - Détection des anomalies de saisie des actions d'intervention (Auth: Optional if AUTH_DISABLED)
+- `GET /stats/anomalies-saisie` - [BETA] Détection des anomalies de saisie des actions d'intervention (Auth: Optional if AUTH_DISABLED)
   - Query params:
     - `start_date` (YYYY-MM-DD, default: 3 months ago)
     - `end_date` (YYYY-MM-DD, default: today)
@@ -353,6 +353,20 @@ Data mapping: table `equipement_class`, column `machine.equipement_class_id`.
   - Chaque anomalie a une sévérité `high` ou `medium` selon des seuils configurables
   - La réponse inclut un bloc `config` avec les seuils et listes appliqués
   - Returns: `AnomaliesSaisieResponse`
+
+- `GET /stats/qualite-donnees` - Détection des problèmes de complétude et cohérence des données (Auth: Optional if AUTH_DISABLED)
+  - Query params:
+    - `severite` (string, optional) - Filter by severity: `high`, `medium`
+    - `entite` (string, optional) - Filter by entity: `intervention_action`, `intervention`, `stock_item`, `purchase_request`
+    - `code` (string, optional) - Filter by specific anomaly code
+  - Description: Identifie les données manquantes ou incohérentes avec les règles métier explicites. 13 règles de détection sur 4 entités :
+    - **intervention_action** : `action_time_null` (high), `action_complexity_sans_facteur` (high), `action_subcategory_null` (high), `action_tech_null` (medium), `action_description_vide` (medium), `action_time_suspect` (medium), `action_sur_intervention_fermee` (high)
+    - **intervention** : `intervention_fermee_sans_action` (high), `intervention_sans_type` (medium), `intervention_en_cours_inactive` (medium)
+    - **stock_item** : `stock_sans_seuil_min` (medium), `stock_sans_fournisseur` (medium)
+    - **purchase_request** : `demande_sans_stock_item` (medium)
+  - Tri : high d'abord, puis medium, puis par entité, puis created_at DESC
+  - Chaque règle est une requête SQL indépendante
+  - Returns: `QualiteDonneesResponse`
 
 ### Purchase Requests
 
@@ -1201,6 +1215,35 @@ Query params:
     "low_value_categories": ["BAT_NET", "BAT_RAN", "BAT_DIV", "LOG_MAG", "LOG_REC"],
     "suspicious_keywords": ["mécanique", "hydraulique", "électrique", "..."]
   }
+}
+```
+
+### QualiteDonneesResponse
+
+```json
+{
+  "total": "int",
+  "par_severite": {
+    "high": "int",
+    "medium": "int"
+  },
+  "problemes": [
+    {
+      "code": "string (action_time_null, action_complexity_sans_facteur, ...)",
+      "severite": "high|medium",
+      "entite": "intervention_action|intervention|stock_item|purchase_request",
+      "entite_id": "string (uuid)",
+      "message": "string (label en français)",
+      "contexte": {
+        "intervention_id": "string|null",
+        "intervention_code": "string|null",
+        "created_at": "string (ISO 8601)|null",
+        "stock_item_ref": "string|null",
+        "stock_item_name": "string|null",
+        "purchase_request_id": "string|null"
+      }
+    }
+  ]
 }
 ```
 

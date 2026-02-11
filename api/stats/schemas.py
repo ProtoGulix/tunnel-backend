@@ -342,3 +342,38 @@ class AnomaliesSaisieResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# --- Qualité Données ---
+
+class QualiteDonneesContexte(BaseModel):
+    """Contexte variable selon l'entité concernée"""
+    intervention_id: str | None = None
+    intervention_code: str | None = None
+    created_at: str | None = None
+    stock_item_ref: str | None = None
+    stock_item_name: str | None = None
+    purchase_request_id: str | None = None
+
+
+class QualiteDonneesProbleme(BaseModel):
+    code: str
+    severite: str
+    entite: str
+    entite_id: str
+    message: str
+    contexte: QualiteDonneesContexte
+
+
+class QualiteDonneesParSeverite(BaseModel):
+    high: int = 0
+    medium: int = 0
+
+
+class QualiteDonneesResponse(BaseModel):
+    total: int
+    par_severite: QualiteDonneesParSeverite
+    problemes: List[QualiteDonneesProbleme]
+
+    class Config:
+        from_attributes = True
