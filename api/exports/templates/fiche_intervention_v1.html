@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <title>FICHE MAINTENANCE - {{ code }}</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <style>
+      /* A4-safe layout (toutes les mesures en mm ou pt) */
+      @page {
+        size: A4 portrait;
+        margin: 9mm;
+        margin-left: 10mm;
+      }
+
+      body {
+        margin: 0;
+        padding: 0;
+        font-family: Arial, Helvetica, sans-serif;
+        font-size: 9pt;
+        line-height: 1.1;
+        color: #1e293b;
+        counter-reset: page;
+      }
+
+      /* Conteneur principal */
+      .container {
+        /*width: 195mm;*/
+        margin: 0 auto;
+        box-sizing: border-box;
+      }
+
+      /* En-tête */
+      .main-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: -4mm;
+      }
+
+      .header-left {
+        flex: 1;
+        text-align: right;
+      }
+
+      .header-title {
+        font-size: 16pt;
+        font-weight: bold;
+        color: #1e3a8a;
+        margin: 0 0 2mm 0;
+        line-height: 1.2;
+      }
+
+      .header-meta {
+        font-size: 8pt;
+        line-height: 1.1;
+        margin-bottom: 1mm;
+      }
+
+      .logo-container {
+        width: 45mm;
+        height: 20mm;
+      }
+
+      .logo {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+      }
+
+      /* Code unique */
+      .code-container {
+        display: flex;
+        align-items: center;
+        margin-bottom: 3mm;
+      }
+
+      .code-label {
+        font-weight: bold;
+        color: #1e3a8a;
+        margin-right: 2mm;
+        font-size: 10pt;
+        white-space: nowrap;
+      }
+
+      .code-value {
+        background-color: #e0f2fe;
+        border: 1px solid #1e3a8a;
+        border-radius: 1mm;
+        padding: 2mm 4mm;
+        font-family: "Consolas", "Courier New", monospace;
+        font-size: 12pt;
+        font-weight: bold;
+        color: #1e3a8a;
+        white-space: nowrap;
+      }
+
+      /* Ligne supérieure */
+      .top-row {
+        display: flex;
+        width: 100%;
+        gap: 2mm;
+      }
+
+      .top-row .col {
+        box-sizing: border-box;
+      }
+
+      .top-row .col:nth-child(1) {
+        width: 35%;
+      }
+
+      .top-row .col:nth-child(2) {
+        width: 65%;
+      }
+
+      /* Sections */
+      .section {
+        margin-top: 2mm;
+      }
+
+      .section h2 {
+        margin: 0 0 1.5mm 0;
+        font-size: 10pt;
+        color: #1e3a8a;
+        border-bottom: 0.5mm solid #475569;
+        padding-bottom: 1mm;
+      }
+
+      /* Lignes de champ */
+      .field-row {
+        display: flex;
+        margin-bottom: 1mm;
+        align-items: flex-start;
+      }
+
+      .field-label {
+        width: 20mm;
+        font-weight: 600;
+        color: #475569;
+        padding-right: 1mm;
+        font-size: 8.5pt;
+        padding-top: 1mm;
+      }
+
+      .field-value {
+        flex: 1;
+        padding: 1mm 2mm;
+        border: 0.3mm solid #cbd5e1;
+        border-radius: 1mm;
+        min-height: 6mm;
+        box-sizing: border-box;
+        font-size: 9pt;
+      }
+
+      /* Badge de priorité */
+      .priority-container {
+        display: flex;
+        align-items: center;
+        margin-bottom: 1mm;
+      }
+
+      .priority-label {
+        width: 20mm;
+        font-weight: 600;
+        color: #475569;
+        padding-right: 1mm;
+        font-size: 8.5pt;
+        padding-top: 1mm;
+      }
+
+      .priority-badge {
+        flex: 1;
+        padding: 1mm 2mm;
+        border-radius: 1mm;
+        font-weight: bold;
+        font-size: 9pt;
+        border: 0.3mm solid #cbd5e1;
+        text-align: center;
+      }
+
+      .priority-normal {
+        background-color: #dcfce7;
+        color: #166534;
+        border-color: #166534;
+      }
+
+      .priority-high {
+        background-color: #fed7aa;
+        color: #9a3412;
+        border-color: #9a3412;
+      }
+
+      .priority-urgent {
+        background-color: #fee2e2;
+        color: #991b1b;
+        border-color: #991b1b;
+      }
+
+      /* Badges de statut */
+      .status-badge {
+        display: inline-block;
+        padding: 0.5mm 2mm;
+        border-radius: 2mm;
+        font-size: 8pt;
+        font-weight: bold;
+        text-align: center;
+        min-width: 15mm;
+      }
+
+      .status-inprogress {
+        background-color: #bbf7d0;
+        color: #166534;
+      }
+
+      .status-completed {
+        background-color: #bfdbfe;
+        color: #1e40af;
+      }
+
+      .status-cancelled {
+        background-color: #fecaca;
+        color: #991b1b;
+      }
+
+      /* Lignes de planification */
+      .planification-row {
+        display: flex;
+        margin-bottom: 1mm;
+      }
+
+      .planification-label {
+        width: 20mm;
+        font-weight: 600;
+        color: #475569;
+        padding-right: 1mm;
+        padding-top: 1mm;
+        font-size: 8.5pt;
+      }
+
+      .planification-value {
+        flex: 1;
+        padding: 1mm 2mm;
+        border: 0.3mm solid #cbd5e1;
+        border-radius: 1mm;
+        min-height: 6mm;
+        box-sizing: border-box;
+        font-size: 9pt;
+      }
+
+      /* Tableaux */
+      .actions-table,
+      .status-table {
+        table-layout: fixed;
+        border-collapse: collapse;
+        margin-top: 2mm;
+        font-size: 8.5pt;
+        width: 100%;
+      }
+
+      .actions-table th:nth-child(1) {
+        width: 20mm;
+      }
+      .actions-table th:nth-child(2) {
+        width: 20mm;
+      }
+      .actions-table th:nth-child(3) {
+        width: 20mm;
+      }
+      .actions-table th:nth-child(4) {
+        width: 20mm;
+      }
+      .actions-table th:nth-child(5) {
+        width: 100mm;
+      }
+
+      .status-table th:nth-child(1) {
+        width: 20mm;
+      }
+      .status-table th:nth-child(2) {
+        width: 75mm;
+      }
+      .status-table th:nth-child(3) {
+        width: 20mm;
+      }
+
+      .actions-table thead th,
+      .status-table thead th {
+        background: #0f4c81;
+        color: #ffffff;
+        font-weight: 600;
+        padding: 1mm;
+        border-bottom: 0.5mm solid #1e3a8a;
+      }
+
+      .actions-table tbody td,
+      .status-table tbody td {
+        padding: 1mm;
+        vertical-align: top;
+        border-bottom: 0.3mm solid #cbd5e1;
+      }
+
+      .actions-table tbody td p {
+        margin: 0;
+      }
+
+      .actions-table tbody tr:nth-child(even) {
+        background: #e2e8f0;
+      }
+
+      /* Tableau des pièces */
+      .parts-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 1mm;
+        font-size: 8.5pt;
+      }
+
+      .parts-table th {
+        background-color: #f3f4f6;
+        padding: 1mm;
+        text-align: left;
+        font-weight: bold;
+        color: #1e3a8a;
+        border-bottom: 0.5mm solid #cbd5e1;
+      }
+
+      .parts-table td {
+        padding: 1mm;
+        border-bottom: 0.3mm solid #cbd5e1;
+      }
+
+      .parts-table tr:nth-child(even) {
+        background-color: #e2e8f0;
+      }
+
+      .parts-qty {
+        width: 15mm;
+        text-align: center;
+        font-weight: bold;
+      }
+
+      .parts-reference {
+        width: 40mm;
+      }
+
+      .parts-stock {
+        width: 25mm;
+      }
+
+      /* Commentaires */
+      .comments {
+        min-height: 20mm;
+        padding: 1mm;
+        border: 0.3mm solid #cbd5e1;
+        box-sizing: border-box;
+        font-size: 9pt;
+        background-color: #f8fafc;
+      }
+
+      .comments:empty::before {
+        content: "Ex. : Problème résolu. Pièce remplacée. À surveiller : ...";
+        color: #9ca3af;
+        font-style: italic;
+      }
+
+      /* Message "pas de pièces" */
+      .no-parts {
+        font-weight: bold;
+        color: #1e3a8a;
+        background-color: #f0f9ff;
+        padding: 2mm;
+        border-radius: 1mm;
+        text-align: center;
+        margin-top: 1mm;
+      }
+
+      /* Pied de page */
+      footer {
+        margin-top: 6mm;
+        font-size: 8pt;
+        color: #666;
+        text-align: right;
+        border-top: 0.5px solid #cbd5e1;
+        padding-top: 2mm;
+        width: 100%;
+        display: block;
+      }
+
+      /* Règles d'impression */
+      @media print {
+        thead {
+          display: table-header-group;
+        }
+        tfoot {
+          display: table-footer-group;
+        }
+        tr {
+          page-break-inside: avoid;
+        }
+        .header,
+        .section,
+        .actions-table,
+        .status-table,
+        .parts-table,
+        .comments {
+          page-break-inside: avoid;
+        }
+      }
+    </style>
+  </head>
+  <body
+    data-code="{{ code }}"
+    data-datetime="{% if now is string %}{{ now }}{% else %}{{ now.strftime('%Y-%m-%d %H:%M') }}{% endif %}"
+  >
+    <div class="container">
+      <!-- Header with logo and meta -->
+      <div class="main-header">
+        <div class="logo-container">
+          <img
+            class="logo"
+            src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAABaCAYAAABwm16CAAAACXBIWXMAAAsTAAALEwEAmpwYAAAG/GlUWHRYTUw6Y29tLmFkb2JlLnhtcAAAAAAAPD94cGFja2V0IGJlZ2luPSLvu78iIGlkPSJXNU0wTXBDZWhpSHpyZVN6TlRjemtjOWQiPz4gPHg6eG1wbWV0YSB4bWxuczp4PSJhZG9iZTpuczptZXRhLyIgeDp4bXB0az0iQWRvYmUgWE1QIENvcmUgNS42LWMxNDUgNzkuMTYzNDk5LCAyMDE4LzA4LzEzLTE2OjQwOjIyICAgICAgICAiPiA8cmRmOlJERiB4bWxuczpyZGY9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkvMDIvMjItcmRmLXN5bnRheC1ucyMiPiA8cmRmOkRlc2NyaXB0aW9uIHJkZjphYm91dD0iIiB4bWxuczp4bXA9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC8iIHhtbG5zOmRjPSJodHRwOi8vcHVybC5vcmcvZGMvZWxlbWVudHMvMS4xLyIgeG1sbnM6cGhvdG9zaG9wPSJodHRwOi8vbnMuYWRvYmUuY29tL3Bob3Rvc2hvcC8xLjAvIiB4bWxuczp4bXBNTT0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL21tLyIgeG1sbnM6c3RFdnQ9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZUV2ZW50IyIgeG1sbnM6dGlmZj0iaHR0cDovL25zLmFkb2JlLmNvbS90aWZmLzEuMC8iIHhtbG5zOmV4aWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20vZXhpZi8xLjAvIiB4bXA6Q3JlYXRvclRvb2w9IkFkb2JlIFBob3Rvc2hvcCBDQyAyMDE3IChXaW5kb3dzKSIgeG1wOkNyZWF0ZURhdGU9IjIwMTctMDktMTJUMTM6MzU6NDIrMDI6MDAiIHhtcDpNb2RpZnlEYXRlPSIyMDE4LTExLTIwVDA5OjU0OjI3KzAxOjAwIiB4bXA6TWV0YWRhdGFEYXRlPSIyMDE4LTExLTIwVDA5OjU0OjI3KzAxOjAwIiBkYzpmb3JtYXQ9ImltYWdlL3BuZyIgcGhvdG9zaG9wOkNvbG9yTW9kZT0iMyIgcGhvdG9zaG9wOklDQ1Byb2ZpbGU9InNSR0IgSUVDNjE5NjYtMi4xIiB4bXBNTTpJbnN0YW5jZUlEPSJ4bXAuaWlkOjZjMWRhNDY5LTczOWEtODI0Yi1iYTViLTVhNzg0YTA5Y2YxYSIgeG1wTU06RG9jdW1lbnRJRD0ieG1wLmRpZDpiNTAzZDA3OS1kMGY0LTc5NGQtYTRlZi04MjFlNjM4YTdiZjciIHhtcE1NOk9yaWdpbmFsRG9jdW1lbnRJRD0ieG1wLmRpZDpiNTAzZDA3OS1kMGY0LTc5NGQtYTRlZi04MjFlNjM4YTdiZjciIHRpZmY6T3JpZW50YXRpb249IjEiIHRpZmY6WFJlc29sdXRpb249IjcyMDAwMC8xMDAwMCIgdGlmZjpZUmVzb2x1dGlvbj0iNzIwMDAwLzEwMDAwIiB0aWZmOlJlc29sdXRpb25Vbml0PSIyIiBleGlmOkNvbG9yU3BhY2U9IjY1NTM1IiBleGlmOlBpeGVsWERpbWVuc2lvbj0iMTI4IiBleGlmOlBpeGVsWURpbWVuc2lvbj0iOTAiPiA8eG1wTU06SGlzdG9yeT4gPHJkZjpTZXE+IDxyZGY6bGkgc3RFdnQ6YWN0aW9uPSJjcmVhdGVkIiBzdEV2dDppbnN0YW5jZUlEPSJ4bXAuaWlkOmI1MDNkMDc5LWQwZjQtNzk0ZC1hNGVmLTgyMWU2MzhhN2JmNyIgc3RFdnQ6d2hlbj0iMjAxNy0wOS0xMlQxMzozNTo0MiswMjowMCIgc3RFdnQ6c29mdHdhcmVBZ2VudD0iQWRvYmUgUGhvdG9zaG9wIENDIDIwMTcgKFdpbmRvd3MpIi8+IDxyZGY6bGkgc3RFdnQ6YWN0aW9uPSJzYXZlZCIgc3RFdnQ6aW5zdGFuY2VJRD0ieG1wLmlpZDo2YzFkYTQ2OS03MzlhLTgyNGItYmE1Yi01YTc4NGEwOWNmMWEiIHN0RXZ0OndoZW49IjIwMTgtMTEtMjBUMDk6NTQ6MjcrMDE6MDAiIHN0RXZ0OnNvZnR3YXJlQWdlbnQ9IkFkb2JlIFBob3Rvc2hvcCBDQyAyMDE5IChXaW5kb3dzKSIgc3RFdnQ6Y2hhbmdlZD0iLyIvPiA8L3JkZjpTZXE+IDwveG1wTU06SGlzdG9yeT4gPC9yZGY6RGVzY3Jp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"
+            alt="logo"
+          />
+        </div>
+        <div class="header-left">
+          <div class="header-meta">
+            <div>Version : 8</div>
+            <div>2025-10-31</div>
+          </div>
+          <div class="header-title">FICHE MAINTENANCE</div>
+        </div>
+      </div>
+      <!-- Unique code -->
+      <div class="code-container" style="float: right">
+        <span class="code-label">Numéro unique:</span>
+        <span class="code-value">{{ code }}</span>
+      </div>
+      <div style="clear: both" />
+      <!-- Top row: request and planning side-by-side -->
+      <div class="top-row" role="region">
+        <div class="col">
+          <section class="section demande" aria-labelledby="demande">
+            <h2 id="demande">Demande</h2>
+            <div class="field-row">
+              <div class="field-label">Demandeur</div>
+              <div class="field-value">
+                {{ reported_by | default("N/A") }}
+              </div>
+            </div>
+            <div class="field-row">
+              <div class="field-label">Date</div>
+              <div class="field-value">{{ reported_date | format_date }}</div>
+            </div>
+            <div class="field-row">
+              <div class="field-label">Description</div>
+              <div class="field-value">
+                {{ title | default('&nbsp;') | safe }}
+              </div>
+            </div>
+          </section>
+          <section class="section general" aria-labelledby="plan">
+            <h2 id="plan">Planification / Suivie</h2>
+            <div class="priority-container">
+              <div class="priority-label">Priorité</div>
+              <div
+                class="priority-badge {% if priority == 'normal' %}priority-normal {% elif priority == 'important' %}priority-high {% elif priority == 'urgent' %}priority-urgent {% endif %}"
+              >
+                {{ priority }}
+              </div>
+            </div>
+            <div class="planification-row">
+              <div class="planification-label">Code équipement</div>
+              <div class="planification-value">{{ equipements.code }}</div>
+            </div>
+            <div class="planification-row">
+              <div class="planification-label">Classeur</div>
+              <div class="planification-value">{% if equipements.equipement_type %}{{ equipements.equipement_type.no_classeur or '-' }}{% else %}-{% endif %}</div>
+            </div>
+            <div class="planification-row">
+              <div class="planification-label">Type</div>
+              <div class="planification-value">{{ type_inter }}</div>
+            </div>
+            <div class="planification-row">
+              <div class="planification-label">Technicien</div>
+              <div class="planification-value">
+                {{ tech_initials }}
+              </div>
+            </div>
+          </section>
+        </div>
+        <div class="col">
+          <section
+            class="section status-history"
+            aria-labelledby="status-history"
+          >
+            <h2 id="status-history">Historique des statuts</h2>
+            <table class="status-table" aria-label="Historique des statuts">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Changement</th>
+                  <th>Modifié par</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% if status_logs %} {% for s in status_logs %}
+                <tr>
+                  <td>{{ s.date|format_date }}</td>
+                  <td>
+                    {{ s.status_from }} <span class="arrow">→</span> {{
+                    s.status_to }}
+                  </td>
+                  <td>
+                    {% if s.technician_id is mapping and s.technician_id.initial
+                    %} {{ s.technician_id.initial }} {% else %} N/A {% endif %}
+                  </td>
+                </tr>
+                {% endfor %} {% else %}
+                <tr>
+                  <td colspan="3" class="text-center">
+                    Aucun statut enregistré.
+                  </td>
+                </tr>
+                {% endif %}
+              </tbody>
+            </table>
+          </section>
+        </div>
+      </div>
+      <!-- Actions -->
+      <section class="section actions" aria-labelledby="actions">
+        <h2 id="actions">Actions réalisées</h2>
+        <table class="actions-table" aria-label="Actions réalisées">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Durée</th>
+              <th>Technicien</th>
+              <th>Code Action</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for a in actions %}
+            <tr>
+              <td>{{ a.created_at | format_date }}</td>
+              <td><b>{{ a.time_spent | default('') }}</b></td>
+              <td>
+                {% if a.tech is mapping %} {{ a.tech.initial |
+                default(a.tech.first_name ~ ' ' ~ a.tech.last_name) }} {% else
+                %} {{ a.tech }} {% endif %}
+              </td>
+              <td>{{ a.action_subcategory.code | default('') }}</td>
+              <td>{{ a.description | default('') | safe }}</td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="4">Aucune action enregistrée.</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </section>
+      <!-- Observations -->
+      <section class="section observations">
+        <h2>Commentaires / Observations</h2>
+        <div class="comments">
+          {{ observations | default('&nbsp;') | safe }}
+        </div>
+      </section>
+      <!-- Parts with improved table -->
+      <section class="section pieces">
+        <h2>Pièces détachées</h2>
+        {% if parts %}
+        <table class="parts-table">
+          <thead>
+            <tr>
+              <th class="parts-qty">Qté</th>
+              <th class="parts-reference">Référence</th>
+              <th class="parts-stock">Stock</th>
+              <th class="parts-comment">Commentaire</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for p in parts %}
+            <tr>
+              <td class="parts-qty">{{ p.qty }}</td>
+              <td class="parts-reference">{{ p.reference }}</td>
+              <td class="parts-stock">{{ p.in_stock }}</td>
+              <td class="parts-comment">{{ p.comment | default('') }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <div class="no-parts">Aucune pièce enregistrée.</div>
+        {% endif %}
+      </section>
+      <footer>Document généré le {{ now | format_date }}</footer>
+    </div>
+  </body>
+</html>

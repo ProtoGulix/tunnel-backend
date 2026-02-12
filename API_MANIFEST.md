@@ -1,6 +1,6 @@
 # API Manifest
 
-Last updated: 2026-02-11 (v1.7.0)
+Last updated: 2026-02-12 (v1.8.0)
 
 ## Endpoints
 
@@ -1809,8 +1809,60 @@ Note: Includes enriched `stock_item_name`, `stock_item_ref`, `supplier_name`, `s
 }
 ```
 
+### Exports (v1.8.0+)
+
+- `GET /exports/interventions/{id}/pdf` - Generate PDF report for intervention (Auth: Required - JWT Bearer token)
+  - Headers:
+    - `Authorization: Bearer {token}` (required)
+  - Returns: PDF file (application/pdf)
+  - Filename: `{intervention_code}.pdf` (e.g., "INT-2026-001.pdf")
+  - Features:
+    - A4 optimized layout with professional formatting
+    - Complete intervention data: equipment, actions, status logs, statistics
+    - Customizable Jinja2 HTML template
+    - WeasyPrint rendering for print quality
+    - ETag support for client-side caching
+  - Errors:
+    - 400: Invalid UUID format
+    - 401: Missing or invalid JWT token
+    - 404: Intervention not found
+    - 500: PDF generation failed
+  - Example:
+    ```bash
+    curl -X GET "http://localhost:8000/exports/interventions/{id}/pdf" \
+         -H "Authorization: Bearer {token}" \
+         -o intervention.pdf
+    ```
+
+- `GET /exports/interventions/{id}/qrcode` - Generate QR code linking to intervention (Auth: Public)
+  - Headers: None (public endpoint for printing on physical reports)
+  - Returns: PNG image (image/png)
+  - Filename: `{intervention_code}.png` (inline display, not download)
+  - QR Content: `{FRONTEND_URL}/interventions/{id}` (configurable via EXPORT_QR_BASE_URL)
+  - Features:
+    - Optional logo overlay (configured via EXPORT_QR_LOGO_PATH)
+    - High error correction (ERROR_CORRECT_H) for reliable scanning
+    - Optimized for printing on physical reports
+    - 1 hour cache (public, max-age=3600)
+  - Errors:
+    - 400: Invalid UUID format
+    - 404: Intervention not found
+    - 500: QR generation failed
+  - Example:
+    ```bash
+    curl -X GET "http://localhost:8000/exports/interventions/{id}/qrcode" \
+         -o qrcode.png
+    ```
+
 ## Configuration
 
 - **AUTH_DISABLED**: Set to `true` in `.env` to skip JWT validation for testing
 - **DATABASE_URL**: PostgreSQL connection string
 - **DIRECTUS_URL**: Authentication service URL
+
+### Export Configuration (v1.8.0+)
+
+- **EXPORT_TEMPLATE_DIR**: Template directory path (default: `api/exports/templates`)
+- **EXPORT_TEMPLATE_FILE**: HTML template filename (default: `fiche_intervention_v1.html`)
+- **EXPORT_QR_BASE_URL**: Frontend base URL for QR codes (default: `http://localhost:5173/interventions`)
+- **EXPORT_QR_LOGO_PATH**: Logo overlay path for QR codes (default: `api/exports/templates/logo.png`)

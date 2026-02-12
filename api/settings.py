@@ -23,10 +23,28 @@ class Settings(BaseSettings):
 
     # API
     API_TITLE: str = "GMAO API"
-    API_VERSION: str = "1.7.0"
+    API_VERSION: str = "1.8.0"
     API_ENV: str = os.getenv("API_ENV", "development")
     AUTH_DISABLED: bool = os.getenv("AUTH_DISABLED", "false").lower() == "true"
     FRONTEND_URL: str = os.getenv("FRONTEND_URL", "http://localhost:5173")
+
+    # Export Configuration
+    EXPORT_TEMPLATE_DIR: str = os.getenv(
+        "EXPORT_TEMPLATE_DIR",
+        "api/exports/templates"
+    )
+    EXPORT_TEMPLATE_FILE: str = os.getenv(
+        "EXPORT_TEMPLATE_FILE",
+        "fiche_intervention_v1.html"
+    )
+    EXPORT_QR_BASE_URL: str = os.getenv(
+        "EXPORT_QR_BASE_URL",
+        "http://localhost:5173/interventions"
+    )
+    EXPORT_QR_LOGO_PATH: str = os.getenv(
+        "EXPORT_QR_LOGO_PATH",
+        "api/exports/templates/logo.png"
+    )
     
     @property
     def CORS_ORIGINS(self) -> list[str]:

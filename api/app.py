@@ -21,6 +21,7 @@ from api.supplier_order_lines.routes import router as supplier_order_line_router
 from api.supplier_orders.routes import router as supplier_order_router
 from api.suppliers.routes import router as supplier_router
 from api.stock_item_suppliers.routes import router as stock_item_supplier_router
+from api.exports.routes import router as exports_router
 from api.errors.handlers import register_error_handlers
 from api.health import health_check
 
@@ -93,6 +94,7 @@ app.include_router(supplier_order_line_router)
 app.include_router(supplier_order_router)
 app.include_router(supplier_router)
 app.include_router(stock_item_supplier_router)
+app.include_router(exports_router)
 app.include_router(auth_router)
 
 

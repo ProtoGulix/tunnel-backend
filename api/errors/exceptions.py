@@ -58,3 +58,25 @@ class ValidationError(HTTPException):
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=detail
         )
+
+
+class ExportError(HTTPException):
+    """Erreur lors de la génération d'export (500)"""
+
+    def __init__(self, detail: str = "Erreur lors de l'export"):
+        logger.error(f"Export Error: {detail}")
+        super().__init__(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=detail
+        )
+
+
+class RenderError(HTTPException):
+    """Erreur rendu PDF/QR (500)"""
+
+    def __init__(self, detail: str = "Erreur lors du rendu"):
+        logger.error(f"Render Error: {detail}")
+        super().__init__(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=detail
+        )

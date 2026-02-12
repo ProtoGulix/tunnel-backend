@@ -2,6 +2,56 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [1.8.0] - 12 février 2026
+
+### Nouveautés
+
+- **Export PDF des interventions** : Génération de rapports PDF professionnels pour impression
+  - `GET /exports/interventions/{id}/pdf` - Export PDF avec authentification requise
+  - Template HTML Jinja2 optimisé pour impression A4
+  - Rendu PDF via WeasyPrint pour qualité professionnelle
+  - Données complètes : intervention, équipement, actions, logs de statut, statistiques
+  - Nom de fichier automatique basé sur le code intervention (ex: "INT-2026-001.pdf")
+  - Support ETag pour mise en cache côté client
+
+- **QR Codes pour interventions** : Génération de QR codes pour accès mobile rapide
+  - `GET /exports/interventions/{id}/qrcode` - Génération QR code sans authentification (public)
+  - QR code pointe vers la page détail intervention dans le frontend
+  - Support overlay logo pour branding d'entreprise (optionnel)
+  - Format PNG optimisé pour impression sur rapports physiques
+  - Correction d'erreur élevée (ERROR_CORRECT_H) pour fiabilité du scan
+  - Cache public 1 heure pour meilleures performances
+
+- **Module exports dédié** : Architecture modulaire pour réutilisabilité
+  - `api/exports/` : Nouveau module standalone suivant le pattern repository
+  - `PDFGenerator` : Classe dédiée pour rendu HTML → PDF avec filtres Jinja2
+  - `QRGenerator` : Classe dédiée pour génération QR codes avec logo overlay
+  - `ExportRepository` : Repository spécialisé pour requêtes d'export optimisées
+  - Templates Jinja2 personnalisables dans `api/exports/templates/`
+
+### Configuration
+
+Nouvelles variables d'environnement (optionnelles) :
+- `EXPORT_TEMPLATE_DIR` : Dossier des templates HTML (défaut: `api/exports/templates`)
+- `EXPORT_TEMPLATE_FILE` : Fichier template HTML (défaut: `fiche_intervention_v1.html`)
+- `EXPORT_QR_BASE_URL` : URL frontend pour QR codes (défaut: `http://localhost:5173/interventions`)
+- `EXPORT_QR_LOGO_PATH` : Chemin logo overlay QR (défaut: `api/exports/templates/logo.png`)
+
+### Dépendances
+
+Nouvelles dépendances ajoutées :
+- `Jinja2==3.1.6` : Moteur de templates HTML
+- `weasyprint==66.0.0` : Génération PDF depuis HTML/CSS
+- `qrcode==8.2` : Génération de QR codes
+- `Pillow==12.0.0` : Manipulation d'images (overlay logo sur QR)
+
+### Sécurité
+
+- **PDF exports** : Authentification JWT requise (données sensibles : noms techniciens, temps, notes)
+- **QR codes** : Public (conçu pour impression sur rapports physiques, QR pointe vers frontend qui nécessite login)
+
+---
+
 ## [1.7.0] - 11 février 2026
 
 ### Nouveautés
