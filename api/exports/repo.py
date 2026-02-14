@@ -147,8 +147,8 @@ class ExportRepository:
             # Fetch purchase requests linked to this intervention
             cur.execute("""
                 SELECT
-                    pr.id, pr.item_label, pr.quantity_requested, pr.quantity_approved,
-                    pr.urgent, pr.unit, pr.created_at, pr.requester_name,
+                    pr.id, pr.item_label, pr.quantity, pr.unit,
+                    pr.urgent, pr.requester_name, pr.created_at,
                     si.ref as stock_item_ref, si.name as stock_item_name
                 FROM purchase_request pr
                 LEFT JOIN stock_item si ON pr.stock_item_id = si.id
@@ -159,6 +159,9 @@ class ExportRepository:
             purchase_requests = []
             for pr_row in cur.fetchall():
                 pr_dict = dict(zip([d[0] for d in cur.description], pr_row))
+                # Map quantity to quantity_requested for template compatibility
+                pr_dict['quantity_requested'] = pr_dict.get('quantity')
+                pr_dict['quantity_approved'] = None  # Not stored in this table
                 purchase_requests.append(pr_dict)
 
             # Structure finale compatible template

@@ -4,6 +4,7 @@ from pathlib import Path
 from api.settings import settings
 from api.errors.exceptions import RenderError
 from datetime import datetime
+import base64
 
 
 class PDFGenerator:
@@ -20,10 +21,12 @@ class PDFGenerator:
         try:
             template = self.env.get_template(settings.EXPORT_TEMPLATE_FILE)
             data['now'] = datetime.now().strftime('%Y-%m-%d')
-            # Add logo path for template
+            # Add logo as base64 for WeasyPrint compatibility
             logo_path = Path(settings.EXPORT_TEMPLATE_DIR) / "logo.png"
             if logo_path.exists():
-                data['logo_path'] = str(logo_path.absolute())
+                with open(logo_path, 'rb') as f:
+                    logo_base64 = base64.b64encode(f.read()).decode('utf-8')
+                    data['logo_path'] = f"data:image/png;base64,{logo_base64}"
             else:
                 # Fallback to empty if logo doesn't exist
                 data['logo_path'] = ""
