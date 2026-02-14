@@ -54,7 +54,6 @@ class ExportRepository:
                 SELECT
                     i.id, i.code, i.title, i.priority, i.status_actual,
                     i.reported_date, i.reported_by, i.type_inter,
-                    i.observations,
                     m.id as machine_id, m.code as machine_code,
                     m.name as machine_name, m.no_machine,
                     m.affectation, m.fabricant, m.numero_serie,
@@ -137,7 +136,7 @@ class ExportRepository:
                 "reported_date": intervention.get("reported_date"),
                 "reported_by": intervention.get("reported_by"),
                 "type_inter": intervention.get("type_inter"),
-                "observations": intervention.get("observations"),
+                "observations": None,  # Champ non disponible dans le schéma
                 "equipements": {
                     "code": intervention.get("machine_code"),
                     "name": intervention.get("machine_name"),
