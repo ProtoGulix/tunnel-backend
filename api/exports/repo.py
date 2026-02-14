@@ -90,14 +90,22 @@ class ExportRepository:
             actions = []
             for action_row in cur.fetchall():
                 action_dict = dict(zip([d[0] for d in cur.description], action_row))
-                # Compute tech initials
-                initials = ""
-                if action_dict.get('first_name') and action_dict.get('last_name'):
-                    initials = f"{action_dict['first_name'][0]}{action_dict['last_name'][0]}"
-                action_dict['tech_name'] = initials
 
-                # Structure subcategory nested object
-                action_dict['subcategory'] = {
+                # Structure tech object (compatible avec template)
+                first_name = action_dict.get('first_name')
+                last_name = action_dict.get('last_name')
+                initials = ""
+                if first_name and last_name:
+                    initials = f"{first_name[0]}{last_name[0]}"
+
+                action_dict['tech'] = {
+                    'first_name': first_name,
+                    'last_name': last_name,
+                    'initial': initials
+                }
+
+                # Structure subcategory nested object (compatible avec template)
+                action_dict['action_subcategory'] = {
                     'name': action_dict.get('subcategory_name'),
                     'code': action_dict.get('subcategory_code'),
                     'category': {
@@ -121,10 +129,19 @@ class ExportRepository:
             status_logs = []
             for log_row in cur.fetchall():
                 log_dict = dict(zip([d[0] for d in cur.description], log_row))
-                tech_name = ""
-                if log_dict.get('first_name') and log_dict.get('last_name'):
-                    tech_name = f"{log_dict['first_name']} {log_dict['last_name']}"
-                log_dict['technician_name'] = tech_name
+
+                # Structure technician object (compatible avec template)
+                first_name = log_dict.get('first_name')
+                last_name = log_dict.get('last_name')
+                initials = ""
+                if first_name and last_name:
+                    initials = f"{first_name[0]}{last_name[0]}"
+
+                log_dict['technician_id'] = {
+                    'first_name': first_name,
+                    'last_name': last_name,
+                    'initial': initials
+                }
                 status_logs.append(log_dict)
 
             # Structure finale compatible template
