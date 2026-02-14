@@ -600,32 +600,38 @@
       <section class="section purchase-requests">
         <h2>Demandes d'achat</h2>
         {% if purchase_requests %}
-        <table class="parts-table">
+        <table class="parts-table" style="font-size: 9px;">
           <thead>
             <tr>
-              <th class="parts-qty">Qté dem.</th>
-              <th class="parts-qty">Qté appr.</th>
-              <th class="parts-reference">Article / Référence</th>
-              <th class="parts-stock">Demandeur</th>
-              <th class="parts-comment">Urgent</th>
+              <th style="width: 5%; text-align: center;">Qté</th>
+              <th style="width: 15%;">Réf. Interne</th>
+              <th style="width: 25%;">Désignation</th>
+              <th style="width: 15%;">Fournisseur</th>
+              <th style="width: 15%;">Réf. Fournisseur</th>
+              <th style="width: 10%;">Fabricant</th>
+              <th style="width: 10%;">Réf. Fabricant</th>
+              <th style="width: 5%; text-align: center;">URG</th>
             </tr>
           </thead>
           <tbody>
             {% for pr in purchase_requests %}
-            <tr>
-              <td class="parts-qty">{{ pr.quantity_requested }} {{ pr.unit | default('') }}</td>
-              <td class="parts-qty">{{ pr.quantity_approved | default('-') }}</td>
-              <td class="parts-reference">
-                {% if pr.stock_item_ref %}
-                  {{ pr.stock_item_ref }} - {{ pr.stock_item_name | default('') }}
+            <tr {% if pr.urgent %}style="background-color: #ffe6e6;"{% endif %}>
+              <td style="text-align: center; font-weight: bold;">{{ pr.quantity_requested }} {{ pr.unit | default('pcs') }}</td>
+              <td style="font-family: monospace; font-size: 8px;">{{ pr.stock_item_ref | default('-') }}</td>
+              <td>
+                {% if pr.stock_item_name %}
+                  {{ pr.stock_item_name }}
                 {% else %}
                   {{ pr.item_label }}
                 {% endif %}
               </td>
-              <td class="parts-stock">{{ pr.requester_name | default('N/A') }}</td>
-              <td class="parts-comment">
+              <td>{{ pr.supplier_name | default('-') }}</td>
+              <td style="font-family: monospace; font-size: 8px;">{{ pr.supplier_ref | default('-') }}</td>
+              <td>{{ pr.manufacturer_name | default('-') }}</td>
+              <td style="font-family: monospace; font-size: 8px;">{{ pr.manufacturer_ref | default('-') }}</td>
+              <td style="text-align: center;">
                 {% if pr.urgent %}
-                  <span style="color: red; font-weight: bold;">✓</span>
+                  <span style="color: #d32f2f; font-weight: bold; font-size: 12px;">⚠</span>
                 {% else %}
                   -
                 {% endif %}
