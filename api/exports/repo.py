@@ -77,14 +77,14 @@ class ExportRepository:
                     ia.id, ia.description, ia.time_spent, ia.created_at,
                     ia.complexity_score,
                     u.first_name, u.last_name,
-                    asc.name as subcategory_name, asc.code as subcategory_code,
+                    asub.name as subcategory_name, asub.code as subcategory_code,
                     ac.name as category_name, ac.code as category_code
                 FROM intervention_action ia
                 LEFT JOIN directus_users u ON ia.tech = u.id
-                LEFT JOIN action_subcategory asc ON ia.action_subcategory = asc.id
-                LEFT JOIN action_category ac ON asc.category_id = ac.id
+                LEFT JOIN action_subcategory asub ON ia.action_subcategory = asub.id
+                LEFT JOIN action_category ac ON asub.category_id = ac.id
                 WHERE ia.intervention_id = %s
-                ORDER BY ia.created_at ASC
+                ORDER BY ia.created_at
             """, (intervention_id,))
 
             actions = []
