@@ -144,6 +144,38 @@ class ExportRepository:
                 }
                 status_logs.append(log_dict)
 
+            # Fetch purchase requests linked to this intervention
+            cur.execute("""
+                SELECT
+                    pr.id, pr.item_label, pr.quantity_requested, pr.quantity_approved,
+                    pr.urgent, pr.unit, pr.created_at,
+                    si.ref as stock_item_ref, si.name as stock_item_name,
+                    u.first_name as requester_first_name, u.last_name as requester_last_name
+                FROM purchase_request pr
+                LEFT JOIN stock_item si ON pr.stock_item_id = si.id
+                LEFT JOIN directus_users u ON pr.requester = u.id
+                WHERE pr.intervention_id = %s
+                ORDER BY pr.created_at DESC
+            """, (intervention_id,))
+
+            purchase_requests = []
+            for pr_row in cur.fetchall():
+                pr_dict = dict(zip([d[0] for d in cur.description], pr_row))
+
+                # Format requester name
+                first_name = pr_dict.get('requester_first_name')
+                last_name = pr_dict.get('requester_last_name')
+                requester_name = ""
+                if first_name and last_name:
+                    requester_name = f"{first_name} {last_name}"
+                elif first_name:
+                    requester_name = first_name
+                elif last_name:
+                    requester_name = last_name
+
+                pr_dict['requester_name'] = requester_name
+                purchase_requests.append(pr_dict)
+
             # Structure finale compatible template
             return {
                 "code": intervention.get("code"),
@@ -165,9 +197,11 @@ class ExportRepository:
                 },
                 "actions": actions,
                 "status_logs": status_logs,
+                "purchase_requests": purchase_requests,
                 "stats": {
                     "action_count": len(actions),
                     "total_time": sum(a.get('time_spent', 0) or 0 for a in actions),
+                    "purchase_requests_count": len(purchase_requests),
                 }
             }
 

@@ -20,6 +20,13 @@ class PDFGenerator:
         try:
             template = self.env.get_template(settings.EXPORT_TEMPLATE_FILE)
             data['now'] = datetime.now().strftime('%Y-%m-%d')
+            # Add logo path for template
+            logo_path = Path(settings.EXPORT_TEMPLATE_DIR) / "logo.png"
+            if logo_path.exists():
+                data['logo_path'] = str(logo_path.absolute())
+            else:
+                # Fallback to empty if logo doesn't exist
+                data['logo_path'] = ""
             return template.render(**data)
         except Exception as e:
             raise RenderError(f"Erreur rendu template: {str(e)}")
