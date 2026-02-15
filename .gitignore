@@ -56,3 +56,9 @@ htmlcov/
 # OS
 .DS_Store
 Thumbs.db
+
+# Templates
+config/templates/logo.png
+
+# Windows reserved names
+nul

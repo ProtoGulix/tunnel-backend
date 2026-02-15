@@ -23,7 +23,7 @@ class Settings(BaseSettings):
 
     # API
     API_TITLE: str = "GMAO API"
-    API_VERSION: str = "1.8.0"
+    API_VERSION: str = "1.9.0"
     API_ENV: str = os.getenv("API_ENV", "development")
     AUTH_DISABLED: bool = os.getenv("AUTH_DISABLED", "false").lower() == "true"
     FRONTEND_URL: str = os.getenv("FRONTEND_URL", "http://localhost:5173")
@@ -31,11 +31,19 @@ class Settings(BaseSettings):
     # Export Configuration
     EXPORT_TEMPLATE_DIR: str = os.getenv(
         "EXPORT_TEMPLATE_DIR",
-        "api/exports/templates"
+        "config/templates"
     )
     EXPORT_TEMPLATE_FILE: str = os.getenv(
         "EXPORT_TEMPLATE_FILE",
-        "fiche_intervention_v1.html"
+        "fiche_intervention_v8.html"
+    )
+    EXPORT_TEMPLATE_VERSION: str = os.getenv(
+        "EXPORT_TEMPLATE_VERSION",
+        "8.1"
+    )
+    EXPORT_TEMPLATE_DATE: str = os.getenv(
+        "EXPORT_TEMPLATE_DATE",
+        "2026-02-16"
     )
     EXPORT_QR_BASE_URL: str = os.getenv(
         "EXPORT_QR_BASE_URL",
@@ -43,7 +51,7 @@ class Settings(BaseSettings):
     )
     EXPORT_QR_LOGO_PATH: str = os.getenv(
         "EXPORT_QR_LOGO_PATH",
-        "api/exports/templates/logo.png"
+        "config/templates/logo.png"
     )
     
     @property

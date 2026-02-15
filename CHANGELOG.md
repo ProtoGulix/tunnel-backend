@@ -2,6 +2,54 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [1.9.0] - 15 février 2026
+
+### Nouveautés
+
+- **Demandes d'achat dans les exports PDF** : Les fiches d'intervention incluent maintenant la liste des demandes d'achat liées
+  - 8 colonnes : Quantité, Réf. Interne, Désignation, Fournisseur, Réf. Fournisseur, Fabricant, Réf. Fabricant, Urgence
+  - Données enrichies via JOINs SQL : `stock_item`, `stock_item_supplier`, `supplier`, `manufacturer_item`
+  - Indicateur visuel d'urgence (⚠ fond rouge)
+
+- **Pied de page PDF complet** : Informations de traçabilité sur chaque page du document
+  - Code intervention et numérotation des pages (`Page X / Y`) en bleu, gras, monospace
+  - Version API et version template (gauche)
+  - Date de génération (droite)
+  - Utilisation de CSS Paged Media (`string-set`, `counter(page)`, `counter(pages)`)
+
+- **Version de template configurable** : Nouveau champ de configuration pour gérer le versioning des templates
+  - `EXPORT_TEMPLATE_VERSION` : Version du template d'export (défaut: `v8.0`)
+  - `EXPORT_TEMPLATE_DATE` : Date de version du template (défaut: `2025-10-03`)
+
+### Changements
+
+- **Déplacement des templates d'export** : Les templates sont déplacés de `api/exports/templates/` vers `config/templates/`
+  - Template renommé : `fiche_intervention_v1.html` → `fiche_intervention_v8.html`
+  - Logo déplacé : `api/exports/templates/logo.png` → `config/templates/logo.png`
+  - Mise à jour des chemins par défaut dans la configuration
+
+- **Logo en base64** : Le logo est converti en data URI base64 pour compatibilité WeasyPrint
+  - Résout le problème d'affichage du logo dans les PDF générés
+
+### Corrections
+
+- **Colonne `quantity`** : Correction du nom de colonne (`quantity` au lieu de `quantity_requested`)
+- **Colonne `requester_name`** : Utilisation du champ texte direct au lieu d'une jointure sur `directus_users`
+- **Table `manufacturer`** : Correction de la jointure - les données fabricant sont dans `manufacturer_item.manufacturer_name` (pas de table `manufacturer` séparée)
+
+### Configuration
+
+Nouvelles variables d'environnement (optionnelles) :
+- `EXPORT_TEMPLATE_VERSION` : Version du template (défaut: `v8.0`)
+- `EXPORT_TEMPLATE_DATE` : Date de version du template (défaut: `2025-10-03`)
+
+Variables modifiées :
+- `EXPORT_TEMPLATE_DIR` : Défaut changé de `api/exports/templates` → `config/templates`
+- `EXPORT_TEMPLATE_FILE` : Défaut changé de `fiche_intervention_v1.html` → `fiche_intervention_v8.html`
+- `EXPORT_QR_LOGO_PATH` : Défaut changé de `api/exports/templates/logo.png` → `config/templates/logo.png`
+
+---
+
 ## [1.8.0] - 12 février 2026
 
 ### Nouveautés

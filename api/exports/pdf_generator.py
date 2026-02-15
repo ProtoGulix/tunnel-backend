@@ -12,7 +12,11 @@ class PDFGenerator:
 
     def __init__(self):
         template_dir = Path(settings.EXPORT_TEMPLATE_DIR)
-        self.env = Environment(loader=FileSystemLoader(str(template_dir)))
+        self.env = Environment(
+            loader=FileSystemLoader(str(template_dir)),
+            auto_reload=True,
+            cache_size=0
+        )
         self.env.filters['format_date'] = self._format_date
         self.env.filters['format_priority'] = self._format_priority
 
@@ -21,6 +25,11 @@ class PDFGenerator:
         try:
             template = self.env.get_template(settings.EXPORT_TEMPLATE_FILE)
             data['now'] = datetime.now().strftime('%Y-%m-%d')
+
+            # Add version information
+            data['api_version'] = settings.API_VERSION
+            data['template_version'] = f"{settings.EXPORT_TEMPLATE_VERSION} ({settings.EXPORT_TEMPLATE_DATE})"
+
             # Add logo as base64 for WeasyPrint compatibility
             logo_path = Path(settings.EXPORT_TEMPLATE_DIR) / "logo.png"
             if logo_path.exists():

@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="fr">
   <head>
     <meta charset="utf-8" />
@@ -8,8 +8,31 @@
       /* A4-safe layout (toutes les mesures en mm ou pt) */
       @page {
         size: A4 portrait;
-        margin: 9mm;
-        margin-left: 10mm;
+        margin: 9mm 10mm 15mm 10mm; /* top right bottom left */
+
+        @bottom-left {
+          content: "API v" string(api-version) " | Template "
+            string(template-version);
+          font-size: 7pt;
+          color: #94a3b8;
+          font-family: Arial, Helvetica, sans-serif;
+        }
+
+        @bottom-center {
+          content: string(intervention-code) "  ·  Page " counter(page) " / "
+            counter(pages);
+          font-size: 8pt;
+          font-weight: bold;
+          color: #1e3a8a;
+          font-family: "Consolas", "Courier New", monospace;
+        }
+
+        @bottom-right {
+          content: "Généré le " string(generation-date);
+          font-size: 7pt;
+          color: #94a3b8;
+          font-family: Arial, Helvetica, sans-serif;
+        }
       }
 
       body {
@@ -83,6 +106,7 @@
       }
 
       .code-value {
+        string-set: intervention-code content();
         background-color: #e0f2fe;
         border: 1px solid #1e3a8a;
         border-radius: 1mm;
@@ -374,16 +398,21 @@
         margin-top: 1mm;
       }
 
-      /* Pied de page */
-      footer {
-        margin-top: 6mm;
-        font-size: 8pt;
-        color: #666;
-        text-align: right;
-        border-top: 0.5px solid #cbd5e1;
-        padding-top: 2mm;
-        width: 100%;
-        display: block;
+      /* Éléments string-set pour @page */
+      .page-meta-api-version {
+        string-set: api-version content();
+      }
+      .page-meta-template-version {
+        string-set: template-version content();
+      }
+      .page-meta-generation-date {
+        string-set: generation-date content();
+      }
+      .page-meta {
+        height: 0;
+        overflow: hidden;
+        font-size: 0;
+        line-height: 0;
       }
 
       /* Règles d'impression */
@@ -408,24 +437,23 @@
       }
     </style>
   </head>
-  <body
-    data-code="{{ code }}"
-    data-datetime="{% if now is string %}{{ now }}{% else %}{{ now.strftime('%Y-%m-%d %H:%M') }}{% endif %}"
-  >
+  <body>
+    <!-- Métadonnées pour pied de page @page (string-set) - doit être avant le contenu -->
+    <div class="page-meta">
+      <span class="page-meta-api-version">{{ api_version }}</span>
+      <span class="page-meta-template-version">{{ template_version }}</span>
+      <span class="page-meta-generation-date">{{ now | format_date }}</span>
+    </div>
     <div class="container">
       <!-- Header with logo and meta -->
       <div class="main-header">
         <div class="logo-container">
-          <img
-            class="logo"
-            src="{{ logo_path }}"
-            alt="logo"
-          />
+          <img class="logo" src="{{ logo_path }}" alt="logo" />
         </div>
         <div class="header-left">
           <div class="header-meta">
-            <div>Version : 8</div>
-            <div>2025-10-31</div>
+            <div>Api : {{ api_version }}</div>
+            <div>Format : {{ template_version }}</div>
           </div>
           <div class="header-title">FICHE MAINTENANCE</div>
         </div>
@@ -443,9 +471,7 @@
             <h2 id="demande">Demande</h2>
             <div class="field-row">
               <div class="field-label">Demandeur</div>
-              <div class="field-value">
-                {{ reported_by | default("N/A") }}
-              </div>
+              <div class="field-value">{{ reported_by | default("N/A") }}</div>
             </div>
             <div class="field-row">
               <div class="field-label">Date</div>
@@ -474,7 +500,11 @@
             </div>
             <div class="planification-row">
               <div class="planification-label">Classeur</div>
-              <div class="planification-value">{% if equipements.equipement_type %}{{ equipements.equipement_type.no_classeur or '-' }}{% else %}-{% endif %}</div>
+              <div class="planification-value">
+                {% if equipements.equipement_type %}{{
+                equipements.equipement_type.no_classeur or '-' }}{% else %}-{%
+                endif %}
+              </div>
             </div>
             <div class="planification-row">
               <div class="planification-label">Type</div>
@@ -482,9 +512,7 @@
             </div>
             <div class="planification-row">
               <div class="planification-label">Technicien</div>
-              <div class="planification-value">
-                {{ tech_initials }}
-              </div>
+              <div class="planification-value">{{ tech_initials }}</div>
             </div>
           </section>
         </div>
@@ -562,14 +590,15 @@
         </table>
       </section>
       <!-- Observations -->
+      <!--
       <section class="section observations">
         <h2>Commentaires / Observations</h2>
         <div class="comments">
           {{ observations | default('&nbsp;') | safe }}
         </div>
-      </section>
+      </section> -->
       <!-- Parts with improved table -->
-      <section class="section pieces">
+      <!--<section class="section pieces">
         <h2>Pièces détachées</h2>
         {% if parts %}
         <table class="parts-table">
@@ -595,46 +624,59 @@
         {% else %}
         <div class="no-parts">Aucune pièce enregistrée.</div>
         {% endif %}
-      </section>
+      </section> -->
       <!-- Purchase Requests -->
       <section class="section purchase-requests">
         <h2>Demandes d'achat</h2>
         {% if purchase_requests %}
-        <table class="parts-table" style="font-size: 9px;">
+        <table class="parts-table" style="font-size: 9px">
           <thead>
             <tr>
-              <th style="width: 5%; text-align: center;">Qté</th>
-              <th style="width: 15%;">Réf. Interne</th>
-              <th style="width: 25%;">Désignation</th>
-              <th style="width: 15%;">Fournisseur</th>
-              <th style="width: 15%;">Réf. Fournisseur</th>
-              <th style="width: 10%;">Fabricant</th>
-              <th style="width: 10%;">Réf. Fabricant</th>
-              <th style="width: 5%; text-align: center;">URG</th>
+              <th style="width: 5%; text-align: center">Qté</th>
+              <th style="width: 15%">Réf. Interne</th>
+              <th style="width: 25%">Désignation</th>
+              <th style="width: 15%">Fournisseur</th>
+              <th style="width: 15%">Réf. Fournisseur</th>
+              <th style="width: 10%">Fabricant</th>
+              <th style="width: 10%">Réf. Fabricant</th>
+              <th style="width: 5%; text-align: center">URG</th>
             </tr>
           </thead>
           <tbody>
             {% for pr in purchase_requests %}
-            <tr {% if pr.urgent %}style="background-color: #ffe6e6;"{% endif %}>
-              <td style="text-align: center; font-weight: bold;">{{ pr.quantity_requested }} {{ pr.unit | default('pcs') }}</td>
-              <td style="font-family: monospace; font-size: 8px;">{{ pr.stock_item_ref | default('-') }}</td>
+            <tr
+              {%
+              if
+              pr.urgent
+              %}style="background-color: #ffe6e6;"
+              {%
+              endif
+              %}
+            >
+              <td style="text-align: center; font-weight: bold">
+                {{ pr.quantity_requested }} {{ pr.unit | default('pcs') }}
+              </td>
+              <td style="font-family: monospace; font-size: 8px">
+                {{ pr.stock_item_ref | default('-') }}
+              </td>
               <td>
-                {% if pr.stock_item_name %}
-                  {{ pr.stock_item_name }}
-                {% else %}
-                  {{ pr.item_label }}
-                {% endif %}
+                {% if pr.stock_item_name %} {{ pr.stock_item_name }} {% else %}
+                {{ pr.item_label }} {% endif %}
               </td>
               <td>{{ pr.supplier_name | default('-') }}</td>
-              <td style="font-family: monospace; font-size: 8px;">{{ pr.supplier_ref | default('-') }}</td>
+              <td style="font-family: monospace; font-size: 8px">
+                {{ pr.supplier_ref | default('-') }}
+              </td>
               <td>{{ pr.manufacturer_name | default('-') }}</td>
-              <td style="font-family: monospace; font-size: 8px;">{{ pr.manufacturer_ref | default('-') }}</td>
-              <td style="text-align: center;">
+              <td style="font-family: monospace; font-size: 8px">
+                {{ pr.manufacturer_ref | default('-') }}
+              </td>
+              <td style="text-align: center">
                 {% if pr.urgent %}
-                  <span style="color: #d32f2f; font-weight: bold; font-size: 12px;">⚠</span>
-                {% else %}
-                  -
-                {% endif %}
+                <span style="color: #d32f2f; font-weight: bold; font-size: 12px"
+                  >⚠</span
+                >
+                {% else %} - {% endif %}
               </td>
             </tr>
             {% endfor %}
@@ -644,7 +686,6 @@
         <div class="no-parts">Aucune demande d'achat.</div>
         {% endif %}
       </section>
-      <footer>Document généré le {{ now | format_date }}</footer>
     </div>
   </body>
 </html>

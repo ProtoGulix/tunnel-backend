@@ -151,13 +151,12 @@ class ExportRepository:
                     pr.urgent, pr.requester_name, pr.created_at,
                     si.ref as stock_item_ref, si.name as stock_item_name,
                     sis.supplier_ref, s.name as supplier_name, s.code as supplier_code,
-                    mi.manufacturer_ref, m.name as manufacturer_name
+                    mi.manufacturer_ref, mi.manufacturer_name
                 FROM purchase_request pr
                 LEFT JOIN stock_item si ON pr.stock_item_id = si.id
                 LEFT JOIN stock_item_supplier sis ON si.id = sis.stock_item_id AND sis.is_preferred = true
                 LEFT JOIN supplier s ON sis.supplier_id = s.id
                 LEFT JOIN manufacturer_item mi ON sis.manufacturer_item_id = mi.id
-                LEFT JOIN manufacturer m ON mi.manufacturer_id = m.id
                 WHERE pr.intervention_id = %s
                 ORDER BY pr.created_at DESC
             """, (intervention_id,))

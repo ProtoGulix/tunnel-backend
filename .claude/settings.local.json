@@ -12,7 +12,9 @@
       "Bash(tree:*)",
       "Bash(dir:*)",
       "Bash(venv/Scripts/python:*)",
-      "Bash(venv/Scripts/pip list:*)"
+      "Bash(venv/Scripts/pip list:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ]
   }
 }
