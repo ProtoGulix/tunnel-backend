@@ -1,4 +1,4 @@
-# API Manifest — GMAO API v1.9.0
+# API Manifest — GMAO API v1.10.0
 
 > Dernière mise à jour : 2026-02-15
 
@@ -189,6 +189,14 @@ curl http://localhost:8000/interventions \
 |---|---|---|---|---|
 | GET | `/exports/interventions/{id}/pdf` | Rapport PDF | JWT | [exports.md](docs/endpoints/exports.md) |
 | GET | `/exports/interventions/{id}/qrcode` | QR Code PNG | Public | [exports.md](docs/endpoints/exports.md) |
+
+### Utilisateurs (proxy Directus)
+
+| Méthode | Endpoint | Description | Doc |
+|---|---|---|---|
+| GET | `/users` | Liste avec filtres et recherche | [users.md](docs/endpoints/users.md) |
+| GET | `/users/me` | Utilisateur courant (JWT) | [users.md](docs/endpoints/users.md) |
+| GET | `/users/{id}` | Détail par UUID | [users.md](docs/endpoints/users.md) |
 
 ---
 

@@ -2,6 +2,7 @@ from pydantic import BaseModel, Field
 from typing import Optional, List, Any
 from datetime import datetime
 from uuid import UUID
+from api.users.schemas import UserListItem
 
 
 class InterventionActionIn(BaseModel):
@@ -48,7 +49,7 @@ class InterventionActionOut(BaseModel):
     description: Optional[str] = Field(default=None)
     time_spent: Optional[float] = Field(default=None)
     subcategory: Optional[ActionSubcategoryDetail] = Field(default=None)
-    tech: Optional[UUID] = Field(default=None)
+    tech: Optional[UserListItem] = Field(default=None)
     complexity_score: Optional[int] = Field(default=None)
     complexity_factor: Optional[str] = Field(default=None)
     purchase_requests: List[Any] = Field(

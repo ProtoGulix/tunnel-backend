@@ -12,10 +12,10 @@ Liste toutes les actions d'intervention.
 
 ### Query params
 
-| Param | Type | Défaut |
-|---|---|---|
-| `skip` | int | 0 |
-| `limit` | int | 100 (max: 1000) |
+| Param   | Type | Défaut          |
+| ------- | ---- | --------------- |
+| `skip`  | int  | 0               |
+| `limit` | int  | 100 (max: 1000) |
 
 ---
 
@@ -42,7 +42,15 @@ Détail d'une action avec sous-catégorie et demandes d'achat.
       "color": "#e53e3e"
     }
   },
-  "tech": "uuid",
+  "tech": {
+    "id": "a1b2c3d4-...",
+    "first_name": "Jean",
+    "last_name": "Dupont",
+    "email": "jean.dupont@example.com",
+    "initial": "JD",
+    "status": "active",
+    "role": "uuid"
+  },
   "complexity_score": 7,
   "complexity_factor": "PCE",
   "purchase_requests": [],
@@ -51,7 +59,10 @@ Détail d'une action avec sous-catégorie et demandes d'achat.
 }
 ```
 
-> `purchase_requests` : tableau de [PurchaseRequestOut](purchase-requests.md#purchaserequestout)
+> **Schemas imbriqués :**
+>
+> - `tech` : [UserListItem](users.md#userlistitem) (informations du technicien)
+> - `purchase_requests` : tableau de [PurchaseRequestOut](purchase-requests.md#purchaserequestout)
 
 ---
 
@@ -74,16 +85,16 @@ Ajoute une action à une intervention.
 }
 ```
 
-| Champ | Type | Requis | Description |
-|---|---|---|---|
-| `intervention_id` | uuid | oui | Intervention parente |
-| `description` | string | oui | Description (HTML nettoyé) |
-| `time_spent` | float | oui | Quarts d'heure uniquement : 0.25, 0.5, 0.75, 1.0... Min: 0.25 |
-| `action_subcategory` | int | oui | ID de la sous-catégorie |
-| `tech` | uuid | oui | Technicien |
-| `complexity_score` | int | oui | Score 1-10 |
-| `complexity_factor` | string | conditionnel | **Requis si score > 5**. Code existant dans [complexity_factors](complexity-factors.md) |
-| `created_at` | datetime | non | Défaut: `now()`. Permet le backdating |
+| Champ                | Type     | Requis       | Description                                                                             |
+| -------------------- | -------- | ------------ | --------------------------------------------------------------------------------------- |
+| `intervention_id`    | uuid     | oui          | Intervention parente                                                                    |
+| `description`        | string   | oui          | Description (HTML nettoyé)                                                              |
+| `time_spent`         | float    | oui          | Quarts d'heure uniquement : 0.25, 0.5, 0.75, 1.0... Min: 0.25                           |
+| `action_subcategory` | int      | oui          | ID de la sous-catégorie                                                                 |
+| `tech`               | uuid     | oui          | Technicien                                                                              |
+| `complexity_score`   | int      | oui          | Score 1-10                                                                              |
+| `complexity_factor`  | string   | conditionnel | **Requis si score > 5**. Code existant dans [complexity_factors](complexity-factors.md) |
+| `created_at`         | datetime | non          | Défaut: `now()`. Permet le backdating                                                   |
 
 ### Réponse `201`
 

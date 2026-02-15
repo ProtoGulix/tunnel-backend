@@ -2,6 +2,44 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [1.10.0] - 15 février 2026
+
+### Nouveautés
+
+- **Endpoint Utilisateurs** : Proxy lecture seule vers `directus_users` — expose les données publiques sans champs sensibles
+  - `GET /users` — Liste avec filtres (`status`, `search`) et pagination (`skip`, `limit`)
+  - `GET /users/me` — Utilisateur courant identifié par JWT (`request.state.user_id`)
+  - `GET /users/{id}` — Détail par UUID
+  - Champs exposés : id, first_name, last_name, email, location, title, description, tags, avatar, status, role, initial, last_access
+  - Champs sensibles exclus : password, token, tfa_secret, auth_data
+
+### Documentation
+
+- **Restructuration complète de la documentation API**
+  - `API_MANIFEST.md` refondu en index avec liens vers les pages individuelles
+  - 16 fichiers de documentation par endpoint dans `docs/endpoints/`
+  - `docs/shared-schemas.md` pour les schémas JSON réutilisés
+  - Formats JSON d'entrée/sortie, règles métier et exemples pour chaque endpoint
+  - Liens croisés entre endpoints liés pour éviter la duplication
+- **Documentation des schémas utilisateur** : Section explicite des schémas `UserListItem` et `UserOut` dans [users.md](docs/endpoints/users.md)
+
+### Refactoring
+
+- **Suppression du schéma dupliqué `TechUserInfo`** : Remplacé par `UserListItem` de [api/users/schemas.py](api/users/schemas.py)
+  - Principe DRY : Un seul schéma réutilisable au lieu de deux copies identiques
+  - `InterventionActionOut.tech` utilise maintenant `UserListItem`
+  - Les champs restent identiques : aucun impact sur l'API
+
+### Correctifs
+
+- **Cache Jinja2 désactivé** : Templates rechargés à chaque génération PDF pour faciliter le développement
+  - `auto_reload=True` : Rechargement automatique des templates modifiés
+  - `cache_size=0` : Pas de cache en mémoire
+- **Logo PDF** : `config/templates/logo.png` ajouté au `.gitignore` (fichier local, pas versionné)
+- **Pied de page PDF** : Bordures supérieures supprimées pour un rendu plus épuré
+
+---
+
 ## [1.9.0] - 15 février 2026
 
 ### Nouveautés
@@ -40,10 +78,12 @@ Toutes les modifications importantes de l'API sont documentées ici.
 ### Configuration
 
 Nouvelles variables d'environnement (optionnelles) :
+
 - `EXPORT_TEMPLATE_VERSION` : Version du template (défaut: `v8.0`)
 - `EXPORT_TEMPLATE_DATE` : Date de version du template (défaut: `2025-10-03`)
 
 Variables modifiées :
+
 - `EXPORT_TEMPLATE_DIR` : Défaut changé de `api/exports/templates` → `config/templates`
 - `EXPORT_TEMPLATE_FILE` : Défaut changé de `fiche_intervention_v1.html` → `fiche_intervention_v8.html`
 - `EXPORT_QR_LOGO_PATH` : Défaut changé de `api/exports/templates/logo.png` → `config/templates/logo.png`
@@ -80,6 +120,7 @@ Variables modifiées :
 ### Configuration
 
 Nouvelles variables d'environnement (optionnelles) :
+
 - `EXPORT_TEMPLATE_DIR` : Dossier des templates HTML (défaut: `api/exports/templates`)
 - `EXPORT_TEMPLATE_FILE` : Fichier template HTML (défaut: `fiche_intervention_v1.html`)
 - `EXPORT_QR_BASE_URL` : URL frontend pour QR codes (défaut: `http://localhost:5173/interventions`)
@@ -88,6 +129,7 @@ Nouvelles variables d'environnement (optionnelles) :
 ### Dépendances
 
 Nouvelles dépendances ajoutées :
+
 - `Jinja2==3.1.6` : Moteur de templates HTML
 - `weasyprint==66.0.0` : Génération PDF depuis HTML/CSS
 - `qrcode==8.2` : Génération de QR codes

@@ -47,6 +47,27 @@ class InterventionActionRepository:
 
         return row_dict
 
+    def _map_tech_user(self, row_dict: Dict[str, Any]) -> Dict[str, Any]:
+        """Mappe les colonnes tech_* en objet tech imbriqué"""
+        if row_dict.get('tech_id') is not None:
+            row_dict['tech'] = {
+                'id': row_dict['tech_id'],
+                'first_name': row_dict.get('tech_first_name'),
+                'last_name': row_dict.get('tech_last_name'),
+                'email': row_dict.get('tech_email'),
+                'initial': row_dict.get('tech_initial'),
+                'status': row_dict.get('tech_status', 'active'),
+                'role': row_dict.get('tech_role'),
+            }
+        else:
+            row_dict['tech'] = None
+
+        for key in ['tech_id', 'tech_first_name', 'tech_last_name',
+                    'tech_email', 'tech_initial', 'tech_status', 'tech_role']:
+            row_dict.pop(key, None)
+
+        return row_dict
+
     def _get_linked_purchase_requests(self, action_id: str, conn) -> List[Dict[str, Any]]:
         """Récupère les demandes d'achat liées à une action via PurchaseRequestRepository"""
         try:
@@ -81,34 +102,50 @@ class InterventionActionRepository:
             return []
 
     def get_all(self) -> List[Dict[str, Any]]:
-        """Récupère toutes les actions"""
+        """Récupère toutes les actions avec tech hydraté"""
         conn = self._get_connection()
         try:
             cur = conn.cursor()
-            cur.execute(
-                "SELECT * FROM intervention_action ORDER BY created_at DESC")
+            cur.execute("""
+                SELECT ia.*,
+                    u.id as tech_id, u.first_name as tech_first_name,
+                    u.last_name as tech_last_name, u.email as tech_email,
+                    u.initial as tech_initial, u.status as tech_status,
+                    u.role as tech_role
+                FROM intervention_action ia
+                LEFT JOIN directus_users u ON ia.tech = u.id
+                ORDER BY ia.created_at DESC
+            """)
             rows = cur.fetchall()
             cols = [desc[0] for desc in cur.description]
-            return [dict(zip(cols, row)) for row in rows]
+            return [self._map_tech_user(dict(zip(cols, row))) for row in rows]
         except Exception as e:
             raise DatabaseError(f"Erreur base de données: {str(e)}") from e
         finally:
             conn.close()
 
     def get_by_id(self, action_id: str) -> Dict[str, Any]:
-        """Récupère une action par ID"""
+        """Récupère une action par ID avec tech hydraté"""
         conn = self._get_connection()
         try:
             cur = conn.cursor()
-            cur.execute(
-                "SELECT * FROM intervention_action WHERE id = %s", (action_id,))
+            cur.execute("""
+                SELECT ia.*,
+                    u.id as tech_id, u.first_name as tech_first_name,
+                    u.last_name as tech_last_name, u.email as tech_email,
+                    u.initial as tech_initial, u.status as tech_status,
+                    u.role as tech_role
+                FROM intervention_action ia
+                LEFT JOIN directus_users u ON ia.tech = u.id
+                WHERE ia.id = %s
+            """, (action_id,))
             row = cur.fetchone()
 
             if not row:
                 raise NotFoundError(f"Action {action_id} non trouvée")
 
             cols = [desc[0] for desc in cur.description]
-            return dict(zip(cols, row))
+            return self._map_tech_user(dict(zip(cols, row)))
         except NotFoundError:
             raise
         except Exception as e:
@@ -128,10 +165,15 @@ class InterventionActionRepository:
                     ia.tech, ia.complexity_score, ia.complexity_factor,
                     ia.created_at, ia.updated_at,
                     sc.id as subcategory_id, sc.name as subcategory_name, sc.code as subcategory_code,
-                    ac.id as category_id, ac.name as category_name, ac.code as category_code, ac.color
+                    ac.id as category_id, ac.name as category_name, ac.code as category_code, ac.color,
+                    u.id as tech_id, u.first_name as tech_first_name,
+                    u.last_name as tech_last_name, u.email as tech_email,
+                    u.initial as tech_initial, u.status as tech_status,
+                    u.role as tech_role
                 FROM intervention_action ia
                 LEFT JOIN action_subcategory sc ON ia.action_subcategory = sc.id
                 LEFT JOIN action_category ac ON sc.category_id = ac.id
+                LEFT JOIN directus_users u ON ia.tech = u.id
                 WHERE ia.intervention_id = %s
                 ORDER BY ia.created_at ASC
                 """,
@@ -144,6 +186,7 @@ class InterventionActionRepository:
             for row in rows:
                 action = self._map_action_with_subcategory(
                     dict(zip(cols, row)))
+                action = self._map_tech_user(action)
                 action['purchase_requests'] = self._get_linked_purchase_requests(
                     str(action['id']), conn)
                 results.append(action)
@@ -165,10 +208,15 @@ class InterventionActionRepository:
                     ia.tech, ia.complexity_score, ia.complexity_factor,
                     ia.created_at, ia.updated_at,
                     sc.id as subcategory_id, sc.name as subcategory_name, sc.code as subcategory_code,
-                    ac.id as category_id, ac.name as category_name, ac.code as category_code, ac.color
+                    ac.id as category_id, ac.name as category_name, ac.code as category_code, ac.color,
+                    u.id as tech_id, u.first_name as tech_first_name,
+                    u.last_name as tech_last_name, u.email as tech_email,
+                    u.initial as tech_initial, u.status as tech_status,
+                    u.role as tech_role
                 FROM intervention_action ia
                 LEFT JOIN action_subcategory sc ON ia.action_subcategory = sc.id
                 LEFT JOIN action_category ac ON sc.category_id = ac.id
+                LEFT JOIN directus_users u ON ia.tech = u.id
                 WHERE ia.id = %s
                 """,
                 (action_id,)
@@ -178,6 +226,7 @@ class InterventionActionRepository:
                 raise NotFoundError(f"Action {action_id} non trouvée")
             cols = [desc[0] for desc in cur.description]
             action = self._map_action_with_subcategory(dict(zip(cols, row)))
+            action = self._map_tech_user(action)
             action['purchase_requests'] = self._get_linked_purchase_requests(
                 action_id, conn)
             return action
