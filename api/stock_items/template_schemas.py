@@ -21,6 +21,8 @@ class TemplateField(BaseModel):
     unit: Optional[str] = Field(
         default=None, max_length=20, description="Unité (si applicable)")
     required: bool = Field(default=False, description="Champ obligatoire")
+    sort_order: Optional[int] = Field(
+        default=None, description="Ordre d'affichage")
     enum_values: Optional[List[TemplateFieldEnum]] = Field(
         default=None, description="Valeurs possibles si type enum")
 
@@ -33,8 +35,12 @@ class PartTemplate(BaseModel):
     id: UUID
     code: str = Field(..., max_length=50, description="Code du template")
     version: int = Field(..., ge=1, description="Version du template")
+    label: Optional[str] = Field(
+        default=None, max_length=100, description="Libellé du template")
     pattern: str = Field(..., max_length=255,
                          description="Pattern de génération de dimension (ex: {DIAM}x{LONG})")
+    is_active: Optional[bool] = Field(
+        default=True, description="Template actif")
     fields: List[TemplateField] = Field(
         default_factory=list, description="Champs du template")
 

@@ -107,6 +107,9 @@ class PartTemplateRepository:
                 field_dict = dict(field_data)
                 field_id = field_dict.pop('id')  # Retirer l'id interne
 
+                # Convertir field_key → key pour matcher le schéma de réponse
+                field_dict['key'] = field_dict.pop('field_key')
+
                 if field_data['field_type'] == 'enum':
                     cur.execute(
                         """
@@ -254,9 +257,9 @@ class PartTemplateRepository:
                     (
                         field_id,
                         template_id,
-                        field.field_key,
+                        field.key,
                         field.label,
-                        field.type,
+                        field.field_type,
                         field.unit,
                         field.required,
                         False,  # sortable par défaut
@@ -265,7 +268,7 @@ class PartTemplateRepository:
                 )
 
                 # Insertion des enum_values si type enum
-                if field.type == 'enum' and field.enum_values:
+                if field.field_type == 'enum' and field.enum_values:
                     for enum_val in field.enum_values:
                         cur.execute(
                             """
@@ -344,9 +347,9 @@ class PartTemplateRepository:
                     (
                         field_id,
                         template_id,
-                        field.field_key,
+                        field.key,
                         field.label,
-                        field.type,
+                        field.field_type,
                         field.unit,
                         field.required,
                         False,
@@ -355,7 +358,7 @@ class PartTemplateRepository:
                 )
 
                 # Insertion des enum_values si type enum
-                if field.type == 'enum' and field.enum_values:
+                if field.field_type == 'enum' and field.enum_values:
                     for enum_val in field.enum_values:
                         cur.execute(
                             """
