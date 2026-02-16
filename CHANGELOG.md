@@ -2,6 +2,74 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [1.11.0] - 15 février 2026
+
+### Nouveautés
+
+- **Système de templates versionnés pour pièces (v1.4.0)** : Support complet du système de caractérisation des pièces de la base de données v1.4.0
+  - Nouveaux endpoints `/part-templates` pour gérer les templates de pièces
+  - Création de templates avec champs typés (number, text, enum)
+  - Versionnement automatique des templates (incrémentation version)
+  - Protection : refuse suppression si des pièces utilisent le template
+
+- **Gestion des stock_items avec templates** :
+  - Mode **legacy** : Si `template_id IS NULL`, comportement identique à avant v1.4 (saisie libre dimension)
+  - Mode **template** : Si sous-famille a template, validation stricte + génération automatique dimension
+  - `POST /stock_items` : Détection automatique legacy vs template selon sous-famille
+  - `GET /stock_items/{id}/with-characteristics` : Récupération item avec caractéristiques
+  - Immutabilité : `template_id` et `template_version` non modifiables après création
+
+- **Hydratation templates dans sous-familles** :
+  - `GET /stock-sub-families` : Liste avec templates associés (fields + enum_values)
+  - `GET /stock-sub-families/{family_code}/{sub_family_code}` : Détail avec template
+  - Retour `"template": null` si sous-famille sans template
+
+### Services & Architecture
+
+- **TemplateService** : Service centralisé pour templates
+  - `load_template()` : Charge template avec fields et enum_values
+  - `validate_characteristics()` : Validation complète des caractéristiques
+  - `generate_dimension()` : Génération automatique via pattern (ex: `{DIAM}x{LONG}-{MAT}`)
+  - `load_template_for_sub_family()` : Récupère template par codes famille/sous-famille
+
+- **StockItemService** : Service métier pour stock_items
+  - `create_stock_item()` : Création intelligente legacy ou template
+  - `update_stock_item()` : Mise à jour avec respect de l'immutabilité
+  - `get_item_with_characteristics()` : Récupération enrichie
+  - `is_legacy_item()` : Fonction utilitaire de détection
+
+- **PartTemplateRepository** : Gestion CRUD templates
+  - Transactions complètes (template + fields + enum_values)
+  - Gestion du versionnement
+  - Vérification d'utilisation avant suppression
+
+### Règles métier implémentées
+
+- ✅ Validation : Exactement un champ rempli selon `field_type`
+- ✅ Enum obligatoire si type enum avec valeurs contrôlées
+- ✅ Tous les champs `required` présents
+- ✅ Aucun champ hors template accepté
+- ✅ Interdiction saisie manuelle dimension pour items template
+- ✅ Pattern doit contenir au moins un placeholder `{KEY}`
+
+### Rétrocompatibilité
+
+- ✅ Pièces existantes : Continuent de fonctionner (considérées legacy avec `template_id = NULL`)
+- ✅ Aucune migration de données requise
+- ✅ Sous-familles sans template : Continuent en mode legacy
+- ✅ API backward-compatible : Pas de breaking changes
+
+### Tables supportées (DB v1.4.0)
+
+- `part_template` : Templates versionnés
+- `part_template_field` : Champs des templates
+- `part_template_field_enum` : Valeurs enum
+- `stock_item_characteristic` : Caractéristiques des pièces
+- `stock_sub_family.template_id` : Lien template par défaut
+- `stock_item.template_id` + `template_version` : Traçabilité version
+
+---
+
 ## [1.10.0] - 15 février 2026
 
 ### Nouveautés

@@ -3,6 +3,9 @@ from typing import List, Optional
 from pydantic import BaseModel
 from api.stock_items.repo import StockItemRepository
 from api.stock_items.schemas import StockItemOut, StockItemIn, StockItemListItem
+from api.stock_items.stock_item_service import StockItemService
+from api.stock_items.template_schemas import StockItemWithCharacteristics
+from api.errors.exceptions import ValidationError, NotFoundError, DatabaseError
 
 router = APIRouter(prefix="/stock_items", tags=["stock_items"])
 
@@ -15,10 +18,14 @@ class QuantityUpdate(BaseModel):
 @router.get("/", response_model=List[StockItemListItem])
 async def list_stock_items(
     skip: int = Query(0, ge=0, description="Nombre d'éléments à sauter"),
-    limit: int = Query(100, ge=1, le=1000, description="Nombre max d'éléments"),
-    family_code: Optional[str] = Query(None, description="Filtrer par code famille"),
-    sub_family_code: Optional[str] = Query(None, description="Filtrer par code sous-famille"),
-    search: Optional[str] = Query(None, description="Recherche par nom ou référence")
+    limit: int = Query(100, ge=1, le=1000,
+                       description="Nombre max d'éléments"),
+    family_code: Optional[str] = Query(
+        None, description="Filtrer par code famille"),
+    sub_family_code: Optional[str] = Query(
+        None, description="Filtrer par code sous-famille"),
+    search: Optional[str] = Query(
+        None, description="Recherche par nom ou référence")
 ):
     """Liste tous les articles en stock avec filtres optionnels"""
     repo = StockItemRepository()
@@ -45,24 +52,40 @@ async def get_stock_item(item_id: str):
     return repo.get_by_id(item_id)
 
 
+@router.get("/{item_id}/with-characteristics", response_model=StockItemWithCharacteristics)
+async def get_stock_item_with_characteristics(item_id: str):
+    """Récupère un article avec ses caractéristiques (si template)"""
+    service = StockItemService()
+    try:
+        return service.get_item_with_characteristics(item_id)
+    except (NotFoundError, DatabaseError) as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
 @router.post("/", response_model=StockItemOut)
 async def create_stock_item(item: StockItemIn):
-    """Crée un nouvel article en stock"""
-    repo = StockItemRepository()
+    """Crée un nouvel article en stock (legacy ou template-based)"""
+    service = StockItemService()
     try:
-        return repo.add(item.model_dump())
-    except Exception as e:
+        return service.create_stock_item(item.model_dump())
+    except (ValidationError, NotFoundError, DatabaseError) as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.put("/{item_id}", response_model=StockItemOut)
 async def update_stock_item(item_id: str, item: StockItemIn):
-    """Met à jour un article existant"""
-    repo = StockItemRepository()
+    """Met à jour un article existant (respect immutabilité template)"""
+    service = StockItemService()
     try:
-        return repo.update(item_id, item.model_dump(exclude_unset=True))
-    except Exception as e:
+        return service.update_stock_item(item_id, item.model_dump(exclude_unset=True))
+    except (ValidationError, NotFoundError, DatabaseError) as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.patch("/{item_id}/quantity", response_model=StockItemOut)

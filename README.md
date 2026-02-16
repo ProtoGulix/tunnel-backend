@@ -19,7 +19,10 @@ Cette API fournit les données pour l'interface Tunnel GMAO :
 - **Interventions** : gestion du cycle de vie, statuts, priorités
 - **Actions** : traçabilité du travail réel (temps, complexité, pièces)
 - **Demandes d'achat** : suivi des demandes et de leurs statuts (qualification, références fournisseurs, commandes)
+- **Templates de pièces** : caractérisation structurée des pièces avec versionnement (v1.4.0)
 - **Statistiques** : vue d'ensemble des interventions par type et statut
+
+> **Nouveauté v1.11.0** : Support complet du système de templates versionnés pour la caractérisation des pièces. Voir [docs/TEMPLATES_V1.4.0_IMPLEMENTATION.md](docs/TEMPLATES_V1.4.0_IMPLEMENTATION.md)
 
 ## 🎯 Pour qui ?
 
