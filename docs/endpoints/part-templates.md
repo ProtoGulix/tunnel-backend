@@ -8,9 +8,9 @@ Les templates définissent la structure des caractéristiques techniques des pi�
 
 ## GET /part-templates
 
-Liste tous les templates (dernière version de chaque).
+Liste tous les templates (dernière version de chaque) avec leurs champs.
 
-**Retour :** Liste légère sans les champs détaillés.
+**Retour :** Liste complète avec fields (optimisé pour pages de gestion).
 
 ### Réponse
 
@@ -20,13 +20,60 @@ Liste tous les templates (dernière version de chaque).
     "id": "123e4567-e89b-12d3-a456-426614174000",
     "code": "VIS_STANDARD",
     "version": 2,
-    "pattern": "{DIAM}x{LONG}-{MAT}-{TETE}"
+    "label": "Vis standard",
+    "pattern": "{DIAM}x{LONG}-{MAT}-{TETE}",
+    "is_active": true,
+    "fields": [
+      {
+        "key": "DIAM",
+        "label": "Diamètre",
+        "field_type": "number",
+        "unit": "mm",
+        "required": true,
+        "sort_order": 1,
+        "enum_values": null
+      },
+      {
+        "key": "LONG",
+        "label": "Longueur",
+        "field_type": "number",
+        "unit": "mm",
+        "required": true,
+        "sort_order": 2,
+        "enum_values": null
+      },
+      {
+        "key": "MAT",
+        "label": "Matériau",
+        "field_type": "enum",
+        "unit": null,
+        "required": true,
+        "sort_order": 3,
+        "enum_values": [
+          { "value": "INOX", "label": "Inox A2" },
+          { "value": "ACIER", "label": "Acier zingué" }
+        ]
+      }
+    ]
   },
   {
     "id": "223e4567-e89b-12d3-a456-426614174001",
     "code": "ECROU_HEXAGONAL",
     "version": 1,
-    "pattern": "M{DIAM}-{MAT}"
+    "label": "Écrou hexagonal",
+    "pattern": "M{DIAM}-{MAT}",
+    "is_active": true,
+    "fields": [
+      {
+        "key": "DIAM",
+        "label": "Diamètre",
+        "field_type": "number",
+        "unit": "mm",
+        "required": true,
+        "sort_order": 1,
+        "enum_values": null
+      }
+    ]
   }
 ]
 ```

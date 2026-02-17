@@ -2,6 +2,24 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [1.11.1] - 17 février 2026
+
+### Améliorations
+
+- **GET /part-templates** : Retourne maintenant les templates complets avec fields
+  - Avant : Retournait seulement `id`, `code`, `version`, `pattern`
+  - Maintenant : Retourne `id`, `code`, `version`, `label`, `pattern`, `is_active` + array `fields[]` complet
+  - Optimisation : Plus besoin d'appeler `GET /part-templates/{id}` pour chaque template
+  - Utilité : Page de gestion des templates (listing, édition, suppression) en 1 seul appel
+  - Chaque field inclut : `key`, `label`, `field_type`, `unit`, `required`, `sort_order`, `enum_values`
+
+### Technique
+
+- `PartTemplateRepository.get_all()` : Refactor pour charger fields + enum_values via JOINs
+- Documentation mise à jour : [docs/endpoints/part-templates.md](docs/endpoints/part-templates.md)
+
+---
+
 ## [1.11.0] - 15 février 2026
 
 ### Nouveautés

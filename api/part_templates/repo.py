@@ -21,21 +21,75 @@ class PartTemplateRepository:
                 "Erreur de connexion base de données: %s" % str(e)) from e
 
     def get_all(self) -> List[Dict[str, Any]]:
-        """Récupère tous les templates (dernière version de chaque)"""
+        """Récupère tous les templates (dernière version de chaque) avec leurs champs"""
         conn = self._get_connection()
         try:
             cur = conn.cursor()
+            # Récupérer tous les templates (dernière version)
             cur.execute(
                 """
                 SELECT DISTINCT ON (id) 
-                    id, code, version, pattern
+                    id, code, version, label, pattern, is_active
                 FROM part_template
                 ORDER BY id, version DESC
                 """
             )
-            rows = cur.fetchall()
-            cols = [desc[0] for desc in cur.description]
-            return [dict(zip(cols, row)) for row in rows]
+            template_rows = cur.fetchall()
+            template_cols = [desc[0] for desc in cur.description]
+            templates = [dict(zip(template_cols, row))
+                         for row in template_rows]
+
+            # Pour chaque template, récupérer ses champs
+            for template in templates:
+                template_id = str(template['id'])
+
+                # Récupérer les champs
+                cur.execute(
+                    """
+                    SELECT id, field_key, label, field_type, unit, required, sort_order
+                    FROM part_template_field
+                    WHERE template_id = %s
+                    ORDER BY sort_order, field_key
+                    """,
+                    (template_id,)
+                )
+                field_rows = cur.fetchall()
+                field_cols = [desc[0] for desc in cur.description]
+                fields_data = [dict(zip(field_cols, row))
+                               for row in field_rows]
+
+                # Pour chaque champ enum, récupérer les valeurs
+                fields = []
+                for field_data in fields_data:
+                    field_dict = dict(field_data)
+                    field_id = field_dict.pop('id')
+                    field_dict['key'] = field_dict.pop(
+                        'field_key')  # Convertir pour l'API
+
+                    if field_data['field_type'] == 'enum':
+                        cur.execute(
+                            """
+                            SELECT value, label
+                            FROM part_template_field_enum
+                            WHERE field_id = %s
+                            ORDER BY value
+                            """,
+                            (field_id,)
+                        )
+                        enum_rows = cur.fetchall()
+                        enum_cols = [desc[0] for desc in cur.description]
+                        field_dict['enum_values'] = [
+                            dict(zip(enum_cols, enum_row))
+                            for enum_row in enum_rows
+                        ]
+                    else:
+                        field_dict['enum_values'] = None
+
+                    fields.append(field_dict)
+
+                template['fields'] = fields
+
+            return templates
         except Exception as e:
             logger.error(
                 "Erreur lors de la récupération des templates: %s", str(e))

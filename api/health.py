@@ -2,10 +2,13 @@ import httpx
 from api.settings import settings
 from pydantic import BaseModel
 
+__version__ = "1.11.1"
+
 
 class HealthCheckResponse(BaseModel):
     """Réponse du health check"""
     status: str
+    version: str
     database: str
     auth_service: str
 
@@ -50,6 +53,7 @@ async def health_check() -> HealthCheckResponse:
 
     return HealthCheckResponse(
         status=overall_status,
+        version=__version__,
         database=db_status,
         auth_service=auth_status
     )

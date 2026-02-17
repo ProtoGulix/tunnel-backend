@@ -10,11 +10,11 @@ from api.errors.exceptions import DatabaseError, NotFoundError, ValidationError
 router = APIRouter(prefix="/part-templates", tags=["part_templates"])
 
 
-@router.get("/", response_model=List[dict])
+@router.get("/", response_model=List[PartTemplate])
 async def list_templates():
     """
-    Liste tous les templates (dernière version de chaque)
-    Retourne uniquement les métadonnées (sans les fields)
+    Liste tous les templates (dernière version de chaque) avec leurs champs
+    Retourne les données complètes (optimisé pour pages de gestion)
     """
     repo = PartTemplateRepository()
     try:
@@ -32,7 +32,8 @@ async def get_template_versions_by_code(code: str):
     try:
         versions = repo.get_by_code(code)
         if not versions:
-            raise HTTPException(status_code=404, detail="Template %s non trouvé" % code)
+            raise HTTPException(
+                status_code=404, detail="Template %s non trouvé" % code)
         return versions
     except DatabaseError as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
@@ -41,7 +42,8 @@ async def get_template_versions_by_code(code: str):
 @router.get("/{template_id}", response_model=PartTemplate)
 async def get_template(
     template_id: str,
-    version: Optional[int] = Query(None, description="Version spécifique (dernière si omis)")
+    version: Optional[int] = Query(
+        None, description="Version spécifique (dernière si omis)")
 ):
     """
     Récupère un template complet avec ses champs et enum_values
@@ -60,7 +62,7 @@ async def get_template(
 async def create_template(data: PartTemplateIn):
     """
     Crée un nouveau template (version 1)
-    
+
     Le template inclut :
     - code unique
     - pattern de génération
@@ -78,7 +80,7 @@ async def create_template(data: PartTemplateIn):
 async def create_template_version(template_id: str, data: PartTemplateUpdate):
     """
     Crée une nouvelle version d'un template existant
-    
+
     Permet de faire évoluer un template sans casser les pièces existantes
     Le numéro de version est incrémenté automatiquement
     """
@@ -94,11 +96,12 @@ async def create_template_version(template_id: str, data: PartTemplateUpdate):
 @router.delete("/{template_id}")
 async def delete_template(
     template_id: str,
-    version: Optional[int] = Query(None, description="Version à supprimer (toutes si omis)")
+    version: Optional[int] = Query(
+        None, description="Version à supprimer (toutes si omis)")
 ):
     """
     Supprime un template ou une version spécifique
-    
+
     Si version est omise, supprime toutes les versions du template
     Refuse la suppression si des pièces utilisent ce template
     """
