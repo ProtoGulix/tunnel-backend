@@ -62,7 +62,7 @@ class PartTemplateRepository:
                 fields = []
                 for field_data in fields_data:
                     field_dict = dict(field_data)
-                    field_id = field_dict.pop('id')
+                    field_id = field_dict['id']
                     field_dict['key'] = field_dict.pop(
                         'field_key')  # Convertir pour l'API
 
@@ -159,7 +159,7 @@ class PartTemplateRepository:
             fields = []
             for field_data in fields_data:
                 field_dict = dict(field_data)
-                field_id = field_dict.pop('id')  # Retirer l'id interne
+                field_id = field_dict['id']
 
                 # Convertir field_key → key pour matcher le schéma de réponse
                 field_dict['key'] = field_dict.pop('field_key')

@@ -100,10 +100,10 @@ class StockItemService:
                     data.get('manufacturer_item_id')
                 )
             )
-            conn.commit()
             row = cur.fetchone()
             cols = [desc[0] for desc in cur.description]
             result = dict(zip(cols, row))
+            conn.commit()
 
             logger.info("Item legacy créé: %s", result['id'])
             return result
@@ -184,18 +184,20 @@ class StockItemService:
 
             # Insertion des caractéristiques
             for char in validated_chars:
+                char_id = str(uuid4())
                 cur.execute(
                     """
                     INSERT INTO stock_item_characteristic
-                    (stock_item_id, characteristic_key, text_value, number_value, enum_value)
-                    VALUES (%s, %s, %s, %s, %s)
+                    (id, stock_item_id, field_id, value_text, value_number, value_enum)
+                    VALUES (%s, %s, %s, %s, %s, %s)
                     """,
                     (
+                        char_id,
                         item_id,
-                        char.key,
-                        char.text_value,
-                        char.number_value,
-                        char.enum_value
+                        str(char.field_id),
+                        char.value_text,
+                        char.value_number,
+                        char.value_enum
                     )
                 )
 
@@ -317,10 +319,11 @@ class StockItemService:
             cur = conn.cursor()
             cur.execute(
                 """
-                SELECT characteristic_key, text_value, number_value, enum_value
-                FROM stock_item_characteristic
-                WHERE stock_item_id = %s
-                ORDER BY characteristic_key
+                SELECT sc.field_id, f.field_key, sc.value_text, sc.value_number, sc.value_enum
+                FROM stock_item_characteristic sc
+                JOIN part_template_field f ON f.id = sc.field_id
+                WHERE sc.stock_item_id = %s
+                ORDER BY f.sort_order, f.field_key
                 """,
                 (item_id,)
             )
@@ -329,10 +332,11 @@ class StockItemService:
 
             characteristics = [
                 CharacteristicValue(
-                    key=row[0],
-                    text_value=row[1],
-                    number_value=row[2],
-                    enum_value=row[3]
+                    field_id=row[0],
+                    key=row[1],
+                    value_text=row[2],
+                    value_number=row[3],
+                    value_enum=row[4]
                 )
                 for row in char_rows
             ]

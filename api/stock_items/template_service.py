@@ -69,13 +69,17 @@ class TemplateService:
         characteristics: List[Dict[str, Any]]
     ) -> List[CharacteristicValue]:
         """
-        Valide les caractéristiques fournies contre le template
+        Valide les caractéristiques fournies contre le template.
+
+        Format d'entrée simplifié : { "key": "DIAM", "value": 25 }
+        Le service route automatiquement vers text_value / number_value / enum_value
+        selon le field_type défini dans le template.
 
         Règles :
-        - Exactement un champ rempli selon field_type
-        - Enum obligatoire si type enum
-        - Tous les required présents
-        - Aucun champ hors template
+        - Chaque caractéristique doit avoir un key et une value
+        - La value est castée et validée selon le field_type du template
+        - Tous les champs required du template doivent être présents
+        - Aucun champ hors template n'est accepté
 
         Returns:
             Liste de CharacteristicValue validés
@@ -84,7 +88,7 @@ class TemplateService:
         template_fields = {field.key: field for field in template.fields}
 
         # Map des caractéristiques fournies par key
-        provided_chars = {char['key']: char for char in characteristics}
+        provided_chars = {char['key']: char for char in characteristics if char.get('key')}
 
         # Vérification des champs obligatoires
         for field in template.fields:
@@ -104,68 +108,60 @@ class TemplateService:
                 raise ValidationError(f"Champ hors template: {key}")
 
             field = template_fields[key]
+            value = char_data.get('value')
 
-            # Vérifier qu'exactement un champ est rempli
-            text_val = char_data.get('text_value')
-            number_val = char_data.get('number_value')
-            enum_val = char_data.get('enum_value')
-
-            filled_count = sum([
-                text_val is not None,
-                number_val is not None,
-                enum_val is not None
-            ])
-
-            if filled_count == 0:
+            if value is None:
                 raise ValidationError(
                     f"Aucune valeur fournie pour le champ: {key}")
 
-            if filled_count > 1:
-                raise ValidationError(
-                    f"Plusieurs valeurs fournies pour le champ: {key}")
-
-            # Validation selon le type
+            # Routage et validation selon le field_type du template
             if field.field_type == 'text':
-                if text_val is None:
+                text_val = str(value)
+                if not text_val.strip():
                     raise ValidationError(
-                        f"Champ {key} doit être de type text")
+                        f"Champ {key}: la valeur texte ne peut pas être vide")
                 validated_chars.append(CharacteristicValue(
+                    field_id=field.id,
                     key=key,
-                    text_value=text_val,
-                    number_value=None,
-                    enum_value=None
+                    value_text=text_val,
+                    value_number=None,
+                    value_enum=None
                 ))
 
             elif field.field_type == 'number':
-                if number_val is None:
+                try:
+                    number_val = float(value)
+                except (TypeError, ValueError):
                     raise ValidationError(
-                        f"Champ {key} doit être de type number")
+                        f"Champ {key}: '{value}' n'est pas un nombre valide")
                 validated_chars.append(CharacteristicValue(
+                    field_id=field.id,
                     key=key,
-                    text_value=None,
-                    number_value=number_val,
-                    enum_value=None
+                    value_text=None,
+                    value_number=number_val,
+                    value_enum=None
                 ))
 
             elif field.field_type == 'enum':
-                if enum_val is None:
-                    raise ValidationError(
-                        f"Champ {key} doit être de type enum")
-
-                # Vérifier que la valeur est dans les enum_values
+                enum_val = str(value)
                 if field.enum_values:
                     valid_values = [e.value for e in field.enum_values]
                     if enum_val not in valid_values:
                         raise ValidationError(
-                            f"Valeur {enum_val} invalide pour {key}. Valeurs autorisées: {', '.join(valid_values)}"
+                            f"Valeur '{enum_val}' invalide pour {key}. "
+                            f"Valeurs autorisées: {', '.join(valid_values)}"
                         )
-
                 validated_chars.append(CharacteristicValue(
+                    field_id=field.id,
                     key=key,
-                    text_value=None,
-                    number_value=None,
-                    enum_value=enum_val
+                    value_text=None,
+                    value_number=None,
+                    value_enum=enum_val
                 ))
+
+            else:
+                raise ValidationError(
+                    f"Type de champ inconnu '{field.field_type}' pour {key}")
 
         return validated_chars
 
@@ -198,14 +194,14 @@ class TemplateService:
             char = char_map[placeholder]
 
             # Récupérer la valeur selon le type
-            if char.text_value is not None:
-                value = char.text_value
-            elif char.number_value is not None:
+            if char.value_text is not None:
+                value = char.value_text
+            elif char.value_number is not None:
                 # Formater le nombre sans décimales inutiles
-                value = str(int(char.number_value)) if char.number_value == int(
-                    char.number_value) else str(char.number_value)
-            elif char.enum_value is not None:
-                value = char.enum_value
+                value = str(int(char.value_number)) if char.value_number == int(
+                    char.value_number) else str(char.value_number)
+            elif char.value_enum is not None:
+                value = char.value_enum
             else:
                 raise ValidationError(
                     f"Aucune valeur pour la caractéristique: {placeholder}")

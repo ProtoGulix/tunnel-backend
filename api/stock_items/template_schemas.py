@@ -14,6 +14,7 @@ class TemplateFieldEnum(BaseModel):
 
 class TemplateField(BaseModel):
     """Champ d'un template de pièce"""
+    id: Optional[UUID] = Field(default=None, description="ID du champ en base")
     key: str = Field(..., max_length=50, description="Clé du champ (ex: DIAM)")
     label: str = Field(..., max_length=100, description="Libellé du champ")
     field_type: Literal["text", "number",
@@ -62,20 +63,15 @@ class StockSubFamily(BaseModel):
 
 class CharacteristicValue(BaseModel):
     """Valeur d'une caractéristique pour un stock_item"""
+    field_id: Optional[UUID] = Field(
+        default=None, description="ID du champ template (pour insertion en base)")
     key: str = Field(..., max_length=50,
                      description="Clé du champ (doit correspondre au template)")
-    text_value: Optional[str] = Field(default=None, description="Valeur texte")
-    number_value: Optional[float] = Field(
+    value_text: Optional[str] = Field(default=None, description="Valeur texte")
+    value_number: Optional[float] = Field(
         default=None, description="Valeur numérique")
-    enum_value: Optional[str] = Field(
+    value_enum: Optional[str] = Field(
         default=None, description="Valeur énumération")
-
-    @field_validator('text_value', 'number_value', 'enum_value')
-    @classmethod
-    def validate_single_value(cls, v):
-        """Vérifie qu'un seul type de valeur est renseigné (validation de base)"""
-        # Cette validation sera complétée par le service qui connaît le type attendu
-        return v
 
     class Config:
         from_attributes = True

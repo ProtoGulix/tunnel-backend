@@ -2,6 +2,34 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [2.1.0] - 18 février 2026
+
+### Améliorations
+
+- **POST /stock-items** : Format d'entrée simplifié pour les caractéristiques
+  - Avant : `{ "key": "DIAM", "number_value": 25, "text_value": null, "enum_value": null }`
+  - Maintenant : `{ "key": "DIAM", "value": 25 }`
+  - Le service route automatiquement la `value` vers le type approprié selon le `field_type` du template
+  - Validation : Type checking automatique (number, text, enum) avec messages d'erreur explicites
+
+- **GET /stock-items/{id}/with-characteristics** : Amélioration du format de sortie
+  - Tri logique des caractéristiques par ordre défini dans le template
+  - Retour enrichi : Inclut `field_id` pour chaque caractéristique
+  - Format : `{ "field_id": "uuid", "key": "DIAM", "value_text": null, "value_number": 25, "value_enum": null }`
+
+### Corrections
+
+- **GET /part-templates** : Le `field_id` est maintenant retourné dans les templates
+  - Permet au client de référencer précisément les champs lors de la création d'articles
+
+### Documentation
+
+- [stock-items.md](docs/endpoints/stock-items.md) : Détails complets sur les modes legacy/template
+- Clarification du format d'entrée des caractéristiques avec exemples concrets
+- Tableau récapitulatif du routing automatique des valeurs selon `field_type`
+
+---
+
 ## [2.0.0] - 18 février 2026
 
 ### ⚠️ BREAKING CHANGES
