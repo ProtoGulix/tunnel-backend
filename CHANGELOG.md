@@ -34,31 +34,31 @@ Toutes les modifications importantes de l'API sont documentées ici.
 
 ### ⚠️ BREAKING CHANGES
 
-- **Convention kebab-case sur toutes les URLs** : Tous les endpoints de l'API utilisent désormais le kebab-case (`-`) au lieu du snake_case (`_`) dans les URLs, conformément aux bonnes pratiques REST (Google API Design Guide, Microsoft REST API Guidelines)
+- **Convention kebab-case sur toutes les URLs** : Tous les endpoints de l'API utilisent désormais le kebab-case (`-`) au lieu du snake*case (`*`) dans les URLs, conformément aux bonnes pratiques REST (Google API Design Guide, Microsoft REST API Guidelines)
 
 #### Mapping complet des changements d'URLs
 
-| Avant (v1.x) | Après (v2.0.0) |
-|---|---|
-| `/intervention_actions` | `/intervention-actions` |
-| `/intervention_status` | `/intervention-status` |
+| Avant (v1.x)               | Après (v2.0.0)             |
+| -------------------------- | -------------------------- |
+| `/intervention_actions`    | `/intervention-actions`    |
+| `/intervention_status`     | `/intervention-status`     |
 | `/intervention_status_log` | `/intervention-status-log` |
-| `/action_categories` | `/action-categories` |
-| `/action_subcategories` | `/action-subcategories` |
-| `/complexity_factors` | `/complexity-factors` |
-| `/equipement_class` | `/equipement-class` |
-| `/purchase_requests` | `/purchase-requests` |
-| `/stock_items` | `/stock-items` |
-| `/supplier_orders` | `/supplier-orders` |
-| `/supplier_order_lines` | `/supplier-order-lines` |
-| `/stock_item_suppliers` | `/stock-item-suppliers` |
+| `/action_categories`       | `/action-categories`       |
+| `/action_subcategories`    | `/action-subcategories`    |
+| `/complexity_factors`      | `/complexity-factors`      |
+| `/equipement_class`        | `/equipement-class`        |
+| `/purchase_requests`       | `/purchase-requests`       |
+| `/stock_items`             | `/stock-items`             |
+| `/supplier_orders`         | `/supplier-orders`         |
+| `/supplier_order_lines`    | `/supplier-order-lines`    |
+| `/stock_item_suppliers`    | `/stock-item-suppliers`    |
 
 #### Sous-routes également migrées
 
-| Avant | Après |
-|---|---|
-| `/stock_item_suppliers/stock_item/{id}` | `/stock-item-suppliers/stock-item/{id}` |
-| `/stock_item_suppliers/{id}/set_preferred` | `/stock-item-suppliers/{id}/set-preferred` |
+| Avant                                          | Après                                          |
+| ---------------------------------------------- | ---------------------------------------------- |
+| `/stock_item_suppliers/stock_item/{id}`        | `/stock-item-suppliers/stock-item/{id}`        |
+| `/stock_item_suppliers/{id}/set_preferred`     | `/stock-item-suppliers/{id}/set-preferred`     |
 | `/supplier_order_lines/{id}/purchase_requests` | `/supplier-order-lines/{id}/purchase-requests` |
 
 #### Endpoints inchangés (déjà conformes)
