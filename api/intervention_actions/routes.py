@@ -3,8 +3,8 @@ from typing import List
 from api.intervention_actions.repo import InterventionActionRepository
 from api.intervention_actions.schemas import InterventionActionOut, InterventionActionIn
 
-router = APIRouter(prefix="/intervention_actions",
-                   tags=["intervention_actions"])
+router = APIRouter(prefix="/intervention-actions",
+                   tags=["intervention-actions"])
 
 
 @router.get("/", response_model=List[InterventionActionOut])

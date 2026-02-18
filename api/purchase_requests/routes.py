@@ -11,7 +11,7 @@ from api.purchase_requests.schemas import (
     DispatchResult  # v1.2.12 nouveau
 )
 
-router = APIRouter(prefix="/purchase_requests", tags=["purchase_requests"])
+router = APIRouter(prefix="/purchase-requests", tags=["purchase-requests"])
 
 
 # ========== Endpoints optimisés v1.2.0 ==========
@@ -139,7 +139,7 @@ async def list_purchase_requests(
 ):
     """
     [LEGACY] Liste toutes les demandes d'achat avec filtres optionnels.
-    Utiliser /purchase_requests/list pour payload optimisé
+    Utiliser /purchase-requests/list pour payload optimisé
     """
     repo = PurchaseRequestRepository()
     return repo.get_all(
@@ -155,7 +155,7 @@ async def list_purchase_requests(
 async def get_purchase_requests_by_intervention(intervention_id: str):
     """
     [LEGACY] Récupère toutes les demandes d'achat liées à une intervention.
-    Utiliser /purchase_requests/intervention/{id}/optimized?view=list
+    Utiliser /purchase-requests/intervention/{id}/optimized?view=list
     """
     repo = PurchaseRequestRepository()
     return repo.get_by_intervention(intervention_id)
@@ -165,7 +165,7 @@ async def get_purchase_requests_by_intervention(intervention_id: str):
 async def get_purchase_request(request_id: str):
     """
     [LEGACY] Récupère une demande d'achat par ID.
-    Utiliser /purchase_requests/detail/{id} pour contexte enrichi
+    Utiliser /purchase-requests/detail/{id} pour contexte enrichi
     """
     repo = PurchaseRequestRepository()
     return repo.get_by_id(request_id)

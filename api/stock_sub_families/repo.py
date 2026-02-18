@@ -162,6 +162,77 @@ class StockSubFamilyRepository:
         finally:
             conn.close()
 
+    def update(self, family_code: str, sub_family_code: str, label: Optional[str] = None, 
+               template_id: Optional[UUID] = None) -> StockSubFamily:
+        """
+        Met à jour une sous-famille de stock
+        
+        Args:
+            family_code: Code de la famille
+            sub_family_code: Code de la sous-famille
+            label: Nouveau label (optionnel)
+            template_id: UUID du template à associer ou None pour dissocier (optionnel)
+            
+        Returns:
+            StockSubFamily mis à jour avec son template
+        """
+        conn = self._get_connection()
+        try:
+            cur = conn.cursor()
+            
+            # Vérifier que la sous-famille existe
+            cur.execute(
+                "SELECT 1 FROM stock_sub_family WHERE family_code = %s AND code = %s",
+                (family_code, sub_family_code)
+            )
+            if not cur.fetchone():
+                raise NotFoundError(
+                    f"Sous-famille {family_code}/{sub_family_code} non trouvée")
+            
+            # Construire la requête UPDATE dynamiquement
+            update_fields = []
+            params = []
+            
+            if label is not None:
+                update_fields.append("label = %s")
+                params.append(label)
+            
+            if template_id is not None:
+                update_fields.append("template_id = %s")
+                params.append(template_id)
+            
+            if not update_fields:
+                # Aucun champ à mettre à jour, retourner l'objet actuel
+                return self.get_by_codes_with_template(family_code, sub_family_code)
+            
+            # Ajouter les paramètres pour WHERE
+            params.extend([family_code, sub_family_code])
+            
+            query = f"""
+                UPDATE stock_sub_family
+                SET {', '.join(update_fields)}
+                WHERE family_code = %s AND code = %s
+            """
+            
+            cur.execute(query, params)
+            conn.commit()
+            
+            logger.info("Sous-famille %s/%s mise à jour", family_code, sub_family_code)
+            
+            # Retourner l'objet mis à jour
+            return self.get_by_codes_with_template(family_code, sub_family_code)
+            
+        except NotFoundError:
+            conn.rollback()
+            raise
+        except Exception as e:
+            conn.rollback()
+            logger.error("Erreur lors de la mise à jour de la sous-famille: %s", str(e))
+            raise DatabaseError(
+                f"Erreur lors de la mise à jour de la sous-famille: {str(e)}") from e
+        finally:
+            conn.close()
+
     def load_template_for_sub_family(self, family_code: str, sub_family_code: str) -> Optional['PartTemplate']:
         """
         Charge le template associé à une sous-famille si existant

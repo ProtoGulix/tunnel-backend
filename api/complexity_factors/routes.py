@@ -3,7 +3,7 @@ from typing import List
 from api.complexity_factors.repo import ComplexityFactorRepository
 from api.complexity_factors.schemas import ComplexityFactorOut
 
-router = APIRouter(prefix="/complexity_factors", tags=["complexity_factors"])
+router = APIRouter(prefix="/complexity-factors", tags=["complexity-factors"])
 
 
 @router.get("/", response_model=List[ComplexityFactorOut])

@@ -137,6 +137,84 @@ GET /stock-sub-families/FIX/VIS
 
 ---
 
+## PATCH /stock-sub-families/{family_code}/{sub_family_code}
+
+Met à jour une sous-famille de stock (label et/ou template associé).
+
+**Paramètres :**
+
+- `family_code` (path) : Code de la famille
+- `sub_family_code` (path) : Code de la sous-famille
+
+**Body :** Tous les champs sont optionnels
+
+| Champ         | Type   | Description                                         |
+| ------------- | ------ | --------------------------------------------------- |
+| `label`       | string | Nouveau libellé de la sous-famille                  |
+| `template_id` | UUID?  | UUID du template à associer (null pour dissocier)   |
+
+### Exemple : Modifier le label
+
+```bash
+PATCH /stock-sub-families/FIX/VIS
+Content-Type: application/json
+
+{
+  "label": "Vis et fixations"
+}
+```
+
+### Exemple : Associer un template
+
+```bash
+PATCH /stock-sub-families/FIX/VIS
+Content-Type: application/json
+
+{
+  "template_id": "123e4567-e89b-12d3-a456-426614174000"
+}
+```
+
+### Exemple : Dissocier un template
+
+```bash
+PATCH /stock-sub-families/FIX/VIS
+Content-Type: application/json
+
+{
+  "template_id": null
+}
+```
+
+### Réponse (200)
+
+Retourne la sous-famille mise à jour avec son template hydraté :
+
+```json
+{
+  "family_code": "FIX",
+  "code": "VIS",
+  "label": "Vis et fixations",
+  "template": {
+    "id": "123e4567-e89b-12d3-a456-426614174000",
+    "code": "VIS_STANDARD",
+    "version": 2,
+    "pattern": "{DIAM}x{LONG}-{MAT}",
+    "fields": [...]
+  }
+}
+```
+
+### Erreur (404)
+
+```json
+{
+  "detail": "Sous-famille FIX/INVALID non trouvée"
+}
+```
+
+---
+
 ## Utilisation
 
 ### 1. Lister les sous-familles pour sélection
@@ -212,7 +290,7 @@ sequenceDiagram
     Frontend->>Frontend: Génère formulaire dynamique
     User->>Frontend: Remplit caractéristiques
 
-    Frontend->>API: POST /stock_items {characteristics}
+    Frontend->>API: POST /stock-items {characteristics}
     API->>API: Valide via template
     API->>API: Génère dimension via pattern
     API->>DB: INSERT stock_item + characteristics

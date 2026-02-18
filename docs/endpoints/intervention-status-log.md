@@ -6,7 +6,7 @@ Historique des changements de statut des interventions. Chaque entrée trace la 
 
 ---
 
-## `GET /intervention_status_log`
+## `GET /intervention-status-log`
 
 Liste les logs de changement de statut.
 
@@ -24,7 +24,7 @@ Tableau trié par date DESC.
 
 ---
 
-## `GET /intervention_status_log/{id}`
+## `GET /intervention-status-log/{id}`
 
 Détail d'un log de changement de statut.
 
@@ -58,7 +58,7 @@ Détail d'un log de changement de statut.
 
 ---
 
-## `POST /intervention_status_log`
+## `POST /intervention-status-log`
 
 Crée un changement de statut.
 

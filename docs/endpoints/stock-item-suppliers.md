@@ -4,7 +4,7 @@ Références fournisseurs pour les articles en stock. Table de liaison entre [St
 
 ---
 
-## `GET /stock_item_suppliers`
+## `GET /stock-item-suppliers`
 
 Liste les références avec filtres.
 
@@ -43,25 +43,25 @@ Trié par `is_preferred` DESC, nom fournisseur ASC.
 
 ---
 
-## `GET /stock_item_suppliers/{id}`
+## `GET /stock-item-suppliers/{id}`
 
 Détail complet (StockItemSupplierOut) avec timestamps.
 
 ---
 
-## `GET /stock_item_suppliers/stock_item/{stock_item_id}`
+## `GET /stock-item-suppliers/stock-item/{stock_item_id}`
 
 Tous les fournisseurs d'un article.
 
 ---
 
-## `GET /stock_item_suppliers/supplier/{supplier_id}`
+## `GET /stock-item-suppliers/supplier/{supplier_id}`
 
 Tous les articles d'un fournisseur.
 
 ---
 
-## `POST /stock_item_suppliers`
+## `POST /stock-item-suppliers`
 
 Crée une référence fournisseur.
 
@@ -96,18 +96,18 @@ Crée une référence fournisseur.
 
 ---
 
-## `PUT /stock_item_suppliers/{id}`
+## `PUT /stock-item-suppliers/{id}`
 
 Met à jour. Même règle `is_preferred`.
 
 ---
 
-## `POST /stock_item_suppliers/{id}/set_preferred`
+## `POST /stock-item-suppliers/{id}/set-preferred`
 
 Raccourci pour marquer cette référence comme préférée (désélectionne les autres automatiquement).
 
 ---
 
-## `DELETE /stock_item_suppliers/{id}`
+## `DELETE /stock-item-suppliers/{id}`
 
 Supprime. Réponse `204`.

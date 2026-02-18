@@ -4,7 +4,7 @@ from typing import List, Dict, Any
 from api.intervention_status.repo import InterventionStatusRepository
 from api.errors.exceptions import DatabaseError
 
-router = APIRouter(prefix="/intervention_status", tags=["Intervention Status"])
+router = APIRouter(prefix="/intervention-status", tags=["intervention-status"])
 
 repo = InterventionStatusRepository()
 

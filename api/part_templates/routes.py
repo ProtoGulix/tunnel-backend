@@ -7,7 +7,7 @@ from api.stock_items.template_service import TemplateService
 from api.stock_items.template_schemas import PartTemplate
 from api.errors.exceptions import DatabaseError, NotFoundError, ValidationError
 
-router = APIRouter(prefix="/part-templates", tags=["part_templates"])
+router = APIRouter(prefix="/part-templates", tags=["part-templates"])
 
 
 @router.get("/", response_model=List[PartTemplate])

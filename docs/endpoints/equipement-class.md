@@ -6,7 +6,7 @@ Classification des équipements par type (SCIE, EXTRUDEUSE, etc.). Relation Many
 
 ---
 
-## `GET /equipement_class`
+## `GET /equipement-class`
 
 Liste toutes les classes, triées par code ASC.
 
@@ -25,13 +25,13 @@ Liste toutes les classes, triées par code ASC.
 
 ---
 
-## `GET /equipement_class/{id}`
+## `GET /equipement-class/{id}`
 
 Détail d'une classe.
 
 ---
 
-## `POST /equipement_class`
+## `POST /equipement-class`
 
 Crée une classe.
 
@@ -57,13 +57,13 @@ Crée une classe.
 
 ---
 
-## `PATCH /equipement_class/{id}`
+## `PATCH /equipement-class/{id}`
 
 Met à jour une classe. Même body, tous champs optionnels. Si `code` change, l'unicité est vérifiée.
 
 ---
 
-## `DELETE /equipement_class/{id}`
+## `DELETE /equipement-class/{id}`
 
 Supprime une classe.
 

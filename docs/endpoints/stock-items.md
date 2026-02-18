@@ -8,7 +8,7 @@ Catalogue d'articles en stock. La référence (`ref`) est auto-générée par tr
 
 ---
 
-## `GET /stock_items`
+## `GET /stock-items`
 
 Liste les articles avec filtres.
 
@@ -28,7 +28,7 @@ Tableau trié par nom ASC. Schema léger (voir [StockItemListItem](../shared-sch
 
 ---
 
-## `GET /stock_items/{id}`
+## `GET /stock-items/{id}`
 
 Détail complet.
 
@@ -54,13 +54,13 @@ Détail complet.
 
 ---
 
-## `GET /stock_items/ref/{ref}`
+## `GET /stock-items/ref/{ref}`
 
 Recherche par référence (ex: `OUT-ROUL-SKF-6205`).
 
 ---
 
-## `POST /stock_items`
+## `POST /stock-items`
 
 Crée un article.
 
@@ -100,13 +100,13 @@ Crée un article.
 
 ---
 
-## `PUT /stock_items/{id}`
+## `PUT /stock-items/{id}`
 
 Met à jour. Si `family_code`, `sub_family_code`, `spec` ou `dimension` changent, `ref` est régénérée.
 
 ---
 
-## `PATCH /stock_items/{id}/quantity`
+## `PATCH /stock-items/{id}/quantity`
 
 Mise à jour rapide de la quantité uniquement.
 
@@ -118,6 +118,6 @@ Mise à jour rapide de la quantité uniquement.
 
 ---
 
-## `DELETE /stock_items/{id}`
+## `DELETE /stock-items/{id}`
 
 Supprime un article. Réponse `204`.

@@ -5,7 +5,7 @@ from api.action_categories.schemas import ActionCategoryOut
 from api.action_subcategories.repo import ActionSubcategoryRepository
 from api.action_subcategories.schemas import ActionSubcategoryOut
 
-router = APIRouter(prefix="/action_categories", tags=["action_categories"])
+router = APIRouter(prefix="/action-categories", tags=["action-categories"])
 
 
 @router.get("/", response_model=List[ActionCategoryOut])

@@ -6,7 +6,7 @@ Facteurs de complexité attribuables aux actions d'intervention lorsque le score
 
 ---
 
-## `GET /complexity_factors`
+## `GET /complexity-factors`
 
 Liste tous les facteurs, triés par catégorie puis code.
 
@@ -34,6 +34,6 @@ Liste tous les facteurs, triés par catégorie puis code.
 
 ---
 
-## `GET /complexity_factors/{code}`
+## `GET /complexity-factors/{code}`
 
 Détail d'un facteur par son code (ex: `PCE`, `ACC`, `DOC`).

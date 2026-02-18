@@ -5,7 +5,7 @@ from api.stock_item_suppliers.schemas import (
     StockItemSupplierOut, StockItemSupplierIn, StockItemSupplierListItem
 )
 
-router = APIRouter(prefix="/stock_item_suppliers", tags=["stock_item_suppliers"])
+router = APIRouter(prefix="/stock-item-suppliers", tags=["stock-item-suppliers"])
 
 
 @router.get("/", response_model=List[StockItemSupplierListItem])
@@ -34,7 +34,7 @@ async def get_stock_item_supplier(ref_id: str):
     return repo.get_by_id(ref_id)
 
 
-@router.get("/stock_item/{stock_item_id}", response_model=List[StockItemSupplierOut])
+@router.get("/stock-item/{stock_item_id}", response_model=List[StockItemSupplierOut])
 async def get_suppliers_by_stock_item(stock_item_id: str):
     """Récupère toutes les références fournisseurs d'un article"""
     repo = StockItemSupplierRepository()
@@ -68,7 +68,7 @@ async def update_stock_item_supplier(ref_id: str, ref: StockItemSupplierIn):
         raise HTTPException(status_code=400, detail=str(e)) from e
 
 
-@router.post("/{ref_id}/set_preferred", response_model=StockItemSupplierOut)
+@router.post("/{ref_id}/set-preferred", response_model=StockItemSupplierOut)
 async def set_preferred_supplier(ref_id: str):
     """Définit cette référence comme fournisseur préféré pour l'article"""
     repo = StockItemSupplierRepository()

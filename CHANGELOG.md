@@ -2,6 +2,51 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [2.0.0] - 18 février 2026
+
+### ⚠️ BREAKING CHANGES
+
+- **Convention kebab-case sur toutes les URLs** : Tous les endpoints de l'API utilisent désormais le kebab-case (`-`) au lieu du snake_case (`_`) dans les URLs, conformément aux bonnes pratiques REST (Google API Design Guide, Microsoft REST API Guidelines)
+
+#### Mapping complet des changements d'URLs
+
+| Avant (v1.x) | Après (v2.0.0) |
+|---|---|
+| `/intervention_actions` | `/intervention-actions` |
+| `/intervention_status` | `/intervention-status` |
+| `/intervention_status_log` | `/intervention-status-log` |
+| `/action_categories` | `/action-categories` |
+| `/action_subcategories` | `/action-subcategories` |
+| `/complexity_factors` | `/complexity-factors` |
+| `/equipement_class` | `/equipement-class` |
+| `/purchase_requests` | `/purchase-requests` |
+| `/stock_items` | `/stock-items` |
+| `/supplier_orders` | `/supplier-orders` |
+| `/supplier_order_lines` | `/supplier-order-lines` |
+| `/stock_item_suppliers` | `/stock-item-suppliers` |
+
+#### Sous-routes également migrées
+
+| Avant | Après |
+|---|---|
+| `/stock_item_suppliers/stock_item/{id}` | `/stock-item-suppliers/stock-item/{id}` |
+| `/stock_item_suppliers/{id}/set_preferred` | `/stock-item-suppliers/{id}/set-preferred` |
+| `/supplier_order_lines/{id}/purchase_requests` | `/supplier-order-lines/{id}/purchase-requests` |
+
+#### Endpoints inchangés (déjà conformes)
+
+`/interventions`, `/equipements`, `/suppliers`, `/users`, `/auth`, `/health`, `/stats`, `/exports`, `/stock-sub-families`, `/part-templates`
+
+### Migration
+
+- Toutes les applications clientes doivent mettre à jour leurs URLs d'appels API
+- Les tags OpenAPI/Swagger sont également en kebab-case
+- Les noms de modules Python restent en snake_case (convention Python)
+- Les noms de tables SQL restent en snake_case (convention DB)
+- Documentation mise à jour : [API_MANIFEST.md](API_MANIFEST.md) et tous les fichiers `docs/endpoints/*.md`
+
+---
+
 ## [1.11.1] - 17 février 2026
 
 ### Améliorations

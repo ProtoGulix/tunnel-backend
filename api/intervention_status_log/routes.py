@@ -4,7 +4,7 @@ from typing import List
 from api.intervention_status_log.repo import InterventionStatusLogRepository
 from api.intervention_status_log.schemas import InterventionStatusLogIn, InterventionStatusLogOut
 
-router = APIRouter(prefix="/intervention_status_log", tags=["Intervention Status Log"])
+router = APIRouter(prefix="/intervention-status-log", tags=["intervention-status-log"])
 
 
 @router.get("/", response_model=List[InterventionStatusLogOut])

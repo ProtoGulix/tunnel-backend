@@ -3,7 +3,7 @@ from typing import List
 from api.action_subcategories.repo import ActionSubcategoryRepository
 from api.action_subcategories.schemas import ActionSubcategoryOut
 
-router = APIRouter(prefix="/action_subcategories", tags=["action_subcategories"])
+router = APIRouter(prefix="/action-subcategories", tags=["action-subcategories"])
 
 
 @router.get("/", response_model=List[ActionSubcategoryOut])

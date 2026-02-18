@@ -6,7 +6,7 @@ Tables de référence pour la classification des actions d'intervention.
 
 ---
 
-## `GET /action_categories`
+## `GET /action-categories`
 
 Liste toutes les catégories d'actions.
 
@@ -25,13 +25,13 @@ Liste toutes les catégories d'actions.
 
 ---
 
-## `GET /action_categories/{id}`
+## `GET /action-categories/{id}`
 
 Détail d'une catégorie.
 
 ---
 
-## `GET /action_categories/{id}/subcategories`
+## `GET /action-categories/{id}/subcategories`
 
 Liste les sous-catégories d'une catégorie.
 
@@ -50,12 +50,12 @@ Liste les sous-catégories d'une catégorie.
 
 ---
 
-## `GET /action_subcategories`
+## `GET /action-subcategories`
 
 Liste toutes les sous-catégories.
 
 ---
 
-## `GET /action_subcategories/{id}`
+## `GET /action-subcategories/{id}`
 
 Détail d'une sous-catégorie.

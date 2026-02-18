@@ -6,7 +6,7 @@ Commandes fournisseurs avec suivi d'âge, lignes de commande et exports (CSV, em
 
 ---
 
-## `GET /supplier_orders`
+## `GET /supplier-orders`
 
 Liste les commandes avec filtres.
 
@@ -55,19 +55,19 @@ Liste les commandes avec filtres.
 
 ---
 
-## `GET /supplier_orders/{id}`
+## `GET /supplier-orders/{id}`
 
 Détail avec `lines` (tableau de SupplierOrderLineListItem).
 
 ---
 
-## `GET /supplier_orders/number/{order_number}`
+## `GET /supplier-orders/number/{order_number}`
 
 Recherche par numéro de commande.
 
 ---
 
-## `POST /supplier_orders`
+## `POST /supplier-orders`
 
 Crée une commande.
 
@@ -97,19 +97,19 @@ Crée une commande.
 
 ---
 
-## `PUT /supplier_orders/{id}`
+## `PUT /supplier-orders/{id}`
 
 Met à jour. `order_number` non modifiable. Tous champs optionnels (schema `SupplierOrderUpdate`).
 
 ---
 
-## `DELETE /supplier_orders/{id}`
+## `DELETE /supplier-orders/{id}`
 
 Supprime (cascade sur les lignes). Réponse `204`.
 
 ---
 
-## `POST /supplier_orders/{id}/export/csv`
+## `POST /supplier-orders/{id}/export/csv`
 
 Exporte la commande en CSV.
 
@@ -122,7 +122,7 @@ Exporte la commande en CSV.
 
 ---
 
-## `POST /supplier_orders/{id}/export/email`
+## `POST /supplier-orders/{id}/export/email`
 
 Génère le contenu d'un email de commande.
 

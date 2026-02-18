@@ -2,7 +2,7 @@ import httpx
 from api.settings import settings
 from pydantic import BaseModel
 
-__version__ = "1.11.1"
+__version__ = settings.API_VERSION
 
 
 class HealthCheckResponse(BaseModel):

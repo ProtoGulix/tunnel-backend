@@ -15,7 +15,7 @@ from config.export_templates import (
     get_csv_filename
 )
 
-router = APIRouter(prefix="/supplier_orders", tags=["supplier_orders"])
+router = APIRouter(prefix="/supplier-orders", tags=["supplier-orders"])
 
 
 @router.get("/", response_model=List[SupplierOrderListItem])

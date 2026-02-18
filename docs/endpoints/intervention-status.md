@@ -4,7 +4,7 @@ Table de référence des statuts d'intervention disponibles en base de données.
 
 ---
 
-## `GET /intervention_status`
+## `GET /intervention-status`
 
 Liste tous les statuts disponibles.
 

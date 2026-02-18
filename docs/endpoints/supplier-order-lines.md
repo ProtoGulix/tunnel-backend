@@ -8,7 +8,7 @@ Lignes de commande fournisseur. Liées aux [Supplier Orders](supplier-orders.md)
 
 ---
 
-## `GET /supplier_order_lines`
+## `GET /supplier-order-lines`
 
 Liste avec filtres.
 
@@ -44,7 +44,7 @@ Liste avec filtres.
 
 ---
 
-## `GET /supplier_order_lines/{id}`
+## `GET /supplier-order-lines/{id}`
 
 Détail avec `stock_item` et `purchase_requests` enrichis.
 
@@ -80,13 +80,13 @@ Détail avec `stock_item` et `purchase_requests` enrichis.
 
 ---
 
-## `GET /supplier_order_lines/order/{supplier_order_id}`
+## `GET /supplier-order-lines/order/{supplier_order_id}`
 
 Toutes les lignes d'une commande avec détails complets.
 
 ---
 
-## `POST /supplier_order_lines`
+## `POST /supplier-order-lines`
 
 Crée une ligne.
 
@@ -128,19 +128,19 @@ Crée une ligne.
 
 ---
 
-## `PUT /supplier_order_lines/{id}`
+## `PUT /supplier-order-lines/{id}`
 
 Met à jour. Si `purchase_requests` est fourni, les liens existants sont **remplacés**. Même règle d'exclusivité sur `is_selected`.
 
 ---
 
-## `DELETE /supplier_order_lines/{id}`
+## `DELETE /supplier-order-lines/{id}`
 
 Supprime (cascade M2M). Réponse `204`.
 
 ---
 
-## `POST /supplier_order_lines/{id}/purchase_requests`
+## `POST /supplier-order-lines/{id}/purchase-requests`
 
 Lie une demande d'achat à cette ligne.
 
@@ -154,6 +154,6 @@ Lie une demande d'achat à cette ligne.
 
 ---
 
-## `DELETE /supplier_order_lines/{id}/purchase_requests/{purchase_request_id}`
+## `DELETE /supplier-order-lines/{id}/purchase-requests/{purchase_request_id}`
 
 Supprime le lien avec une demande d'achat.

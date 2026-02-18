@@ -6,7 +6,7 @@ Demandes d'achat de matériel, liées aux interventions et aux commandes fournis
 
 ---
 
-## `GET /purchase_requests` [LEGACY]
+## `GET /purchase-requests` [LEGACY]
 
 Liste toutes les demandes d'achat avec filtres.
 
@@ -64,7 +64,7 @@ Liste toutes les demandes d'achat avec filtres.
 
 ---
 
-## `GET /purchase_requests/list` [v1.2.0]
+## `GET /purchase-requests/list` [v1.2.0]
 
 Liste optimisée légère pour tableaux. Payload ~95% plus léger.
 
@@ -96,7 +96,7 @@ Liste optimisée légère pour tableaux. Payload ~95% plus léger.
 
 ---
 
-## `GET /purchase_requests/detail/{id}` [v1.2.0]
+## `GET /purchase-requests/detail/{id}` [v1.2.0]
 
 Détail complet avec contexte enrichi.
 
@@ -106,7 +106,7 @@ Même structure que PurchaseRequestOut avec toutes les relations hydratées.
 
 ---
 
-## `GET /purchase_requests/stats` [v1.2.0]
+## `GET /purchase-requests/stats` [v1.2.0]
 
 Statistiques agrégées pour dashboards.
 
@@ -139,19 +139,19 @@ Statistiques agrégées pour dashboards.
 
 ---
 
-## `GET /purchase_requests/{id}` [LEGACY]
+## `GET /purchase-requests/{id}` [LEGACY]
 
 Détail d'une demande par ID.
 
 ---
 
-## `GET /purchase_requests/intervention/{intervention_id}` [LEGACY]
+## `GET /purchase-requests/intervention/{intervention_id}` [LEGACY]
 
 Demandes liées à une intervention.
 
 ---
 
-## `GET /purchase_requests/intervention/{intervention_id}/optimized` [v1.2.0]
+## `GET /purchase-requests/intervention/{intervention_id}/optimized` [v1.2.0]
 
 Filtre par intervention avec choix de granularité.
 
@@ -163,7 +163,7 @@ Filtre par intervention avec choix de granularité.
 
 ---
 
-## `POST /purchase_requests`
+## `POST /purchase-requests`
 
 Crée une demande d'achat.
 
@@ -205,7 +205,7 @@ Crée une demande d'achat.
 
 ---
 
-## `PUT /purchase_requests/{id}`
+## `PUT /purchase-requests/{id}`
 
 Met à jour une demande. Champs supplémentaires modifiables : `quantity_approved`, `approver_name`, `approved_at`.
 
@@ -213,13 +213,13 @@ Met à jour une demande. Champs supplémentaires modifiables : `quantity_approve
 
 ---
 
-## `DELETE /purchase_requests/{id}`
+## `DELETE /purchase-requests/{id}`
 
 Supprime une demande. Réponse `204`.
 
 ---
 
-## `POST /purchase_requests/dispatch` [v1.2.12]
+## `POST /purchase-requests/dispatch` [v1.2.12]
 
 Dispatch automatique des demandes `PENDING_DISPATCH` vers des [Supplier Orders](supplier-orders.md).
 

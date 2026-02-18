@@ -405,7 +405,7 @@ Mettre à jour `stock_sub_family.template_id` en base (pas d'endpoint dédié po
 ### 3. Créer des pièces
 
 ```bash
-POST /stock_items
+POST /stock-items
 # Si la sous-famille a un template, validation automatique + génération dimension
 ```
 

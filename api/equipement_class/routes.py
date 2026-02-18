@@ -4,7 +4,7 @@ from fastapi import APIRouter, status
 from .schemas import EquipementClass, EquipementClassCreate, EquipementClassUpdate
 from .repo import EquipementClassRepository
 
-router = APIRouter(prefix="/equipement_class", tags=["equipement_class"])
+router = APIRouter(prefix="/equipement-class", tags=["equipement-class"])
 repo = EquipementClassRepository()
 
 

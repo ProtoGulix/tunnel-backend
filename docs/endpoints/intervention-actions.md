@@ -6,7 +6,7 @@ Actions réalisées sur une intervention (réparation, diagnostic, etc.). Chaque
 
 ---
 
-## `GET /intervention_actions`
+## `GET /intervention-actions`
 
 Liste toutes les actions d'intervention.
 
@@ -19,7 +19,7 @@ Liste toutes les actions d'intervention.
 
 ---
 
-## `GET /intervention_actions/{id}`
+## `GET /intervention-actions/{id}`
 
 Détail d'une action avec sous-catégorie et demandes d'achat.
 
@@ -66,7 +66,7 @@ Détail d'une action avec sous-catégorie et demandes d'achat.
 
 ---
 
-## `POST /intervention_actions`
+## `POST /intervention-actions`
 
 Ajoute une action à une intervention.
 

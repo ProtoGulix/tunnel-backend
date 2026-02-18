@@ -7,7 +7,7 @@ from api.stock_items.stock_item_service import StockItemService
 from api.stock_items.template_schemas import StockItemWithCharacteristics
 from api.errors.exceptions import ValidationError, NotFoundError, DatabaseError
 
-router = APIRouter(prefix="/stock_items", tags=["stock_items"])
+router = APIRouter(prefix="/stock-items", tags=["stock-items"])
 
 
 class QuantityUpdate(BaseModel):

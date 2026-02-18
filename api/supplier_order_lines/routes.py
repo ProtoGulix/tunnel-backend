@@ -9,7 +9,7 @@ from api.supplier_order_lines.schemas import (
     PurchaseRequestLink
 )
 
-router = APIRouter(prefix="/supplier_order_lines", tags=["supplier_order_lines"])
+router = APIRouter(prefix="/supplier-order-lines", tags=["supplier-order-lines"])
 
 
 class LinkPurchaseRequestBody(BaseModel):
@@ -96,7 +96,7 @@ async def delete_supplier_order_line(line_id: str):
         raise HTTPException(status_code=400, detail=str(e)) from e
 
 
-@router.post("/{line_id}/purchase_requests", response_model=SupplierOrderLineOut)
+@router.post("/{line_id}/purchase-requests", response_model=SupplierOrderLineOut)
 async def link_purchase_request(line_id: str, body: LinkPurchaseRequestBody):
     """Lie une demande d'achat à une ligne de commande"""
     repo = SupplierOrderLineRepository()
@@ -110,7 +110,7 @@ async def link_purchase_request(line_id: str, body: LinkPurchaseRequestBody):
         raise HTTPException(status_code=400, detail=str(e)) from e
 
 
-@router.delete("/{line_id}/purchase_requests/{purchase_request_id}", response_model=SupplierOrderLineOut)
+@router.delete("/{line_id}/purchase-requests/{purchase_request_id}", response_model=SupplierOrderLineOut)
 async def unlink_purchase_request(line_id: str, purchase_request_id: str):
     """Retire le lien avec une demande d'achat"""
     repo = SupplierOrderLineRepository()
