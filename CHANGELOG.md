@@ -4,6 +4,14 @@ Toutes les modifications importantes de l'API sont documentées ici.
 
 ## [2.1.0] - 18 février 2026
 
+### Nouveautés
+
+- **GET /stock-families** : Nouveau endpoint pour lister les familles de stock
+  - Retourne la liste complète des familles avec leurs sous-familles
+- **GET /stock-families/{family_code}** : Détail d'une famille avec templates complets
+  - Retourne la famille avec toutes ses sous-familles
+  - Inclut les templates complets (avec fields et enum_values) pour chaque sous-famille ayant un template
+
 ### Améliorations
 
 - **POST /stock-items** : Format d'entrée simplifié pour les caractéristiques
@@ -24,6 +32,7 @@ Toutes les modifications importantes de l'API sont documentées ici.
 
 ### Documentation
 
+- [stock-families.md](docs/endpoints/stock-families.md) : Documentation du nouveau endpoint stock-families
 - [stock-items.md](docs/endpoints/stock-items.md) : Détails complets sur les modes legacy/template
 - Clarification du format d'entrée des caractéristiques avec exemples concrets
 - Tableau récapitulatif du routing automatique des valeurs selon `field_type`
