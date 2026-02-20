@@ -16,6 +16,46 @@ class StockItemRepository:
             raise DatabaseError(
                 f"Erreur de connexion base de données: {str(e)}") from e
 
+    def count_all(
+        self,
+        family_code: Optional[str] = None,
+        sub_family_code: Optional[str] = None,
+        search: Optional[str] = None
+    ) -> int:
+        """Compte le nombre total d'articles en stock avec filtres optionnels"""
+        conn = self._get_connection()
+        try:
+            cur = conn.cursor()
+
+            where_clauses = []
+            params: List[Any] = []
+
+            if family_code:
+                where_clauses.append("family_code = %s")
+                params.append(family_code)
+
+            if sub_family_code:
+                where_clauses.append("sub_family_code = %s")
+                params.append(sub_family_code)
+
+            if search:
+                where_clauses.append("(name ILIKE %s OR ref ILIKE %s)")
+                search_pattern = f"%{search}%"
+                params.extend([search_pattern, search_pattern])
+
+            where_sql = ("WHERE " + " AND ".join(where_clauses)
+                         ) if where_clauses else ""
+
+            query = f"SELECT COUNT(*) FROM stock_item {where_sql}"
+
+            cur.execute(query, params)
+            result = cur.fetchone()
+            return result[0] if result else 0
+        except Exception as e:
+            raise DatabaseError(f"Erreur base de données: {str(e)}") from e
+        finally:
+            conn.close()
+
     def get_all(
         self,
         limit: int = 100,
@@ -47,7 +87,8 @@ class StockItemRepository:
                 search_pattern = f"%{search}%"
                 params.extend([search_pattern, search_pattern])
 
-            where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
+            where_sql = ("WHERE " + " AND ".join(where_clauses)
+                         ) if where_clauses else ""
 
             query = f"""
                 SELECT * FROM stock_item

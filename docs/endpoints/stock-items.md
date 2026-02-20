@@ -15,21 +15,59 @@ La création d'un article fonctionne en **deux modes** selon que la sous-famille
 
 ## `GET /stock-items`
 
-Liste les articles avec filtres.
+Liste les articles avec filtres et pagination.
 
 ### Query params
 
 | Param             | Type   | Défaut | Description                        |
 | ----------------- | ------ | ------ | ---------------------------------- |
 | `skip`            | int    | 0      | Offset                             |
-| `limit`           | int    | 100    | Max: 1000                          |
+| `limit`           | int    | 50     | Max par page: 1000                 |
 | `family_code`     | string | —      | Filtrer par famille                |
 | `sub_family_code` | string | —      | Filtrer par sous-famille           |
 | `search`          | string | —      | Recherche nom ou référence (ILIKE) |
 
-### Réponse `200` — StockItemListItem
+### Réponse `200` — PaginatedResponse[StockItemListItem]
 
-Tableau trié par nom ASC. Schema léger (voir [StockItemListItem](../shared-schemas.md#stockitemlistitem)).
+Réponse paginée avec métadonnées.
+
+```json
+{
+  "items": [
+    {
+      "id": "uuid",
+      "name": "Roulement SKF 6205",
+      "family_code": "OUT",
+      "sub_family_code": "ROUL",
+      "spec": "SKF",
+      "dimension": "6205",
+      "ref": "OUT-ROUL-SKF-6205",
+      "quantity": 15,
+      "unit": "pcs",
+      "location": "Étagère A3"
+    }
+  ],
+  "pagination": {
+    "total": 150,
+    "page": 1,
+    "page_size": 50,
+    "total_pages": 3,
+    "offset": 0,
+    "count": 50
+  }
+}
+```
+
+### Métadonnées de pagination
+
+| Champ         | Description                                    |
+| ------------- | ---------------------------------------------- |
+| `total`       | Nombre total d'éléments (tous filtres compris) |
+| `page`        | Numéro de la page actuelle (commence à 1)      |
+| `page_size`   | Nombre d'éléments par page                     |
+| `total_pages` | Nombre total de pages                          |
+| `offset`      | Position de début dans la liste globale        |
+| `count`       | Nombre d'éléments retournés dans cette page    |
 
 ---
 

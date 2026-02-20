@@ -1,11 +1,12 @@
 from fastapi import APIRouter, HTTPException, Query
-from typing import List, Optional
+from typing import Optional
 from pydantic import BaseModel
 from api.stock_items.repo import StockItemRepository
 from api.stock_items.schemas import StockItemOut, StockItemIn, StockItemListItem
 from api.stock_items.stock_item_service import StockItemService
 from api.stock_items.template_schemas import StockItemWithCharacteristics
 from api.errors.exceptions import ValidationError, NotFoundError, DatabaseError
+from api.utils.pagination import PaginatedResponse, create_pagination_meta
 
 router = APIRouter(prefix="/stock-items", tags=["stock-items"])
 
@@ -15,11 +16,11 @@ class QuantityUpdate(BaseModel):
     quantity: int
 
 
-@router.get("/", response_model=List[StockItemListItem])
+@router.get("/", response_model=PaginatedResponse[StockItemListItem])
 async def list_stock_items(
     skip: int = Query(0, ge=0, description="Nombre d'éléments à sauter"),
-    limit: int = Query(100, ge=1, le=1000,
-                       description="Nombre max d'éléments"),
+    limit: int = Query(50, ge=1, le=1000,
+                       description="Nombre max d'éléments par page"),
     family_code: Optional[str] = Query(
         None, description="Filtrer par code famille"),
     sub_family_code: Optional[str] = Query(
@@ -27,15 +28,34 @@ async def list_stock_items(
     search: Optional[str] = Query(
         None, description="Recherche par nom ou référence")
 ):
-    """Liste tous les articles en stock avec filtres optionnels"""
+    """Liste tous les articles en stock avec filtres optionnels et pagination"""
     repo = StockItemRepository()
-    return repo.get_all(
+
+    # Récupérer les items
+    items = repo.get_all(
         limit=limit,
         offset=skip,
         family_code=family_code,
         sub_family_code=sub_family_code,
         search=search
     )
+
+    # Récupérer le total
+    total = repo.count_all(
+        family_code=family_code,
+        sub_family_code=sub_family_code,
+        search=search
+    )
+
+    # Créer la réponse paginée
+    pagination_meta = create_pagination_meta(
+        total=total,
+        offset=skip,
+        limit=limit,
+        count=len(items)
+    )
+
+    return PaginatedResponse(items=items, pagination=pagination_meta)
 
 
 @router.get("/ref/{ref}", response_model=StockItemOut)

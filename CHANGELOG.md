@@ -2,6 +2,29 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [2.2.0] - 20 février 2026
+
+### ⚠️ BREAKING CHANGES
+
+- **GET /stock-items** : Format de réponse modifié pour supporter la pagination
+  - Avant : Retourne directement un tableau `[{...}, {...}]`
+  - Maintenant : Retourne un objet `{ "items": [...], "pagination": {...} }`
+  - Migration : Remplacer `response` par `response.items` côté client
+
+### Améliorations
+
+- **GET /stock-items** : Pagination standard implémentée
+  - Métadonnées : `total`, `page`, `page_size`, `total_pages`, `offset`, `count`
+  - Limite par défaut abaissée de 100 à 50 éléments par page
+  - Nouveau schéma réutilisable `PaginatedResponse` pour d'autres endpoints
+
+### Documentation
+
+- [stock-items.md](docs/endpoints/stock-items.md) : Documentation de la pagination
+- [shared-schemas.md](docs/shared-schemas.md) : Nouveau schéma `PaginatedResponse` réutilisable
+
+---
+
 ## [2.1.0] - 18 février 2026
 
 ### Nouveautés
