@@ -1,4 +1,4 @@
-# API Manifest — GMAO API v2.2.0
+# API Manifest — GMAO API v2.2.1
 
 > Dernière mise à jour : 2026-02-20
 

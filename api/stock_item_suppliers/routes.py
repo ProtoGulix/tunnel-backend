@@ -5,16 +5,21 @@ from api.stock_item_suppliers.schemas import (
     StockItemSupplierOut, StockItemSupplierIn, StockItemSupplierListItem
 )
 
-router = APIRouter(prefix="/stock-item-suppliers", tags=["stock-item-suppliers"])
+router = APIRouter(prefix="/stock-item-suppliers",
+                   tags=["stock-item-suppliers"])
 
 
 @router.get("/", response_model=List[StockItemSupplierListItem])
 async def list_stock_item_suppliers(
     skip: int = Query(0, ge=0, description="Nombre d'éléments à sauter"),
-    limit: int = Query(100, ge=1, le=1000, description="Nombre max d'éléments"),
-    stock_item_id: Optional[str] = Query(None, description="Filtrer par article"),
-    supplier_id: Optional[str] = Query(None, description="Filtrer par fournisseur"),
-    is_preferred: Optional[bool] = Query(None, description="Filtrer par préféré")
+    limit: int = Query(100, ge=1, le=1000,
+                       description="Nombre max d'éléments"),
+    stock_item_id: Optional[str] = Query(
+        None, description="Filtrer par article"),
+    supplier_id: Optional[str] = Query(
+        None, description="Filtrer par fournisseur"),
+    is_preferred: Optional[bool] = Query(
+        None, description="Filtrer par préféré")
 ):
     """Liste toutes les références fournisseurs avec filtres optionnels"""
     repo = StockItemSupplierRepository()
@@ -74,6 +79,19 @@ async def set_preferred_supplier(ref_id: str):
     repo = StockItemSupplierRepository()
     try:
         return repo.set_preferred(ref_id)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+@router.delete("/{ref_id}")
+async def delete_stock_item_supplier(ref_id: str):
+    """Supprime une référence fournisseur"""
+    repo = StockItemSupplierRepository()
+    try:
+        repo.delete(ref_id)
+        return {"message": f"Référence {ref_id} supprimée"}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 

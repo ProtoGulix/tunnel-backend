@@ -23,7 +23,8 @@ async def login(payload: Dict[str, Any] = Body(..., description="Identifiants Di
                 headers={"Accept": "application/json"},
             )
     except httpx.RequestError as exc:
-        raise HTTPException(status_code=502, detail=f"Directus indisponible: {exc}") from exc
+        raise HTTPException(
+            status_code=502, detail=f"Directus indisponible: {exc}") from exc
 
     if response.status_code >= 400:
         try:
@@ -32,8 +33,23 @@ async def login(payload: Dict[str, Any] = Body(..., description="Identifiants Di
             detail = {"detail": response.text}
         raise HTTPException(status_code=response.status_code, detail=detail)
 
+    # Extraire le JWT du cookie Directus
+    jwt_token = None
+    for cookie in response.cookies.jar:
+        if cookie.name.startswith("directus") and "session" in cookie.name:
+            jwt_token = cookie.value
+            break
+
+    # Enrichir la réponse avec le token JWT
+    response_data = response.json()
+    if jwt_token:
+        # Ajouter le token dans data si data existe, sinon créer data
+        if "data" not in response_data:
+            response_data = {"data": {}}
+        response_data["data"]["access_token"] = jwt_token
+
     fastapi_response = JSONResponse(
-        content=response.json(),
+        content=response_data,
         status_code=response.status_code,
     )
 
@@ -48,7 +64,8 @@ def _set_cookie_from_directus(response: JSONResponse, cookie: Cookie) -> None:
     samesite = rest.get("SameSite") or rest.get("samesite")
     httponly = bool(rest.get("HttpOnly") or rest.get("httponly"))
 
-    cookie_name = SESSION_COOKIE_NAME if cookie.name.startswith("directus") else cookie.name
+    cookie_name = SESSION_COOKIE_NAME if cookie.name.startswith(
+        "directus") else cookie.name
 
     response.set_cookie(
         key=cookie_name,
@@ -56,7 +73,7 @@ def _set_cookie_from_directus(response: JSONResponse, cookie: Cookie) -> None:
         max_age=cookie.expires,
         expires=cookie.expires,
         path=cookie.path or "/",
-        domain=cookie.domain,
+        domain=None,  # Utilise le domaine de l'API tunnel au lieu de celui de Directus
         secure=cookie.secure,
         httponly=httponly,
         samesite=samesite.lower() if isinstance(samesite, str) else None,

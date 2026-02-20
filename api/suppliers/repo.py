@@ -38,11 +38,13 @@ class SupplierRepository:
                 params.append(is_active)
 
             if search:
-                where_clauses.append("(name ILIKE %s OR code ILIKE %s OR contact_name ILIKE %s)")
+                where_clauses.append(
+                    "(name ILIKE %s OR code ILIKE %s OR contact_name ILIKE %s)")
                 search_pattern = f"%{search}%"
                 params.extend([search_pattern, search_pattern, search_pattern])
 
-            where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
+            where_sql = ("WHERE " + " AND ".join(where_clauses)
+                         ) if where_clauses else ""
 
             query = f"""
                 SELECT id, name, code, contact_name, email, phone, is_active
@@ -110,9 +112,25 @@ class SupplierRepository:
 
     def add(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Crée un nouveau fournisseur"""
+        # Validation 1: Nom >= 2 caractères (après trim)
+        name = (data.get('name') or '').strip()
+        if not name or len(name) < 2:
+            raise ValueError("Le nom doit contenir au moins 2 caractères")
+
+        data['name'] = name
+
         conn = self._get_connection()
         try:
             cur = conn.cursor()
+
+            # Validation 2: Vérification doublon (nom unique)
+            cur.execute(
+                "SELECT id FROM supplier WHERE name = %s",
+                (name,)
+            )
+            if cur.fetchone():
+                raise ValueError(f"Le fournisseur '{name}' existe déjà")
+
             supplier_id = str(uuid4())
 
             cur.execute(
@@ -123,7 +141,7 @@ class SupplierRepository:
                 """,
                 (
                     supplier_id,
-                    data['name'],
+                    name,
                     data.get('code'),
                     data.get('contact_name'),
                     data.get('email'),
@@ -196,10 +214,25 @@ class SupplierRepository:
         conn = self._get_connection()
         try:
             cur = conn.cursor()
+
+            # Validation: Vérifier qu'il n'a pas de références
+            cur.execute(
+                "SELECT COUNT(*) FROM stock_item_supplier WHERE supplier_id = %s",
+                (supplier_id,)
+            )
+            ref_count = cur.fetchone()[0]
+
+            if ref_count > 0:
+                raise ValueError(
+                    f"Ce fournisseur possède {ref_count} référence(s). Supprimez-les d'abord."
+                )
+
             cur.execute(
                 "DELETE FROM supplier WHERE id = %s", (supplier_id,))
             conn.commit()
             return True
+        except ValueError:
+            raise
         except Exception as e:
             conn.rollback()
             raise DatabaseError(

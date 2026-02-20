@@ -12,12 +12,12 @@ Liste les fournisseurs avec filtres.
 
 ### Query params
 
-| Param | Type | Défaut | Description |
-|---|---|---|---|
-| `skip` | int | 0 | Offset |
-| `limit` | int | 100 | Max: 1000 |
-| `is_active` | bool | — | Filtrer par statut actif |
-| `search` | string | — | Recherche nom, code ou contact (ILIKE) |
+| Param       | Type   | Défaut | Description                            |
+| ----------- | ------ | ------ | -------------------------------------- |
+| `skip`      | int    | 0      | Offset                                 |
+| `limit`     | int    | 100    | Max: 1000                              |
+| `is_active` | bool   | —      | Filtrer par statut actif               |
+| `search`    | string | —      | Recherche nom, code ou contact (ILIKE) |
 
 ### Réponse `200` — SupplierListItem
 
@@ -88,19 +88,50 @@ Crée un fournisseur.
 }
 ```
 
-| Champ | Type | Requis | Description |
-|---|---|---|---|
-| `name` | string | oui | Nom du fournisseur |
-| `code` | string | non | Code court |
-| Autres | — | non | Contact, coordonnées, notes |
+| Champ  | Type   | Requis | Description                           |
+| ------ | ------ | ------ | ------------------------------------- |
+| `name` | string | oui    | Nom du fournisseur (min 2 caractères) |
+| `code` | string | non    | Code court                            |
+| Autres | —      | non    | Contact, coordonnées, notes           |
 
 ### Règles métier
 
+- `name` doit contenir **au moins 2 caractères** (après trim)
+- Le nom doit être **unique** (pas de doublon)
 - `updated_at` est mis à jour automatiquement par trigger
+
+### Erreurs
+
+| Code  | Cas             | Message                                      |
+| ----- | --------------- | -------------------------------------------- |
+| `400` | Nom < 2 chars   | `Le nom doit contenir au moins 2 caractères` |
+| `400` | Nom existe déjà | `Le fournisseur '{name}' existe déjà`        |
 
 ---
 
-## `PUT /suppliers/{id}`
+## `DELETE /suppliers/{id}`
+
+Supprime un fournisseur.
+
+### Règle métier
+
+- **Protection des références** : Un fournisseur ne peut être supprimé que s'il n'a **aucune référence** dans `stock_item_supplier`
+- Si des références existent, elles doivent être supprimées d'abord
+
+### Erreurs
+
+| Code  | Cas                     | Message                                                               |
+| ----- | ----------------------- | --------------------------------------------------------------------- |
+| `404` | Fournisseur introuvable | `Fournisseur {id} non trouvé`                                         |
+| `400` | Possède références      | `Ce fournisseur possède {count} référence(s). Supprimez-les d'abord.` |
+
+### Réponse `200`
+
+```json
+{
+  "message": "Fournisseur {id} supprimé"
+}
+```
 
 Met à jour. Même body, tous champs optionnels.
 

@@ -54,7 +54,8 @@ class StockItemSupplierRepository:
                 where_clauses.append("sis.is_preferred = %s")
                 params.append(is_preferred)
 
-            where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
+            where_sql = ("WHERE " + " AND ".join(where_clauses)
+                         ) if where_clauses else ""
 
             query = f"""
                 SELECT
@@ -102,7 +103,8 @@ class StockItemSupplierRepository:
             row = cur.fetchone()
 
             if not row:
-                raise NotFoundError(f"Référence fournisseur {ref_id} non trouvée")
+                raise NotFoundError(
+                    f"Référence fournisseur {ref_id} non trouvée")
 
             cols = [desc[0] for desc in cur.description]
             return self._convert_decimals(dict(zip(cols, row)))
@@ -171,10 +173,39 @@ class StockItemSupplierRepository:
 
     def add(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Crée une nouvelle référence fournisseur"""
+        # Validation 1: stock_item_id obligatoire
+        if not data.get('stock_item_id'):
+            raise ValueError("L'article est obligatoire")
+
+        # Validation 2: supplier_id obligatoire
+        if not data.get('supplier_id'):
+            raise ValueError("Le fournisseur est obligatoire")
+
+        # Validation 3: supplier_ref >= 2 caractères (après trim)
+        supplier_ref = (data.get('supplier_ref') or '').strip()
+        if not supplier_ref or len(supplier_ref) < 2:
+            raise ValueError(
+                "La référence doit contenir au moins 2 caractères")
+
+        data['supplier_ref'] = supplier_ref
+
         conn = self._get_connection()
         try:
             cur = conn.cursor()
             ref_id = str(uuid4())
+
+            # Validation 4: Vérification doublon (stock_item + supplier + ref)
+            cur.execute(
+                """
+                SELECT id FROM stock_item_supplier
+                WHERE stock_item_id = %s AND supplier_id = %s AND supplier_ref = %s
+                """,
+                (str(data['stock_item_id']), str(
+                    data['supplier_id']), supplier_ref)
+            )
+            if cur.fetchone():
+                raise ValueError(
+                    "Cette référence existe déjà pour ce fournisseur")
 
             # Si is_preferred = true, désactive les autres préférés pour cet article
             if data.get('is_preferred') is True:
@@ -203,7 +234,8 @@ class StockItemSupplierRepository:
                     data.get('min_order_quantity', 1),
                     data.get('delivery_time_days'),
                     data.get('is_preferred', False),
-                    str(data['manufacturer_item_id']) if data.get('manufacturer_item_id') else None
+                    str(data['manufacturer_item_id']) if data.get(
+                        'manufacturer_item_id') else None
                 )
             )
             conn.commit()
@@ -227,7 +259,8 @@ class StockItemSupplierRepository:
 
             # Si is_preferred = true, désactive les autres préférés pour cet article
             if data.get('is_preferred') is True:
-                stock_item_id = data.get('stock_item_id', existing['stock_item_id'])
+                stock_item_id = data.get(
+                    'stock_item_id', existing['stock_item_id'])
                 cur.execute(
                     """
                     UPDATE stock_item_supplier
@@ -280,15 +313,33 @@ class StockItemSupplierRepository:
     def delete(self, ref_id: str) -> bool:
         """Supprime une référence fournisseur"""
         # Vérifie que la référence existe
-        self.get_by_id(ref_id)
+        ref = self.get_by_id(ref_id)
 
         conn = self._get_connection()
         try:
             cur = conn.cursor()
+
+            # Validation: Si préféré, vérifier qu'il y a d'autres références
+            if ref.get('is_preferred'):
+                cur.execute(
+                    """
+                    SELECT COUNT(*) FROM stock_item_supplier
+                    WHERE stock_item_id = %s AND id != %s
+                    """,
+                    (str(ref['stock_item_id']), ref_id)
+                )
+                other_count = cur.fetchone()[0]
+
+                if other_count > 0:
+                    raise ValueError(
+                        "Définissez un autre fournisseur préféré avant de supprimer")
+
             cur.execute(
                 "DELETE FROM stock_item_supplier WHERE id = %s", (ref_id,))
             conn.commit()
             return True
+        except ValueError:
+            raise
         except Exception as e:
             conn.rollback()
             raise DatabaseError(

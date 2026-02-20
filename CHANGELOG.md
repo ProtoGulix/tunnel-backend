@@ -2,6 +2,17 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [2.2.1] - 20 février 2026
+
+### Correctifs
+
+- **POST /auth/login** : Correction de la réponse vide
+  - Fix : Le JWT est maintenant retourné dans le body sous `data.access_token` en plus du cookie
+  - Le cookie `session_token` est toujours configuré automatiquement
+  - Améliore la compatibilité avec les clients non-navigateur (mobile, API)
+
+---
+
 ## [2.2.0] - 20 février 2026
 
 ### ⚠️ BREAKING CHANGES
