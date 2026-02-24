@@ -12,7 +12,8 @@ class ActionSubcategoryRepository:
         try:
             return settings.get_db_connection()
         except Exception as e:
-            raise DatabaseError(f"Erreur de connexion base de données: {str(e)}")
+            raise DatabaseError(
+                f"Erreur de connexion base de données: {str(e)}")
 
     def get_all(self) -> List[Dict[str, Any]]:
         """Récupère toutes les sous-catégories avec leur catégorie"""
@@ -32,11 +33,11 @@ class ActionSubcategoryRepository:
             """)
             rows = cur.fetchall()
             cols = [desc[0] for desc in cur.description]
-            
+
             result = []
             for row in rows:
                 data = dict(zip(cols, row))
-                
+
                 # Construire l'objet sous-catégorie avec catégorie imbriquée
                 subcategory = {
                     'id': data['id'],
@@ -51,7 +52,7 @@ class ActionSubcategoryRepository:
                     } if data['cat_id'] else None
                 }
                 result.append(subcategory)
-            
+
             return result
         except Exception as e:
             raise DatabaseError(f"Erreur base de données: {str(e)}")
@@ -63,11 +64,13 @@ class ActionSubcategoryRepository:
         conn = self._get_connection()
         try:
             cur = conn.cursor()
-            cur.execute("SELECT * FROM action_subcategory WHERE id = %s", (subcategory_id,))
+            cur.execute(
+                "SELECT * FROM action_subcategory WHERE id = %s", (subcategory_id,))
             row = cur.fetchone()
 
             if not row:
-                raise NotFoundError(f"Sous-catégorie {subcategory_id} non trouvée")
+                raise NotFoundError(
+                    f"Sous-catégorie {subcategory_id} non trouvée")
 
             cols = [desc[0] for desc in cur.description]
             return dict(zip(cols, row))
