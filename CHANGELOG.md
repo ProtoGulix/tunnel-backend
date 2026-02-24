@@ -2,6 +2,31 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [2.3.0] - 24 février 2026
+
+### Améliorations
+
+- **GET /action-categories** : Données imbriquées améliorées
+  - Retourne maintenant les sous-catégories imbriquées dans chaque catégorie
+  - Réponse : `{ "id": ..., "name": ..., "subcategories": [...] }`
+  - Simplifie le client (une seule requête pour la hiérarchie complète)
+
+- **GET /action-subcategories** : Données imbriquées améliorées
+  - Retourne maintenant la catégorie parent imbriquée dans chaque sous-catégorie
+  - Réponse : `{ "id": ..., "name": ..., "category": {...} }`
+  - Contexte complet sans appel supplémentaire
+
+- **GET /server/ping** : Nouveau endpoint public
+  - Route de health check minimaliste : retourne simplement `"pong"`
+  - Public (ne nécessite pas d'authentification)
+  - Utile pour vérifier rapidement que l'API répond (monitoring, load balancers)
+
+### Documentation
+
+- [action-categories.md](docs/endpoints/action-categories.md) : Documentation des réponses imbriquées mises à jour
+
+---
+
 ## [2.2.1] - 20 février 2026
 
 ### Correctifs

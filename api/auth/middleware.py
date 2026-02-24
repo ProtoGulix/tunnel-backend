@@ -16,7 +16,7 @@ class JWTMiddleware(BaseHTTPMiddleware):
     """
 
     # Routes publiques (pas d'auth requise)
-    PUBLIC_ROUTES = {"/health", "/docs", "/openapi.json",
+    PUBLIC_ROUTES = {"/health", "/server/ping", "/docs", "/openapi.json",
                      "/redoc", "/favicon.ico", "/auth/login"}
 
     async def dispatch(self, request: Request, call_next):

@@ -112,6 +112,12 @@ async def health_endpoint():
     return await health_check()
 
 
+@app.get("/server/ping")
+async def ping_endpoint():
+    """Route publique: ping rapide pour vérifier que l'API répond"""
+    return "pong"
+
+
 # Middleware JWT (appliqué à toutes les routes sauf exceptions publiques)
 # Vérifie que le JWT Directus est valide et extrait user_id + role
 app.add_middleware(JWTMiddleware)

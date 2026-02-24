@@ -15,14 +15,44 @@ class ActionSubcategoryRepository:
             raise DatabaseError(f"Erreur de connexion base de données: {str(e)}")
 
     def get_all(self) -> List[Dict[str, Any]]:
-        """Récupère toutes les sous-catégories"""
+        """Récupère toutes les sous-catégories avec leur catégorie"""
         conn = self._get_connection()
         try:
             cur = conn.cursor()
-            cur.execute("SELECT * FROM action_subcategory ORDER BY name ASC")
+            cur.execute("""
+                SELECT 
+                    s.*,
+                    c.id as cat_id,
+                    c.name as cat_name,
+                    c.code as cat_code,
+                    c.color as cat_color
+                FROM action_subcategory s
+                LEFT JOIN action_category c ON s.category_id = c.id
+                ORDER BY s.name ASC
+            """)
             rows = cur.fetchall()
             cols = [desc[0] for desc in cur.description]
-            return [dict(zip(cols, row)) for row in rows]
+            
+            result = []
+            for row in rows:
+                data = dict(zip(cols, row))
+                
+                # Construire l'objet sous-catégorie avec catégorie imbriquée
+                subcategory = {
+                    'id': data['id'],
+                    'category_id': data['category_id'],
+                    'name': data['name'],
+                    'code': data['code'],
+                    'category': {
+                        'id': data['cat_id'],
+                        'name': data['cat_name'],
+                        'code': data['cat_code'],
+                        'color': data['cat_color']
+                    } if data['cat_id'] else None
+                }
+                result.append(subcategory)
+            
+            return result
         except Exception as e:
             raise DatabaseError(f"Erreur base de données: {str(e)}")
         finally:
