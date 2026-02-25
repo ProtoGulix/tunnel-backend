@@ -4,6 +4,7 @@ from api.equipements.repo import EquipementRepository
 from api.equipements.schemas import (
     EquipementListItem,
     EquipementDetail,
+    EquipementChildrenPaginated,
     EquipementStatsDetailed,
     EquipementHealthOnly,
     EquipementCreate,
@@ -22,10 +23,30 @@ async def list_equipements():
 
 
 @router.get("/{equipement_id}", response_model=EquipementDetail)
-async def get_equipement(equipement_id: str):
-    """Récupère un équipement par ID avec health et children_ids"""
+async def get_equipement(
+    equipement_id: str,
+    interventions_page: int = Query(1, ge=1, description="Page des interventions"),
+    interventions_limit: int = Query(20, ge=1, le=100, description="Nombre d'interventions par page")
+):
+    """Récupère un équipement par ID avec tous les champs, children_count et interventions paginées"""
     repo = EquipementRepository()
-    return repo.get_by_id(equipement_id)
+    return repo.get_by_id(
+        equipement_id,
+        interventions_page=interventions_page,
+        interventions_limit=interventions_limit
+    )
+
+
+@router.get("/{equipement_id}/children", response_model=EquipementChildrenPaginated)
+async def get_equipement_children(
+    equipement_id: str,
+    page: int = Query(1, ge=1, description="Page"),
+    limit: int = Query(20, ge=1, le=100, description="Nombre d'enfants par page"),
+    search: str | None = Query(None, description="Filtre sur code ou nom")
+):
+    """Récupère les enfants paginés d'un équipement avec health"""
+    repo = EquipementRepository()
+    return repo.get_children(equipement_id, page=page, limit=limit, search=search)
 
 
 @router.post("", response_model=EquipementDetail, status_code=status.HTTP_201_CREATED)

@@ -134,6 +134,39 @@ Objet intervention léger, embarqué dans d'autres réponses (purchase requests,
 
 ---
 
+## EmbeddedInterventionItem
+
+Intervention embarquée dans le détail d'un équipement, avec type d'intervention enrichi.
+
+```json
+{
+  "id": "uuid",
+  "code": "string|null",
+  "title": "string",
+  "type_inter": {
+    "code": "string|null",
+    "label": "string|null"
+  },
+  "status_actual": "string|null",
+  "priority": "string|null",
+  "reported_date": "date|null"
+}
+```
+
+| Champ              | Type         | Description                                  |
+| ------------------ | ------------ | -------------------------------------------- |
+| `id`               | uuid         | Identifiant unique                           |
+| `code`             | string\|null | Code de l'intervention                       |
+| `title`            | string       | Titre/description                            |
+| `type_inter`       | object       | Type d'intervention (code + label)           |
+| `type_inter.code`  | string\|null | Code du type (ex: "CUR", "PREV")             |
+| `type_inter.label` | string\|null | Libellé du type (ex: "Curatif", "Préventif") |
+| `status_actual`    | string\|null | Statut actuel (ex: "ouvert", "ferme")        |
+| `priority`         | string\|null | Priorité (ex: "urgent", "normale")           |
+| `reported_date`    | date\|null   | Date de signalement                          |
+
+---
+
 ## StockItemListItem
 
 Schema léger pour articles en stock, embarqué dans les réponses enrichies.

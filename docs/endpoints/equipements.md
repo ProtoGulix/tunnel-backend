@@ -4,7 +4,7 @@ Gestion du parc d'équipements avec état de santé calculé, classification et 
 
 > Voir aussi : [Equipement Classes](equipement-class.md) | [Interventions](interventions.md)
 >
-> Schemas partagés : [EquipementHealth](../shared-schemas.md#equipementhealth) | [EquipementClass](../shared-schemas.md#equipementclass)
+> Schemas partagés : [EquipementHealth](../shared-schemas.md#equipementhealth) | [EquipementClass](../shared-schemas.md#equipementclass) | [EmbeddedInterventionItem](../shared-schemas.md#embeddedinterventionitem)
 
 ---
 
@@ -42,7 +42,14 @@ Tri par défaut : urgents DESC, ouverts DESC, nom ASC.
 
 ## `GET /equipements/{id}`
 
-Détail d'un équipement avec `children_ids` et `rules_triggered` dans le health.
+Détail complet d'un équipement avec tous les champs de la base, `children_count` et les interventions directement liées, paginées.
+
+### Query params
+
+| Param                 | Type | Défaut | Description              |
+| --------------------- | ---- | ------ | ------------------------ |
+| `interventions_page`  | int  | 1      | Page des interventions   |
+| `interventions_limit` | int  | 20     | Taille de page (max 100) |
 
 ### Réponse `200`
 
@@ -51,14 +58,80 @@ Détail d'un équipement avec `children_ids` et `rules_triggered` dans le health
   "id": "5e6b5a20-...",
   "code": "EQ-001",
   "name": "Scie principale",
+  "no_machine": "M-042",
+  "affectation": "Atelier A",
+  "is_mere": true,
+  "fabricant": "Bosch",
+  "numero_serie": "SN-99887",
+  "date_mise_service": "2019-03-15",
+  "notes": "Révision annuelle prévue",
   "health": {
-    "level": "warning",
-    "reason": "Maintenance planifiée dépassée",
-    "rules_triggered": ["maintenance_overdue"]
+    "level": "critical",
+    "reason": "1 intervention urgente ouverte",
+    "rules_triggered": ["URGENT_OPEN >= 1"]
   },
   "parent_id": null,
   "equipement_class": { "id": "uuid", "code": "SCIE", "label": "Scie" },
-  "children_ids": ["7f2cda3c-..."]
+  "children_count": 233,
+  "interventions": {
+    "total": 47,
+    "page": 1,
+    "page_size": 20,
+    "total_pages": 3,
+    "items": [
+      {
+        "id": "uuid",
+        "code": "INT-0091",
+        "title": "Remplacement lame",
+        "type_inter": {
+          "code": "CUR",
+          "label": "Curatif"
+        },
+        "status_actual": "ouvert",
+        "priority": "urgent",
+        "reported_date": "2026-02-10"
+      }
+    ]
+  }
+}
+```
+
+> Les interventions retournées sont uniquement celles **directement liées** à cet équipement (`machine_id`), triées par `reported_date DESC`.
+
+---
+
+## `GET /equipements/{id}/children`
+
+Liste paginée des enfants d'un équipement avec leur état de santé. Utile pour naviguer dans l'arborescence.
+
+### Query params
+
+| Param    | Type   | Défaut | Description                                         |
+| -------- | ------ | ------ | --------------------------------------------------- |
+| `page`   | int    | 1      | Page                                                |
+| `limit`  | int    | 20     | Taille de page (max 100)                            |
+| `search` | string | —      | Filtre sur `code` ou `name` (insensible à la casse) |
+
+### Réponse `200`
+
+```json
+{
+  "total": 233,
+  "page": 1,
+  "page_size": 20,
+  "total_pages": 12,
+  "items": [
+    {
+      "id": "7f2cda3c-...",
+      "code": "EQ-042",
+      "name": "Lame #1",
+      "health": {
+        "level": "ok",
+        "reason": "Aucune intervention ouverte",
+        "rules_triggered": []
+      }
+    }
+  ]
 }
 ```
 
@@ -79,16 +152,16 @@ Crée un équipement.
 }
 ```
 
-| Champ | Type | Requis | Description |
-|---|---|---|---|
-| `name` | string | oui | Nom de l'équipement |
-| `code` | string | non | Code unique |
-| `parent_id` | uuid | non | Équipement parent (hiérarchie) |
-| `equipement_class_id` | uuid | non | Classe d'équipement |
+| Champ                 | Type   | Requis | Description                    |
+| --------------------- | ------ | ------ | ------------------------------ |
+| `name`                | string | oui    | Nom de l'équipement            |
+| `code`                | string | non    | Code unique                    |
+| `parent_id`           | uuid   | non    | Équipement parent (hiérarchie) |
+| `equipement_class_id` | uuid   | non    | Classe d'équipement            |
 
 ### Réponse `201`
 
-Équipement complet avec health, children_ids, equipement_class.
+Équipement complet (même format que `GET /equipements/{id}`, interventions vides, children_count à 0).
 
 ---
 
@@ -110,10 +183,10 @@ Statistiques détaillées pour un équipement.
 
 ### Query params
 
-| Param | Type | Défaut | Description |
-|---|---|---|---|
+| Param        | Type | Défaut                   | Description      |
+| ------------ | ---- | ------------------------ | ---------------- |
 | `start_date` | date | null (tout l'historique) | Début de période |
-| `end_date` | date | now | Fin de période |
+| `end_date`   | date | now                      | Fin de période   |
 
 ### Réponse `200`
 

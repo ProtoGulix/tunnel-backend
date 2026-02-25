@@ -4,7 +4,7 @@ from uuid import uuid4
 
 from api.settings import settings
 from api.errors.exceptions import DatabaseError, NotFoundError
-from api.constants import PRIORITY_TYPES, CLOSED_STATUS_CODE
+from api.constants import PRIORITY_TYPES, CLOSED_STATUS_CODE, INTERVENTION_TYPES_MAP
 
 
 class EquipementRepository:
@@ -92,8 +92,13 @@ class EquipementRepository:
         finally:
             conn.close()
 
-    def get_by_id(self, equipement_id: str) -> Dict[str, Any]:
-        """Récupère un équipement par ID avec health et children_ids"""
+    def get_by_id(
+        self,
+        equipement_id: str,
+        interventions_page: int = 1,
+        interventions_limit: int = 20
+    ) -> Dict[str, Any]:
+        """Récupère un équipement par ID avec tous les champs, children_count et interventions paginées"""
         conn = self._get_connection()
         try:
             cur = conn.cursor()
@@ -104,6 +109,13 @@ class EquipementRepository:
                     m.id,
                     m.code,
                     m.name,
+                    m.no_machine,
+                    m.affectation,
+                    m.is_mere,
+                    m.fabricant,
+                    m.numero_serie,
+                    m.date_mise_service,
+                    m.notes,
                     m.equipement_mere,
                     ec.id as equipement_class_id,
                     ec.code as equipement_class_code,
@@ -133,6 +145,11 @@ class EquipementRepository:
             equipement['health'] = health
             equipement['parent_id'] = equipement.pop('equipement_mere', None)
 
+            # Normaliser les champs string (peuvent être stockés comme int en DB)
+            for field in ('no_machine', 'affectation', 'fabricant', 'numero_serie', 'notes'):
+                if equipement.get(field) is not None:
+                    equipement[field] = str(equipement[field])
+
             # Restructurer equipement_class
             ec_id = equipement.pop('equipement_class_id', None)
             ec_code = equipement.pop('equipement_class_code', None)
@@ -147,13 +164,147 @@ class EquipementRepository:
             else:
                 equipement['equipement_class'] = None
 
-            # Get children_ids
+            # children_count
             cur.execute(
-                "SELECT id FROM machine WHERE equipement_mere = %s", (equipement_id,))
-            children = cur.fetchall()
-            equipement['children_ids'] = [str(child[0]) for child in children]
+                "SELECT COUNT(*) FROM machine WHERE equipement_mere = %s",
+                (equipement_id,)
+            )
+            equipement['children_count'] = cur.fetchone()[0] or 0
+
+            # Interventions paginées (liées directement à cet équipement)
+            offset = (interventions_page - 1) * interventions_limit
+
+            cur.execute(
+                "SELECT COUNT(*) FROM intervention WHERE machine_id = %s",
+                (equipement_id,)
+            )
+            interventions_total = cur.fetchone()[0] or 0
+
+            from math import ceil
+            total_pages = ceil(
+                interventions_total / interventions_limit) if interventions_limit > 0 else 1
+
+            cur.execute(
+                """
+                SELECT id, code, title, type_inter, status_actual, priority, reported_date
+                FROM intervention
+                WHERE machine_id = %s
+                ORDER BY reported_date DESC
+                LIMIT %s OFFSET %s
+                """,
+                (equipement_id, interventions_limit, offset)
+            )
+            int_rows = cur.fetchall()
+            int_cols = [desc[0] for desc in cur.description]
+            interventions_items = [dict(zip(int_cols, r)) for r in int_rows]
+
+            # Enrichir type_inter avec code et label
+            for item in interventions_items:
+                type_inter_code = item.get('type_inter')
+                if type_inter_code and type_inter_code in INTERVENTION_TYPES_MAP:
+                    type_info = INTERVENTION_TYPES_MAP[type_inter_code]
+                    item['type_inter'] = {
+                        'code': type_inter_code,
+                        'label': type_info.get('title')
+                    }
+                elif type_inter_code:
+                    # Si le code n'est pas dans le mapping, retourner juste le code
+                    item['type_inter'] = {
+                        'code': type_inter_code,
+                        'label': None
+                    }
+                else:
+                    item['type_inter'] = None
+
+            equipement['interventions'] = {
+                'total': interventions_total,
+                'page': interventions_page,
+                'page_size': interventions_limit,
+                'total_pages': total_pages,
+                'items': interventions_items
+            }
 
             return equipement
+        except NotFoundError:
+            raise
+        except Exception as e:
+            raise DatabaseError(f"Erreur base de données: {str(e)}") from e
+        finally:
+            conn.close()
+
+    def get_children(
+        self,
+        equipement_id: str,
+        page: int = 1,
+        limit: int = 20,
+        search: str | None = None
+    ) -> Dict[str, Any]:
+        """Récupère les enfants paginés d'un équipement avec health"""
+        conn = self._get_connection()
+        try:
+            cur = conn.cursor()
+            ferme_id = self._get_closed_status_id(conn)
+
+            # Vérifier que l'équipement existe
+            cur.execute("SELECT id FROM machine WHERE id = %s",
+                        (equipement_id,))
+            if not cur.fetchone():
+                raise NotFoundError(f"Équipement {equipement_id} non trouvé")
+
+            search_clause = ""
+            params_count: list = [equipement_id]
+            params_items: list = [equipement_id]
+
+            if search:
+                search_clause = " AND (m.code ILIKE %s OR m.name ILIKE %s)"
+                like = f"%{search}%"
+                params_count += [like, like]
+                params_items += [like, like]
+
+            # Total
+            cur.execute(
+                f"SELECT COUNT(*) FROM machine m WHERE m.equipement_mere = %s{search_clause}",
+                params_count
+            )
+            total = cur.fetchone()[0] or 0
+
+            from math import ceil
+            total_pages = ceil(total / limit) if limit > 0 else 1
+            offset = (page - 1) * limit
+
+            query = f"""
+                SELECT
+                    m.id,
+                    m.code,
+                    m.name,
+                    COUNT(CASE WHEN i.status_actual != '{ferme_id}' THEN i.id END) as open_interventions_count,
+                    COUNT(CASE WHEN i.status_actual != '{ferme_id}' AND i.priority = 'urgent' THEN i.id END) as urgent_count
+                FROM machine m
+                LEFT JOIN intervention i ON i.machine_id = m.id
+                WHERE m.equipement_mere = %s{search_clause}
+                GROUP BY m.id
+                ORDER BY m.name ASC
+                LIMIT %s OFFSET %s
+            """
+            params_items += [limit, offset]
+            cur.execute(query, params_items)
+            rows = cur.fetchall()
+            cols = [desc[0] for desc in cur.description]
+            items = []
+            for row in rows:
+                child = dict(zip(cols, row))
+                open_c = child.pop('open_interventions_count', 0) or 0
+                urgent_c = child.pop('urgent_count', 0) or 0
+                child['health'] = self._calculate_health(open_c, urgent_c)
+                items.append(child)
+
+            return {
+                'total': total,
+                'page': page,
+                'page_size': limit,
+                'total_pages': total_pages,
+                'items': items
+            }
         except NotFoundError:
             raise
         except Exception as e:

@@ -2,6 +2,33 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [2.4.0] - 25 février 2026
+
+### Améliorations
+
+- **Schemas partagés** : Nouveau schema `EmbeddedInterventionItem`
+  - Utilisé pour embarquer les interventions dans le détail d'un équipement
+  - Permet une distinction claire avec `InterventionInfo` (utilisé dans purchases requests)
+
+- **GET /equipements/{id}** : Type d'intervention enrichi
+  - `type_inter` passe de string à objet structuré : `{code: "CUR", label: "Curatif"}`
+  - Les interventions embarquées incluent code et libellé du type
+  - Élimine le besoin d'une requête supplémentaire pour décoder les types
+  - Exemples : CUR → Curatif, PRE → Préventif, REA → Réapprovisionnement
+
+### Documentation
+
+- [shared-schemas.md](docs/shared-schemas.md#embeddedinterventionitem) : Nouveau schema `EmbeddedInterventionItem` documenté
+- [equipements.md](docs/endpoints/equipements.md) : Exemple d'intervention mis à jour avec structure enrichie
+
+### Technical Details
+
+- Modifié `equipements/schemas.py` : Ajout de `TypeInterventionRef` pour typer `type_inter`
+- Modifié `equipements/repo.py` : Enrichissement des interventions via `INTERVENTION_TYPES_MAP`
+- Tous les types d'intervention sont maintenant disponibles en code (CUR, PRE, REA, BAT, PRO, COF, PIL, MES)
+
+---
+
 ## [2.3.0] - 24 février 2026
 
 ### Améliorations

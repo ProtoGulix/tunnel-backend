@@ -14,7 +14,13 @@
       "Bash(venv/Scripts/python:*)",
       "Bash(venv/Scripts/pip list:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(curl -s http://localhost:8000/ping)",
+      "Bash(curl -s \"http://localhost:8000/equipements\")",
+      "Bash(curl -s \"http://localhost:8000/equipements/55c4a006-504c-42d7-a869-5acf4c8c0811\")",
+      "Bash(curl -v \"http://localhost:8000/equipements/55c4a006-504c-42d7-a869-5acf4c8c0811\")",
+      "Bash(curl -s -H \"Authorization: Bearer test\" \"http://localhost:8000/equipements/55c4a006-504c-42d7-a869-5acf4c8c0811\")",
+      "Bash(python3.12 -c \":*)"
     ]
   }
 }
