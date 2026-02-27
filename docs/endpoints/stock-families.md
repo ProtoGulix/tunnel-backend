@@ -43,6 +43,12 @@ Récupère une famille par son code avec la liste de toutes ses sous-familles et
 ### Paramètres
 
 - **family_code** (path, string, requis) : Code de la famille (ex: `OUT`, `ELE`)
+- **search** (query, string, optionnel) : Filtre sur code ou label des sous-familles (recherche insensible à la casse)
+
+### Exemples d'utilisation
+
+- `/stock-families/OUT` : Toutes les sous-familles de la famille OUT
+- `/stock-families/OUT?search=roul` : Uniquement les sous-familles contenant "roul" dans leur code ou label
 
 ### Réponse `200` — StockFamilyDetail
 
@@ -50,6 +56,8 @@ Récupère une famille par son code avec la liste de toutes ses sous-familles et
 {
   "family_code": "OUT",
   "sub_family_count": 12,
+  "with_template_count": 5,
+  "without_template_count": 7,
   "sub_families": [
     {
       "family_code": "OUT",
@@ -99,7 +107,9 @@ Récupère une famille par son code avec la liste de toutes ses sous-familles et
 **Champs** :
 
 - `family_code` : Code de la famille
-- `sub_family_count` : Nombre total de sous-familles
+- `sub_family_count` : Nombre total de sous-familles (après filtrage si `search` utilisé)
+- `with_template_count` : Nombre de sous-familles avec template
+- `without_template_count` : Nombre de sous-familles sans template
 - `sub_families` : Liste complète des sous-familles avec templates
   - `family_code` : Code de la famille
   - `code` : Code de la sous-famille
@@ -137,6 +147,8 @@ Famille inexistante.
 {
   "family_code": "string (max 20)",
   "sub_family_count": "int",
+  "with_template_count": "int",
+  "without_template_count": "int",
   "sub_families": ["StockSubFamily"]
 }
 ```

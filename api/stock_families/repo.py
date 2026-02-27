@@ -59,12 +59,13 @@ class StockFamilyRepository:
         finally:
             conn.close()
 
-    def get_by_code(self, family_code: str) -> StockFamilyDetail:
+    def get_by_code(self, family_code: str, search: str = None) -> StockFamilyDetail:
         """
         Récupère une famille par son code avec ses sous-familles et templates
 
         Args:
             family_code: Code de la famille
+            search: Filtre optionnel sur code ou label des sous-familles (ILIKE)
 
         Returns:
             Détail de la famille avec liste des sous-familles et templates complets
@@ -76,9 +77,8 @@ class StockFamilyRepository:
         try:
             cur = conn.cursor()
 
-            # Récupérer les sous-familles avec template_id
-            cur.execute(
-                """
+            # Construction de la requête avec filtre optionnel
+            query = """
                 SELECT 
                     family_code,
                     code,
@@ -86,10 +86,18 @@ class StockFamilyRepository:
                     template_id
                 FROM stock_sub_family
                 WHERE family_code = %s
-                ORDER BY code
-                """,
-                (family_code,)
-            )
+            """
+            params = [family_code]
+
+            if search:
+                query += " AND (code ILIKE %s OR label ILIKE %s)"
+                search_pattern = f"%{search}%"
+                params.extend([search_pattern, search_pattern])
+
+            query += " ORDER BY code"
+
+            # Récupérer les sous-familles avec template_id
+            cur.execute(query, params)
 
             rows = cur.fetchall()
 
@@ -122,10 +130,17 @@ class StockFamilyRepository:
 
                 sub_families.append(StockSubFamily(**sf_data))
 
+            # Calculer les compteurs
+            with_template = sum(
+                1 for sf in sub_families if sf.template is not None)
+            without_template = len(sub_families) - with_template
+
             return StockFamilyDetail(
                 family_code=family_code,
                 sub_families=sub_families,
-                sub_family_count=len(sub_families)
+                sub_family_count=len(sub_families),
+                with_template_count=with_template,
+                without_template_count=without_template
             )
 
         except NotFoundError:

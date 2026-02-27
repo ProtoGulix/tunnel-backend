@@ -1,6 +1,6 @@
-# API Manifest — GMAO API v2.2.1
+# API Manifest — GMAO API v2.5.0
 
-> Dernière mise à jour : 2026-02-20
+> Dernière mise à jour : 2026-02-27
 
 Documentation complète de l'API. Chaque endpoint possède sa propre page avec formats JSON d'entrée/sortie, règles métier et exemples.
 

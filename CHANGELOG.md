@@ -2,6 +2,25 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [2.5.0] - 27 février 2026
+
+### Améliorations
+
+- **GET /stock-families/{code}** : Réponse enrichie pour améliorer l'UX
+  - Ajout de compteurs `with_template_count` et `without_template_count`
+  - Permet de connaître rapidement la répartition des sous-familles selon la présence d'un template
+  - Nouveau paramètre `search` (optionnel) pour filtrer les sous-familles par code ou libellé
+  - Exemple : `/stock-families/OUT?search=roul` filtre sur "roul" dans code ou label
+  - Recherche insensible à la casse (ILIKE)
+  - Les compteurs reflètent les résultats après filtrage
+  - Réduit la charge côté client : plus besoin de filtrer manuellement les sous-familles
+
+### Documentation
+
+- [stock-families.md](docs/endpoints/stock-families.md) : Documentation mise à jour avec exemples de filtrage et nouveaux compteurs
+
+---
+
 ## [2.4.0] - 25 février 2026
 
 ### Améliorations

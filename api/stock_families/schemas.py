@@ -20,6 +20,10 @@ class StockFamilyDetail(BaseModel):
     sub_families: List[StockSubFamily] = Field(
         ..., description="Liste des sous-familles avec templates")
     sub_family_count: int = Field(..., description="Nombre de sous-familles")
+    with_template_count: int = Field(...,
+                                     description="Nombre de sous-familles avec template")
+    without_template_count: int = Field(...,
+                                        description="Nombre de sous-familles sans template")
 
     class Config:
         from_attributes = True

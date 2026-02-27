@@ -1,6 +1,6 @@
 """Routes pour les familles de stock"""
-from fastapi import APIRouter, HTTPException
-from typing import List
+from fastapi import APIRouter, HTTPException, Query
+from typing import List, Optional
 
 from api.stock_families.repo import StockFamilyRepository
 from api.stock_families.schemas import StockFamilyListItem, StockFamilyDetail
@@ -25,12 +25,17 @@ async def list_stock_families():
 
 
 @router.get("/{family_code}", response_model=StockFamilyDetail)
-async def get_stock_family(family_code: str):
+async def get_stock_family(
+    family_code: str,
+    search: Optional[str] = Query(
+        None, description="Filtre sur code ou label des sous-familles")
+):
     """
     Récupère une famille par son code avec ses sous-familles
 
     Args:
         family_code: Code de la famille
+        search: Filtre optionnel sur code ou label des sous-familles (ILIKE)
 
     Returns:
         Détail de la famille incluant la liste de toutes ses sous-familles
@@ -38,7 +43,7 @@ async def get_stock_family(family_code: str):
     """
     repo = StockFamilyRepository()
     try:
-        return repo.get_by_code(family_code)
+        return repo.get_by_code(family_code, search=search)
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
