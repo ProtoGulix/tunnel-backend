@@ -81,9 +81,9 @@ class StockItemService:
                 """
                 INSERT INTO stock_item
                 (id, name, family_code, sub_family_code, spec, dimension,
-                 quantity, unit, location, standars_spec, manufacturer_item_id,
+                 quantity, unit, location, standars_spec,
                  template_id, template_version)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NULL, NULL)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NULL, NULL)
                 RETURNING *
                 """,
                 (
@@ -96,8 +96,7 @@ class StockItemService:
                     data.get('quantity', 0),
                     data.get('unit'),
                     data.get('location'),
-                    data.get('standars_spec'),
-                    data.get('manufacturer_item_id')
+                    data.get('standars_spec')
                 )
             )
             row = cur.fetchone()
@@ -156,9 +155,9 @@ class StockItemService:
                 """
                 INSERT INTO stock_item
                 (id, name, family_code, sub_family_code, spec, dimension,
-                 quantity, unit, location, standars_spec, manufacturer_item_id,
+                 quantity, unit, location, standars_spec,
                  template_id, template_version)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING *
                 """,
                 (
@@ -172,7 +171,6 @@ class StockItemService:
                     data.get('unit'),
                     data.get('location'),
                     data.get('standars_spec'),
-                    data.get('manufacturer_item_id'),
                     str(template.id),
                     template.version
                 )
@@ -266,7 +264,7 @@ class StockItemService:
     def _update_item_fields(self, item_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
         """Met à jour les champs autorisés d'un item"""
         updatable_fields = ['name', 'spec', 'quantity', 'unit', 'location',
-                            'standars_spec', 'manufacturer_item_id']
+                            'standars_spec']
 
         set_clauses = []
         params = []

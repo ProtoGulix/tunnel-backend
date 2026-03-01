@@ -2,11 +2,11 @@ from fastapi import APIRouter, HTTPException, Query
 from typing import Optional
 from pydantic import BaseModel
 from api.stock_items.repo import StockItemRepository
-from api.stock_items.schemas import StockItemOut, StockItemIn, StockItemListItem
+from api.stock_items.schemas import StockItemOut, StockItemIn
 from api.stock_items.stock_item_service import StockItemService
 from api.stock_items.template_schemas import StockItemWithCharacteristics
 from api.errors.exceptions import ValidationError, NotFoundError, DatabaseError
-from api.utils.pagination import PaginatedResponse, create_pagination_meta
+from api.utils.pagination import create_pagination_meta
 
 router = APIRouter(prefix="/stock-items", tags=["stock-items"])
 
@@ -16,7 +16,7 @@ class QuantityUpdate(BaseModel):
     quantity: int
 
 
-@router.get("/", response_model=PaginatedResponse[StockItemListItem])
+@router.get("/")
 async def list_stock_items(
     skip: int = Query(0, ge=0, description="Nombre d'éléments à sauter"),
     limit: int = Query(50, ge=1, le=1000,
@@ -26,28 +26,34 @@ async def list_stock_items(
     sub_family_code: Optional[str] = Query(
         None, description="Filtrer par code sous-famille"),
     search: Optional[str] = Query(
-        None, description="Recherche par nom ou référence")
+        None, description="Recherche par nom ou référence"),
+    has_supplier: Optional[bool] = Query(
+        None, description="true = avec fournisseur, false = sans fournisseur"),
+    sort_by: Optional[str] = Query(
+        None, description="Tri : name, ref, family_code, sub_family_code")
 ):
-    """Liste tous les articles en stock avec filtres optionnels et pagination"""
+    """Liste les articles avec filtres, pagination et facettes famille/sous-famille"""
     repo = StockItemRepository()
 
-    # Récupérer les items
     items = repo.get_all(
         limit=limit,
         offset=skip,
         family_code=family_code,
         sub_family_code=sub_family_code,
-        search=search
+        search=search,
+        has_supplier=has_supplier,
+        sort_by=sort_by
     )
 
-    # Récupérer le total
     total = repo.count_all(
         family_code=family_code,
         sub_family_code=sub_family_code,
-        search=search
+        search=search,
+        has_supplier=has_supplier
     )
 
-    # Créer la réponse paginée
+    facets = repo.get_facets(search=search)
+
     pagination_meta = create_pagination_meta(
         total=total,
         offset=skip,
@@ -55,7 +61,11 @@ async def list_stock_items(
         count=len(items)
     )
 
-    return PaginatedResponse(items=items, pagination=pagination_meta)
+    return {
+        "items": items,
+        "pagination": pagination_meta,
+        "facets": facets
+    }
 
 
 @router.get("/ref/{ref}", response_model=StockItemOut)
@@ -67,7 +77,7 @@ async def get_stock_item_by_ref(ref: str):
 
 @router.get("/{item_id}", response_model=StockItemOut)
 async def get_stock_item(item_id: str):
-    """Récupère un article par ID"""
+    """Récupère un article par ID avec ses fournisseurs et le template de sous-famille"""
     repo = StockItemRepository()
     return repo.get_by_id(item_id)
 

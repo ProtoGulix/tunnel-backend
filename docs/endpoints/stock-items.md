@@ -15,21 +15,21 @@ La création d'un article fonctionne en **deux modes** selon que la sous-famille
 
 ## `GET /stock-items`
 
-Liste les articles avec filtres et pagination.
+Liste les articles avec filtres, pagination et facettes.
 
 ### Query params
 
-| Param             | Type   | Défaut | Description                        |
-| ----------------- | ------ | ------ | ---------------------------------- |
-| `skip`            | int    | 0      | Offset                             |
-| `limit`           | int    | 50     | Max par page: 1000                 |
-| `family_code`     | string | —      | Filtrer par famille                |
-| `sub_family_code` | string | —      | Filtrer par sous-famille           |
-| `search`          | string | —      | Recherche nom ou référence (ILIKE) |
+| Param             | Type   | Défaut | Description                                          |
+| ----------------- | ------ | ------ | ---------------------------------------------------- |
+| `skip`            | int    | 0      | Offset                                               |
+| `limit`           | int    | 50     | Max par page: 1000                                   |
+| `family_code`     | string | —      | Filtrer par famille                                  |
+| `sub_family_code` | string | —      | Filtrer par sous-famille                             |
+| `search`          | string | —      | Recherche nom ou référence (ILIKE)                   |
+| `has_supplier`    | bool   | —      | `true` = articles avec au moins un fournisseur       |
+| `sort_by`         | string | `name` | Tri : `name`, `ref`, `family_code`, `sub_family_code` |
 
-### Réponse `200` — PaginatedResponse[StockItemListItem]
-
-Réponse paginée avec métadonnées.
+### Réponse `200`
 
 ```json
 {
@@ -44,7 +44,15 @@ Réponse paginée avec métadonnées.
       "ref": "OUT-ROUL-SKF-6205",
       "quantity": 15,
       "unit": "pcs",
-      "location": "Étagère A3"
+      "location": "Étagère A3",
+      "supplier_refs_count": 2,
+      "preferred_supplier": {
+        "supplier_id": "uuid",
+        "supplier_name": "PONS & SABOT",
+        "supplier_ref": "P1115070",
+        "unit_price": 12.5,
+        "delivery_time_days": 3
+      }
     }
   ],
   "pagination": {
@@ -54,9 +62,26 @@ Réponse paginée avec métadonnées.
     "total_pages": 3,
     "offset": 0,
     "count": 50
+  },
+  "facets": {
+    "families": [
+      {
+        "code": "OUT",
+        "label": "Outillage",
+        "count": 45,
+        "sub_families": [
+          { "code": "ROUL", "label": "Roulements", "count": 20 },
+          { "code": "COUP", "label": "Coupe", "count": 25 }
+        ]
+      }
+    ]
   }
 }
 ```
+
+> `preferred_supplier` est `null` si aucun fournisseur n'est marqué `is_preferred` pour cet article.
+>
+> Les `facets` sont calculées **en une seule requête SQL** (`GROUP BY`) indépendamment de la pagination — elles reflètent toujours le catalogue complet (sans filtre actif ou avec filtre `search` appliqué).
 
 ### Métadonnées de pagination
 
@@ -69,11 +94,21 @@ Réponse paginée avec métadonnées.
 | `offset`      | Position de début dans la liste globale        |
 | `count`       | Nombre d'éléments retournés dans cette page    |
 
+### Facettes
+
+Les facettes permettent au front d'afficher les filtres famille/sous-famille avec leurs compteurs sans calcul supplémentaire.
+
+| Champ                          | Description                                        |
+| ------------------------------ | -------------------------------------------------- |
+| `facets.families`              | Liste des familles avec compteur d'articles        |
+| `facets.families[].count`      | Nombre d'articles dans cette famille               |
+| `facets.families[].sub_families` | Sous-familles avec leurs compteurs individuels   |
+
 ---
 
 ## `GET /stock-items/{id}`
 
-Détail complet.
+Détail complet avec fournisseurs et template de sous-famille.
 
 ### Réponse `200` — StockItemOut
 
@@ -91,9 +126,44 @@ Détail complet.
   "location": "Étagère A3",
   "standars_spec": null,
   "supplier_refs_count": 2,
-  "manufacturer_item_id": "uuid"
+  "suppliers": [
+    {
+      "id": "uuid",
+      "supplier_id": "uuid",
+      "supplier_name": "PONS & SABOT",
+      "supplier_ref": "P1115070",
+      "unit_price": 12.5,
+      "min_order_quantity": 5,
+      "delivery_time_days": 3,
+      "is_preferred": true,
+      "manufacturer_item_id": "uuid"
+    },
+    {
+      "id": "uuid",
+      "supplier_id": "uuid",
+      "supplier_name": "ACME Industrie",
+      "supplier_ref": "ACM-6205",
+      "unit_price": 14.0,
+      "min_order_quantity": 1,
+      "delivery_time_days": 7,
+      "is_preferred": false,
+      "manufacturer_item_id": null
+    }
+  ],
+  "sub_family_template": {
+    "id": "uuid",
+    "code": "ROUL_STANDARD",
+    "version": 1,
+    "pattern": "{DIAM_INT}x{DIAM_EXT}x{LARG}"
+  }
 }
 ```
+
+> `suppliers` est trié `is_preferred` DESC, nom fournisseur ASC. Tableau vide si aucun fournisseur référencé.
+>
+> `suppliers[].manufacturer_item_id` = référence fabricant telle que référencée par ce fournisseur (peut différer selon le canal d'achat).
+>
+> `sub_family_template` est `null` pour un item legacy (sous-famille sans template associé).
 
 ---
 
@@ -218,7 +288,6 @@ Pour les sous-familles **avec** template. Les caractéristiques sont obligatoire
 | `unit`                 | string | non                 | Unité (max 50)                                               |
 | `location`             | string | non                 | Emplacement                                                  |
 | `standars_spec`        | uuid   | non                 | ID spec standard                                             |
-| `manufacturer_item_id` | uuid   | non                 | Article fabricant lié                                        |
 | `characteristics`      | array  | template uniquement | Caractéristiques (obligatoire en template, ignoré en legacy) |
 
 ### Format des caractéristiques (mode template)
@@ -261,7 +330,8 @@ La réponse inclut `ref` calculée immédiatement par le trigger `BEFORE INSERT`
   "location": "Étagère A3",
   "standars_spec": null,
   "supplier_refs_count": 0,
-  "manufacturer_item_id": null
+  "suppliers": [],
+  "sub_family_template": null
 }
 ```
 

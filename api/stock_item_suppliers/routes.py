@@ -83,25 +83,13 @@ async def set_preferred_supplier(ref_id: str):
         raise HTTPException(status_code=400, detail=str(e)) from e
 
 
-@router.delete("/{ref_id}")
+@router.delete("/{ref_id}", status_code=204)
 async def delete_stock_item_supplier(ref_id: str):
     """Supprime une référence fournisseur"""
     repo = StockItemSupplierRepository()
     try:
         repo.delete(ref_id)
-        return {"message": f"Référence {ref_id} supprimée"}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-
-
-@router.delete("/{ref_id}")
-async def delete_stock_item_supplier(ref_id: str):
-    """Supprime une référence fournisseur"""
-    repo = StockItemSupplierRepository()
-    try:
-        repo.delete(ref_id)
-        return {"message": f"Référence fournisseur {ref_id} supprimée"}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e)) from e

@@ -16,38 +16,59 @@ class StockItemRepository:
             raise DatabaseError(
                 f"Erreur de connexion base de données: {str(e)}") from e
 
+    def _build_where(
+        self,
+        family_code: Optional[str],
+        sub_family_code: Optional[str],
+        search: Optional[str],
+        has_supplier: Optional[bool],
+        table_alias: str = "si"
+    ):
+        """Construit la clause WHERE et les paramètres associés"""
+        where_clauses = []
+        params: List[Any] = []
+        a = f"{table_alias}."
+
+        if family_code:
+            where_clauses.append(f"{a}family_code = %s")
+            params.append(family_code)
+
+        if sub_family_code:
+            where_clauses.append(f"{a}sub_family_code = %s")
+            params.append(sub_family_code)
+
+        if search:
+            where_clauses.append(f"({a}name ILIKE %s OR {a}ref ILIKE %s)")
+            search_pattern = f"%{search}%"
+            params.extend([search_pattern, search_pattern])
+
+        if has_supplier is True:
+            where_clauses.append(
+                f"EXISTS (SELECT 1 FROM stock_item_supplier sis WHERE sis.stock_item_id = {a}id)"
+            )
+        elif has_supplier is False:
+            where_clauses.append(
+                f"NOT EXISTS (SELECT 1 FROM stock_item_supplier sis WHERE sis.stock_item_id = {a}id)"
+            )
+
+        where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
+        return where_sql, params
+
     def count_all(
         self,
         family_code: Optional[str] = None,
         sub_family_code: Optional[str] = None,
-        search: Optional[str] = None
+        search: Optional[str] = None,
+        has_supplier: Optional[bool] = None
     ) -> int:
         """Compte le nombre total d'articles en stock avec filtres optionnels"""
         conn = self._get_connection()
         try:
             cur = conn.cursor()
-
-            where_clauses = []
-            params: List[Any] = []
-
-            if family_code:
-                where_clauses.append("family_code = %s")
-                params.append(family_code)
-
-            if sub_family_code:
-                where_clauses.append("sub_family_code = %s")
-                params.append(sub_family_code)
-
-            if search:
-                where_clauses.append("(name ILIKE %s OR ref ILIKE %s)")
-                search_pattern = f"%{search}%"
-                params.extend([search_pattern, search_pattern])
-
-            where_sql = ("WHERE " + " AND ".join(where_clauses)
-                         ) if where_clauses else ""
-
-            query = f"SELECT COUNT(*) FROM stock_item {where_sql}"
-
+            where_sql, params = self._build_where(
+                family_code, sub_family_code, search, has_supplier
+            )
+            query = f"SELECT COUNT(*) FROM stock_item si {where_sql}"
             cur.execute(query, params)
             result = cur.fetchone()
             return result[0] if result else 0
@@ -62,65 +83,186 @@ class StockItemRepository:
         offset: int = 0,
         family_code: Optional[str] = None,
         sub_family_code: Optional[str] = None,
-        search: Optional[str] = None
+        search: Optional[str] = None,
+        has_supplier: Optional[bool] = None,
+        sort_by: Optional[str] = None
     ) -> List[Dict[str, Any]]:
-        """Récupère tous les articles en stock avec filtres optionnels"""
+        """Récupère les articles avec fournisseur préféré embarqué"""
         limit = min(limit, 1000)
+
+        allowed_sort = {'name', 'ref', 'family_code', 'sub_family_code'}
+        sort_col = sort_by if sort_by in allowed_sort else 'name'
 
         conn = self._get_connection()
         try:
             cur = conn.cursor()
-
-            where_clauses = []
-            params: List[Any] = []
-
-            if family_code:
-                where_clauses.append("family_code = %s")
-                params.append(family_code)
-
-            if sub_family_code:
-                where_clauses.append("sub_family_code = %s")
-                params.append(sub_family_code)
-
-            if search:
-                where_clauses.append("(name ILIKE %s OR ref ILIKE %s)")
-                search_pattern = f"%{search}%"
-                params.extend([search_pattern, search_pattern])
-
-            where_sql = ("WHERE " + " AND ".join(where_clauses)
-                         ) if where_clauses else ""
+            where_sql, params = self._build_where(
+                family_code, sub_family_code, search, has_supplier
+            )
 
             query = f"""
-                SELECT * FROM stock_item
+                SELECT
+                    si.id, si.name, si.ref, si.family_code, si.sub_family_code,
+                    si.spec, si.dimension, si.quantity, si.unit, si.location,
+                    si.supplier_refs_count,
+                    pref.id              AS pref_id,
+                    pref.supplier_id     AS pref_supplier_id,
+                    s.name               AS pref_supplier_name,
+                    pref.supplier_ref    AS pref_supplier_ref,
+                    pref.unit_price      AS pref_unit_price,
+                    pref.delivery_time_days AS pref_delivery_time_days
+                FROM stock_item si
+                LEFT JOIN stock_item_supplier pref
+                    ON pref.stock_item_id = si.id AND pref.is_preferred = true
+                LEFT JOIN supplier s ON s.id = pref.supplier_id
                 {where_sql}
-                ORDER BY name ASC
+                ORDER BY si.{sort_col} ASC
                 LIMIT %s OFFSET %s
             """
 
             cur.execute(query, (*params, limit, offset))
             rows = cur.fetchall()
             cols = [desc[0] for desc in cur.description]
+            results = []
+            for row in rows:
+                d = dict(zip(cols, row))
+                if d.get('pref_supplier_id'):
+                    d['preferred_supplier'] = {
+                        'supplier_id': d['pref_supplier_id'],
+                        'supplier_name': d['pref_supplier_name'],
+                        'supplier_ref': d['pref_supplier_ref'],
+                        'unit_price': float(d['pref_unit_price']) if d['pref_unit_price'] else None,
+                        'delivery_time_days': d['pref_delivery_time_days'],
+                    }
+                else:
+                    d['preferred_supplier'] = None
+                for k in ('pref_id', 'pref_supplier_id', 'pref_supplier_name',
+                          'pref_supplier_ref', 'pref_unit_price', 'pref_delivery_time_days'):
+                    d.pop(k, None)
+                results.append(d)
+            return results
+        except Exception as e:
+            raise DatabaseError(f"Erreur base de données: {str(e)}") from e
+        finally:
+            conn.close()
 
-            return [dict(zip(cols, row)) for row in rows]
+    def get_facets(self, search: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Retourne les compteurs famille/sous-famille en une seule requête GROUP BY.
+        Le filtre search est appliqué si présent ; les filtres famille/sous-famille
+        ne sont pas appliqués pour que les facettes reflètent le catalogue complet.
+        """
+        conn = self._get_connection()
+        try:
+            cur = conn.cursor()
+            params: List[Any] = []
+            where_sql = ""
+
+            if search:
+                where_sql = "WHERE (si.name ILIKE %s OR si.ref ILIKE %s)"
+                search_pattern = f"%{search}%"
+                params.extend([search_pattern, search_pattern])
+
+            query = f"""
+                SELECT
+                    si.family_code,
+                    sf.label   AS family_label,
+                    si.sub_family_code,
+                    ssf.label  AS sub_family_label,
+                    COUNT(*)   AS item_count
+                FROM stock_item si
+                LEFT JOIN stock_family sf ON sf.code = si.family_code
+                LEFT JOIN stock_sub_family ssf
+                    ON ssf.family_code = si.family_code
+                    AND ssf.code = si.sub_family_code
+                {where_sql}
+                GROUP BY si.family_code, sf.label, si.sub_family_code, ssf.label
+                ORDER BY si.family_code, si.sub_family_code
+            """
+
+            cur.execute(query, params)
+            rows = cur.fetchall()
+            cols = [desc[0] for desc in cur.description]
+
+            families: Dict[str, Any] = {}
+            for row in rows:
+                d = dict(zip(cols, row))
+                fc = d['family_code']
+                if fc not in families:
+                    families[fc] = {
+                        'code': fc,
+                        'label': d['family_label'],
+                        'count': 0,
+                        'sub_families': []
+                    }
+                families[fc]['count'] += d['item_count']
+                families[fc]['sub_families'].append({
+                    'code': d['sub_family_code'],
+                    'label': d['sub_family_label'],
+                    'count': d['item_count']
+                })
+
+            return {'families': list(families.values())}
         except Exception as e:
             raise DatabaseError(f"Erreur base de données: {str(e)}") from e
         finally:
             conn.close()
 
     def get_by_id(self, item_id: str) -> Dict[str, Any]:
-        """Récupère un article par ID"""
+        """Récupère un article par ID avec ses fournisseurs et le template de sous-famille"""
         conn = self._get_connection()
         try:
             cur = conn.cursor()
-            cur.execute(
-                "SELECT * FROM stock_item WHERE id = %s", (item_id,))
-            row = cur.fetchone()
 
+            # Article principal
+            cur.execute("SELECT * FROM stock_item WHERE id = %s", (item_id,))
+            row = cur.fetchone()
             if not row:
                 raise NotFoundError(f"Article {item_id} non trouvé")
-
             cols = [desc[0] for desc in cur.description]
-            return dict(zip(cols, row))
+            item = dict(zip(cols, row))
+
+            # Fournisseurs (triés préféré en premier)
+            cur.execute(
+                """
+                SELECT
+                    sis.id, sis.supplier_id, s.name AS supplier_name,
+                    sis.supplier_ref, sis.unit_price, sis.min_order_quantity,
+                    sis.delivery_time_days, sis.is_preferred, sis.manufacturer_item_id
+                FROM stock_item_supplier sis
+                LEFT JOIN supplier s ON s.id = sis.supplier_id
+                WHERE sis.stock_item_id = %s
+                ORDER BY sis.is_preferred DESC, s.name ASC
+                """,
+                (item_id,)
+            )
+            sup_rows = cur.fetchall()
+            sup_cols = [desc[0] for desc in cur.description]
+            item['suppliers'] = []
+            for sup_row in sup_rows:
+                s = dict(zip(sup_cols, sup_row))
+                if s.get('unit_price') is not None:
+                    s['unit_price'] = float(s['unit_price'])
+                item['suppliers'].append(s)
+
+            # Template de la sous-famille
+            cur.execute(
+                """
+                SELECT pt.id, pt.code, pt.version, pt.pattern
+                FROM stock_sub_family ssf
+                JOIN part_template pt ON pt.id = ssf.template_id
+                WHERE ssf.family_code = %s AND ssf.code = %s
+                """,
+                (item['family_code'], item['sub_family_code'])
+            )
+            tmpl_row = cur.fetchone()
+            if tmpl_row:
+                tmpl_cols = [desc[0] for desc in cur.description]
+                item['sub_family_template'] = dict(zip(tmpl_cols, tmpl_row))
+            else:
+                item['sub_family_template'] = None
+
+            return item
         except NotFoundError:
             raise
         except Exception as e:
@@ -133,15 +275,11 @@ class StockItemRepository:
         conn = self._get_connection()
         try:
             cur = conn.cursor()
-            cur.execute(
-                "SELECT * FROM stock_item WHERE ref = %s", (ref,))
+            cur.execute("SELECT id FROM stock_item WHERE ref = %s", (ref,))
             row = cur.fetchone()
-
             if not row:
                 raise NotFoundError(f"Article avec référence {ref} non trouvé")
-
-            cols = [desc[0] for desc in cur.description]
-            return dict(zip(cols, row))
+            return self.get_by_id(str(row[0]))
         except NotFoundError:
             raise
         except Exception as e:
@@ -161,9 +299,9 @@ class StockItemRepository:
                 """
                 INSERT INTO stock_item
                 (id, name, family_code, sub_family_code, spec, dimension,
-                 quantity, unit, location, standars_spec, manufacturer_item_id)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                RETURNING *
+                 quantity, unit, location, standars_spec)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING id
                 """,
                 (
                     item_id,
@@ -175,14 +313,11 @@ class StockItemRepository:
                     data.get('quantity', 0),
                     data.get('unit'),
                     data.get('location'),
-                    data.get('standars_spec'),
-                    data.get('manufacturer_item_id')
+                    data.get('standars_spec')
                 )
             )
             conn.commit()
-            row = cur.fetchone()
-            cols = [desc[0] for desc in cur.description]
-            return dict(zip(cols, row))
+            return self.get_by_id(item_id)
         except Exception as e:
             conn.rollback()
             raise DatabaseError(
@@ -192,17 +327,15 @@ class StockItemRepository:
 
     def update(self, item_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
         """Met à jour un article existant"""
-        # Vérifie que l'article existe
         self.get_by_id(item_id)
 
         conn = self._get_connection()
         try:
             cur = conn.cursor()
 
-            # Champs modifiables (ref est généré par trigger si family/sub_family/spec/dimension changent)
             updatable_fields = [
                 'name', 'family_code', 'sub_family_code', 'spec', 'dimension',
-                'quantity', 'unit', 'location', 'standars_spec', 'manufacturer_item_id'
+                'quantity', 'unit', 'location', 'standars_spec'
             ]
 
             set_clauses = []
@@ -222,14 +355,11 @@ class StockItemRepository:
                 UPDATE stock_item
                 SET {', '.join(set_clauses)}
                 WHERE id = %s
-                RETURNING *
             """
 
             cur.execute(query, params)
             conn.commit()
-            row = cur.fetchone()
-            cols = [desc[0] for desc in cur.description]
-            return dict(zip(cols, row))
+            return self.get_by_id(item_id)
         except Exception as e:
             conn.rollback()
             raise DatabaseError(
@@ -239,14 +369,12 @@ class StockItemRepository:
 
     def delete(self, item_id: str) -> bool:
         """Supprime un article"""
-        # Vérifie que l'article existe
         self.get_by_id(item_id)
 
         conn = self._get_connection()
         try:
             cur = conn.cursor()
-            cur.execute(
-                "DELETE FROM stock_item WHERE id = %s", (item_id,))
+            cur.execute("DELETE FROM stock_item WHERE id = %s", (item_id,))
             conn.commit()
             return True
         except Exception as e:
@@ -258,7 +386,6 @@ class StockItemRepository:
 
     def update_quantity(self, item_id: str, quantity: int) -> Dict[str, Any]:
         """Met à jour uniquement la quantité d'un article"""
-        # Vérifie que l'article existe
         self.get_by_id(item_id)
 
         conn = self._get_connection()
@@ -269,14 +396,11 @@ class StockItemRepository:
                 UPDATE stock_item
                 SET quantity = %s
                 WHERE id = %s
-                RETURNING *
                 """,
                 (quantity, item_id)
             )
             conn.commit()
-            row = cur.fetchone()
-            cols = [desc[0] for desc in cur.description]
-            return dict(zip(cols, row))
+            return self.get_by_id(item_id)
         except Exception as e:
             conn.rollback()
             raise DatabaseError(

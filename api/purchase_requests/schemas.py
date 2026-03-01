@@ -191,6 +191,10 @@ class DispatchResult(BaseModel):
                                 description="Nombre de supplier_orders créés")
     errors: List[DispatchError] = Field(
         default_factory=list, description="Erreurs rencontrées")
+    details: List[dict] = Field(
+        default_factory=list,
+        description="Détail par demande : mode 'direct' (préféré) ou 'consultation' (tous)"
+    )
 
     class Config:
         from_attributes = True

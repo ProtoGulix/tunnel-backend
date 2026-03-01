@@ -85,8 +85,11 @@ Crée une référence fournisseur.
 | `stock_item_id`        | uuid   | oui    | Article en stock                                 |
 | `supplier_id`          | uuid   | oui    | Fournisseur                                      |
 | `supplier_ref`         | string | oui    | Référence chez le fournisseur (min 2 caractères) |
+| `unit_price`           | float  | non    | Prix unitaire                                    |
+| `min_order_quantity`   | int    | non    | Quantité minimale de commande                    |
+| `delivery_time_days`   | int    | non    | Délai de livraison en jours                      |
 | `is_preferred`         | bool   | non    | Défaut: false                                    |
-| `manufacturer_item_id` | uuid   | non    | Article fabricant lié                            |
+| `manufacturer_item_id` | uuid   | non    | Ref fabricant telle que référencée par ce fournisseur (peut différer de celle de l'article) |
 
 ### Règles métier
 
@@ -97,6 +100,16 @@ Crée une référence fournisseur.
 - **Un seul fournisseur préféré par article** : quand `is_preferred = true`, les autres références du même `stock_item` passent à `false`
 - `supplier_refs_count` sur le stock_item est mis à jour par trigger
 
+#### Impact sur le dispatch
+
+Le flag `is_preferred` pilote le comportement du [dispatch automatique](purchase-requests.md#post-purchase-requestsdispatch) :
+
+| Situation | Comportement |
+|---|---|
+| `is_preferred = true` sur un fournisseur | Dispatch uniquement vers lui (commande directe) |
+| Aucun `is_preferred` sur l'article | Dispatch vers tous les fournisseurs (consultation) |
+| Aucun fournisseur référencé | Erreur — demande non dispatchée |
+
 ### Erreurs
 
 | Code  | Cas                    | Message                                            |
@@ -105,6 +118,43 @@ Crée une référence fournisseur.
 | `400` | supplier_id manquant   | `Le fournisseur est obligatoire`                   |
 | `400` | supplier_ref < 2 chars | `La référence doit contenir au moins 2 caractères` |
 | `400` | Doublon                | `Cette référence existe déjà pour ce fournisseur`  |
+
+---
+
+## `PUT /stock-item-suppliers/{id}`
+
+Met à jour une référence fournisseur existante. Même règle d'unicité sur `is_preferred`.
+
+### Entrée — champs modifiables
+
+| Champ                  | Type   | Description                   |
+| ---------------------- | ------ | ----------------------------- |
+| `supplier_ref`         | string | Référence chez le fournisseur |
+| `unit_price`           | float  | Prix unitaire                 |
+| `min_order_quantity`   | int    | Quantité minimale de commande |
+| `delivery_time_days`   | int    | Délai de livraison en jours   |
+| `is_preferred`         | bool   | Fournisseur préféré           |
+| `manufacturer_item_id` | uuid   | Article fabricant lié         |
+
+> `stock_item_id` et `supplier_id` sont **immutables** après création.
+
+### Erreurs
+
+| Code  | Cas                    | Message                                            |
+| ----- | ---------------------- | -------------------------------------------------- |
+| `404` | Référence introuvable  | `Référence fournisseur {id} non trouvée`           |
+| `400` | supplier_ref < 2 chars | `La référence doit contenir au moins 2 caractères` |
+| `400` | Doublon                | `Cette référence existe déjà pour ce fournisseur`  |
+
+---
+
+## `POST /stock-item-suppliers/{id}/set-preferred`
+
+Raccourci pour marquer cette référence comme préférée (désélectionne les autres du même article automatiquement).
+
+### Réponse `200` — StockItemSupplierOut
+
+La référence mise à jour avec `is_preferred: true`.
 
 ---
 
@@ -124,24 +174,4 @@ Supprime une référence fournisseur.
 | `404` | Référence introuvable     | `Référence fournisseur {id} non trouvée`                     |
 | `400` | Préféré avec alternatives | `Définissez un autre fournisseur préféré avant de supprimer` |
 
-### Réponse `200`
-
-```json
-{
-  "message": "Référence {id} supprimée"
-}
-```
-
-Met à jour. Même règle `is_preferred`.
-
----
-
-## `POST /stock-item-suppliers/{id}/set-preferred`
-
-Raccourci pour marquer cette référence comme préférée (désélectionne les autres automatiquement).
-
----
-
-## `DELETE /stock-item-suppliers/{id}`
-
-Supprime. Réponse `204`.
+### Réponse `204`

@@ -202,6 +202,7 @@ Crée une demande d'achat.
 - `item_label` et `quantity` sont requis
 - `quantity` doit être > 0
 - `derived_status` est calculé automatiquement (voir [DerivedStatus](../shared-schemas.md#derivedstatus))
+- Si `stock_item_id` est `null`, le statut initial est `TO_QUALIFY` — la demande ne peut pas être dispatchée tant qu'un article du catalogue n'est pas associé
 
 ---
 
@@ -225,9 +226,27 @@ Dispatch automatique des demandes `PENDING_DISPATCH` vers des [Supplier Orders](
 
 ### Règles métier
 
-1. Pour chaque demande PENDING_DISPATCH, récupère les fournisseurs liés au `stock_item`
-2. Trouve ou crée un supplier_order OPEN par fournisseur
-3. Crée les [Supplier Order Lines](supplier-order-lines.md) liées
+Pour chaque demande `PENDING_DISPATCH` avec un `stock_item_id` :
+
+**Cas 1 — Fournisseur préféré défini (`is_preferred = true`)**
+
+1. Un seul fournisseur ciblé : le préféré
+2. Trouve ou crée un `supplier_order` OPEN pour ce fournisseur
+3. Crée une `supplier_order_line` liée à cette commande
+4. `supplier_ref_snapshot` est renseigné depuis `supplier_ref` du fournisseur préféré
+
+**Cas 2 — Aucun fournisseur préféré (mode consultation)**
+
+1. Tous les fournisseurs référencés sont ciblés
+2. Trouve ou crée un `supplier_order` OPEN **par fournisseur**
+3. Crée une `supplier_order_line` par commande (1 fournisseur = 1 commande = 1 ligne)
+4. Le gestionnaire choisit ensuite la meilleure offre via `is_selected` sur les lignes
+
+**Cas 3 — Aucun fournisseur référencé**
+
+- La demande est ignorée et remontée dans `errors[]`
+
+> **Invariant** : une même `purchase_request` n'est jamais dispatchée deux fois. Si elle est déjà liée à une `supplier_order_line`, elle est ignorée.
 
 ### Réponse `200`
 
@@ -237,6 +256,29 @@ Dispatch automatique des demandes `PENDING_DISPATCH` vers des [Supplier Orders](
   "created_orders": 2,
   "errors": [
     { "purchase_request_id": "uuid", "error": "Aucun fournisseur référencé" }
+  ],
+  "details": [
+    {
+      "purchase_request_id": "uuid",
+      "mode": "direct",
+      "supplier_order_id": "uuid",
+      "supplier_name": "PONS & SABOT"
+    },
+    {
+      "purchase_request_id": "uuid",
+      "mode": "consultation",
+      "supplier_orders": [
+        { "supplier_order_id": "uuid", "supplier_name": "PONS & SABOT" },
+        { "supplier_order_id": "uuid", "supplier_name": "ACME Industrie" }
+      ]
+    }
   ]
 }
 ```
+
+| Champ | Description |
+|---|---|
+| `dispatched_count` | Nombre de demandes dispatchées avec succès |
+| `created_orders` | Nombre de nouvelles `supplier_order` créées |
+| `errors` | Demandes non dispatchées avec raison |
+| `details[].mode` | `direct` (fournisseur préféré) ou `consultation` (tous les fournisseurs) |

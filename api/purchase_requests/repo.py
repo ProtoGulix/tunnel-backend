@@ -1014,20 +1014,90 @@ class PurchaseRequestRepository:
         finally:
             conn.close()
 
+    def _find_or_create_order(self, cur, supplier_id_str: str, orders_cache: dict) -> tuple:
+        """
+        Trouve ou crée un supplier_order OPEN pour un fournisseur.
+        Retourne (order_id, was_created).
+        """
+        if supplier_id_str in orders_cache:
+            return orders_cache[supplier_id_str], False
+
+        cur.execute(
+            """
+            SELECT id FROM supplier_order
+            WHERE supplier_id = %s AND status = 'OPEN'
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            (supplier_id_str,)
+        )
+        row = cur.fetchone()
+        if row:
+            order_id = str(row[0])
+            orders_cache[supplier_id_str] = order_id
+            return order_id, False
+
+        new_order_id = str(uuid4())
+        cur.execute(
+            """
+            INSERT INTO supplier_order (id, supplier_id, status, created_at)
+            VALUES (%s, %s, 'OPEN', NOW())
+            """,
+            (new_order_id, supplier_id_str)
+        )
+        orders_cache[supplier_id_str] = new_order_id
+        logger.info("Created new supplier_order %s for supplier %s",
+                    new_order_id, supplier_id_str)
+        return new_order_id, True
+
+    def _dispatch_to_supplier(self, cur, order_id: str, stock_item_id: str,
+                               supplier_ref: str, unit_price, req_id_str: str,
+                               req_quantity: int):
+        """Crée ou fusionne la ligne de commande et lie la purchase_request."""
+        cur.execute(
+            """
+            INSERT INTO supplier_order_line
+            (id, supplier_order_id, stock_item_id, supplier_ref_snapshot, quantity, unit_price)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            ON CONFLICT (supplier_order_id, stock_item_id)
+            DO UPDATE SET quantity = COALESCE(supplier_order_line.quantity, 0) + EXCLUDED.quantity
+            RETURNING id
+            """,
+            (
+                str(uuid4()),
+                order_id,
+                stock_item_id,
+                supplier_ref,
+                req_quantity,
+                float(unit_price) if unit_price else None
+            )
+        )
+        line_id = str(cur.fetchone()[0])
+
+        # Invariant anti-doublon : ON CONFLICT ignore si déjà lié
+        cur.execute(
+            """
+            INSERT INTO supplier_order_line_purchase_request
+            (id, supplier_order_line_id, purchase_request_id, quantity)
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (supplier_order_line_id, purchase_request_id)
+            DO UPDATE SET quantity = EXCLUDED.quantity
+            """,
+            (str(uuid4()), line_id, req_id_str, req_quantity)
+        )
+
     def dispatch_all(self) -> Dict[str, Any]:
         """
-        Dispatch toutes les demandes en PENDING_DISPATCH vers des supplier_orders.
+        Dispatch toutes les demandes PENDING_DISPATCH vers des supplier_orders.
 
-        Pour chaque demande:
-        1. Récupère les stock_item_suppliers liés au stock_item
-        2. Pour chaque fournisseur, trouve ou crée un supplier_order ouvert
-        3. Crée une supplier_order_line liée à la demande
-
-        Retourne un résumé: dispatched_count, created_orders, errors
+        Règles métier :
+        - Fournisseur préféré (is_preferred=true) → mode DIRECT : 1 commande, 1 ligne
+        - Aucun préféré → mode CONSULTATION : 1 commande par fournisseur référencé
+        - Aucun fournisseur → erreur remontée dans errors[]
+        - Invariant : une demande déjà liée à une supplier_order_line est ignorée
         """
         logger.info("Starting dispatch_all for PENDING_DISPATCH requests")
 
-        # Récupère toutes les demandes PENDING_DISPATCH
         pending_requests = [
             req for req in self.get_list(limit=1000, offset=0)
             if req.get('derived_status', {}).get('code') == 'PENDING_DISPATCH'
@@ -1038,7 +1108,8 @@ class PurchaseRequestRepository:
         dispatched_count = 0
         created_orders = 0
         errors = []
-        orders_cache = {}  # Cache: supplier_id -> order_id
+        details = []
+        orders_cache = {}  # Cache: supplier_id_str -> order_id
 
         conn = self._get_connection()
         try:
@@ -1049,7 +1120,6 @@ class PurchaseRequestRepository:
                 savepoint_name = f"sp_{req_id_str.replace('-', '_')[:8]}"
 
                 try:
-                    # Crée un savepoint pour pouvoir rollback cette demande seule
                     cur.execute(f"SAVEPOINT {savepoint_name}")
 
                     stock_item_id = req.get('stock_item_id')
@@ -1061,125 +1131,95 @@ class PurchaseRequestRepository:
                         })
                         continue
 
-                    # Récupère le fournisseur préféré lié au stock_item
+                    req_quantity = req.get('quantity', 1)
+                    stock_item_id_str = str(stock_item_id)
+
+                    # Récupère tous les fournisseurs de l'article (préféré en premier)
                     cur.execute(
                         """
-                        SELECT sis.id, sis.supplier_id, sis.supplier_ref, sis.unit_price
+                        SELECT sis.supplier_id, sis.supplier_ref, sis.unit_price,
+                               sis.is_preferred, s.name AS supplier_name
                         FROM stock_item_supplier sis
+                        LEFT JOIN supplier s ON s.id = sis.supplier_id
                         WHERE sis.stock_item_id = %s
-                        ORDER BY sis.is_preferred DESC
-                        LIMIT 1
+                        ORDER BY sis.is_preferred DESC, s.name ASC
                         """,
-                        (str(stock_item_id),)
+                        (stock_item_id_str,)
                     )
-                    supplier_row = cur.fetchone()
+                    supplier_rows = cur.fetchall()
 
-                    if not supplier_row:
+                    if not supplier_rows:
                         cur.execute(f"ROLLBACK TO SAVEPOINT {savepoint_name}")
                         errors.append({
                             'purchase_request_id': req_id_str,
-                            'error': 'Aucune référence fournisseur'
+                            'error': 'Aucun fournisseur référencé'
                         })
                         continue
 
-                    # Utilise le fournisseur préféré (ou le premier disponible)
-                    _, supplier_id, supplier_ref, unit_price = supplier_row
-                    supplier_id_str = str(supplier_id)
+                    # Détermine le mode : préféré trouvé → direct, sinon consultation
+                    has_preferred = supplier_rows[0][3]  # is_preferred du premier
 
-                    # Trouve ou crée un supplier_order ouvert pour ce fournisseur
-                    order_id = None
-                    if supplier_id_str not in orders_cache:
-                        cur.execute(
-                            """
-                            SELECT id FROM supplier_order
-                            WHERE supplier_id = %s AND status = 'OPEN'
-                            ORDER BY created_at DESC
-                            LIMIT 1
-                            """,
-                            (supplier_id_str,)
+                    if has_preferred:
+                        # Mode DIRECT : un seul fournisseur (le préféré)
+                        supplier_id_str, supplier_ref, unit_price, _, supplier_name = supplier_rows[0]
+                        supplier_id_str = str(supplier_id_str)
+
+                        order_id, was_created = self._find_or_create_order(
+                            cur, supplier_id_str, orders_cache
                         )
-                        row = cur.fetchone()
-
-                        if row:
-                            order_id = str(row[0])
-                            orders_cache[supplier_id_str] = order_id
-                        else:
-                            # Crée un nouveau supplier_order
-                            new_order_id = str(uuid4())
-                            cur.execute(
-                                """
-                                INSERT INTO supplier_order (id, supplier_id, status, created_at)
-                                VALUES (%s, %s, 'OPEN', NOW())
-                                """,
-                                (new_order_id, supplier_id_str)
-                            )
-                            order_id = new_order_id
-                            orders_cache[supplier_id_str] = order_id
+                        if was_created:
                             created_orders += 1
-                            logger.info("Created new supplier_order %s for supplier %s",
-                                        new_order_id, supplier_id_str)
+
+                        self._dispatch_to_supplier(
+                            cur, order_id, stock_item_id_str,
+                            supplier_ref, unit_price, req_id_str, req_quantity
+                        )
+
+                        details.append({
+                            'purchase_request_id': req_id_str,
+                            'mode': 'direct',
+                            'supplier_order_id': order_id,
+                            'supplier_name': supplier_name
+                        })
+
                     else:
-                        order_id = orders_cache[supplier_id_str]
-                    req_quantity = req.get('quantity', 1)
+                        # Mode CONSULTATION : tous les fournisseurs
+                        consultation_orders = []
+                        for sup_row in supplier_rows:
+                            supplier_id_str, supplier_ref, unit_price, _, supplier_name = sup_row
+                            supplier_id_str = str(supplier_id_str)
 
-                    # Crée ou met à jour la ligne de commande (incrémente quantité si existe)
-                    cur.execute(
-                        """
-                        INSERT INTO supplier_order_line
-                        (id, supplier_order_id, stock_item_id, supplier_ref_snapshot, quantity, unit_price)
-                        VALUES (%s, %s, %s, %s, %s, %s)
-                        ON CONFLICT (supplier_order_id, stock_item_id)
-                        DO UPDATE SET quantity = COALESCE(supplier_order_line.quantity, 0) + EXCLUDED.quantity
-                        RETURNING id
-                        """,
-                        (
-                            str(uuid4()),
-                            order_id,
-                            str(stock_item_id),
-                            supplier_ref,
-                            req_quantity,
-                            float(unit_price) if unit_price else None
-                        )
-                    )
-                    line_row = cur.fetchone()
-                    line_id = str(line_row[0])
+                            order_id, was_created = self._find_or_create_order(
+                                cur, supplier_id_str, orders_cache
+                            )
+                            if was_created:
+                                created_orders += 1
 
-                    # Lie la demande à la ligne (quantity = quantité couverte)
-                    cur.execute(
-                        """
-                        INSERT INTO supplier_order_line_purchase_request
-                        (id, supplier_order_line_id, purchase_request_id, quantity)
-                        VALUES (%s, %s, %s, %s)
-                        ON CONFLICT (supplier_order_line_id, purchase_request_id)
-                        DO UPDATE SET quantity = EXCLUDED.quantity
-                        """,
-                        (
-                            str(uuid4()),
-                            line_id,
-                            str(req['id']),
-                            req_quantity
-                        )
-                    )
+                            self._dispatch_to_supplier(
+                                cur, order_id, stock_item_id_str,
+                                supplier_ref, unit_price, req_id_str, req_quantity
+                            )
 
-                    # Libère le savepoint (succès)
+                            consultation_orders.append({
+                                'supplier_order_id': order_id,
+                                'supplier_name': supplier_name
+                            })
+
+                        details.append({
+                            'purchase_request_id': req_id_str,
+                            'mode': 'consultation',
+                            'supplier_orders': consultation_orders
+                        })
+
                     cur.execute(f"RELEASE SAVEPOINT {savepoint_name}")
                     dispatched_count += 1
                     logger.debug("Dispatched request %s", req['id'])
 
                 except Exception as e:
-                    # Rollback au savepoint pour récupérer la transaction
                     try:
                         cur.execute(f"ROLLBACK TO SAVEPOINT {savepoint_name}")
-                        # Si on a créé un order dans ce savepoint, le retirer du cache
-                        if supplier_id_str in orders_cache and order_id:
-                            # Vérifie si l'ordre existe vraiment après le rollback
-                            cur.execute(
-                                "SELECT 1 FROM supplier_order WHERE id = %s", (order_id,))
-                            if not cur.fetchone():
-                                del orders_cache[supplier_id_str]
-                                created_orders -= 1
                     except Exception:
-                        pass  # Le savepoint peut ne pas exister
+                        pass
                     errors.append({
                         'purchase_request_id': req_id_str,
                         'error': str(e)
@@ -1194,7 +1234,8 @@ class PurchaseRequestRepository:
             return {
                 'dispatched_count': dispatched_count,
                 'created_orders': created_orders,
-                'errors': errors
+                'errors': errors,
+                'details': details
             }
 
         except Exception as e:
