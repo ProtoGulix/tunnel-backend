@@ -45,7 +45,7 @@ class DatabaseError(HTTPException):
         logger.error(f"Database Error: {detail}")
         super().__init__(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=detail
+            detail="Erreur base de données"
         )
 
 
@@ -67,7 +67,7 @@ class ExportError(HTTPException):
         logger.error(f"Export Error: {detail}")
         super().__init__(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=detail
+            detail="Erreur lors de l'export"
         )
 
 
@@ -78,5 +78,5 @@ class RenderError(HTTPException):
         logger.error(f"Render Error: {detail}")
         super().__init__(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=detail
+            detail="Erreur lors du rendu"
         )

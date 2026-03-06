@@ -4,6 +4,7 @@ from datetime import date, datetime, timedelta
 from api.stats.repo import StatsRepository
 from api.stats.schemas import ServiceStatusResponse, ChargeTechniqueResponse, AnomaliesSaisieResponse, QualiteDonneesResponse
 from api.errors.exceptions import ValidationError
+from api.limiter import limiter
 
 from api.auth.permissions import require_authenticated
 
@@ -11,6 +12,7 @@ router = APIRouter(prefix="/stats", tags=["stats"], dependencies=[Depends(requir
 
 
 @router.get("/service-status", response_model=ServiceStatusResponse)
+@limiter.limit("10/minute")
 async def get_service_status(
     request: Request,
     start_date: date = Query(None, description="Date de début (format: YYYY-MM-DD)"),
@@ -26,6 +28,7 @@ async def get_service_status(
 
 
 @router.get("/charge-technique", response_model=ChargeTechniqueResponse)
+@limiter.limit("10/minute")
 async def get_charge_technique(
     request: Request,
     start_date: date = Query(None, description="Date de début (format: YYYY-MM-DD)"),
@@ -49,6 +52,7 @@ async def get_charge_technique(
 
 
 @router.get("/anomalies-saisie", response_model=AnomaliesSaisieResponse)
+@limiter.limit("10/minute")
 async def get_anomalies_saisie(
     request: Request,
     start_date: date = Query(None, description="Date de début (format: YYYY-MM-DD)"),
@@ -64,6 +68,7 @@ async def get_anomalies_saisie(
 
 
 @router.get("/qualite-donnees", response_model=QualiteDonneesResponse)
+@limiter.limit("10/minute")
 async def get_qualite_donnees(
     request: Request,
     severite: Optional[str] = Query(None, description="Filtrer par sévérité: high, medium"),

@@ -2,6 +2,24 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [2.7.4] - 6 mars 2026
+
+### Sécurité
+
+- **Injection SQL dans `equipements/repo.py`** : 6 requêtes interpolaient directement l'UUID du statut "fermé" via f-string — remplacé par une sous-requête paramétrée `(SELECT id FROM intervention_status_ref WHERE code = %s LIMIT 1)`
+
+- **XSS dans l'export PDF** : Jinja2 `autoescape` était désactivé dans `pdf_generator.py` — activé (`autoescape=True`)
+
+- **Header injection `Content-Disposition`** : les noms de fichiers PDF et QR code sont désormais sanitisés via `re.sub(r'[^\w\-]', '_', ...)` avant d'être injectés dans les headers HTTP
+
+- **Rate limiting sur les routes lourdes** :
+  - `GET /stats/*` (4 routes) : limité à 10 requêtes/minute par IP
+  - `GET /exports/{id}/pdf` : limité à 5 requêtes/minute par IP (génération WeasyPrint)
+
+- **Fuite d'informations base de données** : `DatabaseError`, `ExportError` et `RenderError` exposaient le message technique PostgreSQL au client (`str(e)`) — le détail technique est désormais uniquement loggé côté serveur, le client reçoit un message générique
+
+---
+
 ## [2.7.3] - 6 mars 2026
 
 ### Améliorations

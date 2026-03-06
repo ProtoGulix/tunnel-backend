@@ -9,7 +9,7 @@ from api.exports.repo import ExportRepository
 from api.exports.pdf_generator import PDFGenerator
 from api.exports.qr_generator import QRGenerator
 from api.errors.exceptions import ValidationError
-
+from api.limiter import limiter
 
 from api.auth.permissions import require_authenticated
 
@@ -17,6 +17,7 @@ router = APIRouter(prefix="/exports", tags=["exports"], dependencies=[Depends(re
 
 
 @router.get("/interventions/{intervention_id}/pdf")
+@limiter.limit("5/minute")
 async def export_intervention_pdf(intervention_id: str, request: Request):
     """
     Export PDF d'une intervention (authentification requise)
