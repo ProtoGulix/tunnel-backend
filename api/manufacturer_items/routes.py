@@ -1,29 +1,38 @@
 from fastapi import APIRouter, HTTPException, Query
-from typing import List
+from typing import Optional
 
 from api.manufacturer_items.repo import ManufacturerItemRepository
-from api.manufacturer_items.schemas import ManufacturerItemIn, ManufacturerItemOut
+from api.manufacturer_items.schemas import ManufacturerItemIn, ManufacturerItemOut, ManufacturerItemDetail
 from api.errors.exceptions import NotFoundError
+from api.utils.pagination import create_pagination_meta
 
 router = APIRouter(prefix="/manufacturer-items", tags=["manufacturer-items"])
 
 
-@router.get("/", response_model=List[ManufacturerItemOut])
+@router.get("/")
 async def list_manufacturer_items(
-    skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=1000)
+    skip: int = Query(0, ge=0, description="Offset de pagination"),
+    limit: int = Query(100, ge=1, le=1000,
+                       description="Nombre max d'éléments par page"),
+    search: Optional[str] = Query(
+        None, description="Recherche par nom fabricant ou référence")
 ):
-    """Liste toutes les références fabricants"""
+    """Liste les références fabricants avec pagination et recherche"""
     repo = ManufacturerItemRepository()
-    return repo.get_all(limit=limit, offset=skip)
+    items = repo.get_all(limit=limit, offset=skip, search=search)
+    total = repo.count_all(search=search)
+    return {
+        "items": items,
+        "pagination": create_pagination_meta(total=total, offset=skip, limit=limit, count=len(items))
+    }
 
 
-@router.get("/{item_id}", response_model=ManufacturerItemOut)
+@router.get("/{item_id}", response_model=ManufacturerItemDetail)
 async def get_manufacturer_item(item_id: str):
-    """Récupère une référence fabricant par ID"""
+    """Récupère une référence fabricant avec ses références fournisseurs liées"""
     repo = ManufacturerItemRepository()
     try:
-        return repo.get_by_id(item_id)
+        return repo.get_by_id_with_suppliers(item_id)
     except NotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
 

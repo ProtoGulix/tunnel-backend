@@ -18,23 +18,48 @@ class ManufacturerItemRepository:
             raise DatabaseError(
                 f"Erreur de connexion base de données: {str(e)}") from e
 
-    def get_all(self, limit: int = 100, offset: int = 0) -> List[Dict[str, Any]]:
-        """Liste toutes les références fabricants"""
+    def get_all(self, limit: int = 100, offset: int = 0, search: str = None) -> List[Dict[str, Any]]:
+        """Liste les références fabricants avec recherche optionnelle"""
         conn = self._get_connection()
         try:
             cur = conn.cursor()
+            params = []
+            where = ""
+            if search:
+                where = "WHERE manufacturer_name ILIKE %s OR manufacturer_ref ILIKE %s"
+                params = [f"%{search}%", f"%{search}%"]
+            params += [limit, offset]
             cur.execute(
-                """
+                f"""
                 SELECT id, manufacturer_name, manufacturer_ref
                 FROM manufacturer_item
+                {where}
                 ORDER BY manufacturer_name ASC
                 LIMIT %s OFFSET %s
                 """,
-                (limit, offset)
+                params
             )
             rows = cur.fetchall()
             cols = [desc[0] for desc in cur.description]
             return [dict(zip(cols, row)) for row in rows]
+        except Exception as e:
+            raise DatabaseError(f"Erreur base de données: {str(e)}") from e
+        finally:
+            conn.close()
+
+    def count_all(self, search: str = None) -> int:
+        """Compte les références fabricants avec filtre optionnel"""
+        conn = self._get_connection()
+        try:
+            cur = conn.cursor()
+            if search:
+                cur.execute(
+                    "SELECT COUNT(*) FROM manufacturer_item WHERE manufacturer_name ILIKE %s OR manufacturer_ref ILIKE %s",
+                    (f"%{search}%", f"%{search}%")
+                )
+            else:
+                cur.execute("SELECT COUNT(*) FROM manufacturer_item")
+            return cur.fetchone()[0]
         except Exception as e:
             raise DatabaseError(f"Erreur base de données: {str(e)}") from e
         finally:
@@ -57,6 +82,37 @@ class ManufacturerItemRepository:
             return dict(zip(cols, row))
         except NotFoundError:
             raise
+        except Exception as e:
+            raise DatabaseError(f"Erreur base de données: {str(e)}") from e
+        finally:
+            conn.close()
+
+    def get_by_id_with_suppliers(self, item_id: str) -> Dict[str, Any]:
+        """Récupère une référence fabricant avec ses références fournisseurs liées"""
+        item = self.get_by_id(item_id)
+
+        conn = self._get_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                SELECT
+                    sis.id, sis.supplier_ref, sis.unit_price,
+                    sis.min_order_quantity, sis.delivery_time_days, sis.is_preferred,
+                    si.name as stock_item_name, si.ref as stock_item_ref,
+                    s.name as supplier_name, s.code as supplier_code
+                FROM stock_item_supplier sis
+                LEFT JOIN stock_item si ON sis.stock_item_id = si.id
+                LEFT JOIN supplier s ON sis.supplier_id = s.id
+                WHERE sis.manufacturer_item_id = %s
+                ORDER BY s.name ASC, sis.supplier_ref ASC
+                """,
+                (item_id,)
+            )
+            rows = cur.fetchall()
+            cols = [desc[0] for desc in cur.description]
+            item['supplier_items'] = [dict(zip(cols, row)) for row in rows]
+            return item
         except Exception as e:
             raise DatabaseError(f"Erreur base de données: {str(e)}") from e
         finally:

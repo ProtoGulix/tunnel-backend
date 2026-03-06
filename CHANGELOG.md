@@ -2,6 +2,16 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [2.7.1] - 6 mars 2026
+
+### Améliorations
+
+- **`GET /manufacturer-items`** : pagination standard et recherche unifiée
+  - Réponse paginée : `{ items, pagination }` (même format que `stock-items`)
+  - Nouveau paramètre `search` : filtre simultané sur `manufacturer_name` et `manufacturer_ref` (insensible à la casse)
+
+---
+
 ## [2.7.0] - 6 mars 2026
 
 ### Nouveautés
