@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
 from typing import Optional
 
 from api.manufacturer_items.repo import ManufacturerItemRepository
@@ -6,7 +6,9 @@ from api.manufacturer_items.schemas import ManufacturerItemIn, ManufacturerItemO
 from api.errors.exceptions import NotFoundError
 from api.utils.pagination import create_pagination_meta
 
-router = APIRouter(prefix="/manufacturer-items", tags=["manufacturer-items"])
+from api.auth.permissions import require_authenticated
+
+router = APIRouter(prefix="/manufacturer-items", tags=["manufacturer-items"], dependencies=[Depends(require_authenticated)])
 
 
 @router.get("/")

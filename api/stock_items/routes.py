@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
 from typing import Optional
 from pydantic import BaseModel
 from api.stock_items.repo import StockItemRepository
@@ -8,7 +8,9 @@ from api.stock_items.template_schemas import StockItemWithCharacteristics
 from api.errors.exceptions import ValidationError, NotFoundError, DatabaseError
 from api.utils.pagination import create_pagination_meta
 
-router = APIRouter(prefix="/stock-items", tags=["stock-items"])
+from api.auth.permissions import require_authenticated
+
+router = APIRouter(prefix="/stock-items", tags=["stock-items"], dependencies=[Depends(require_authenticated)])
 
 
 class QuantityUpdate(BaseModel):

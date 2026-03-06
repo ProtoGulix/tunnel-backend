@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from typing import List
 
 from api.stock_sub_families.repo import StockSubFamilyRepository
@@ -6,7 +6,9 @@ from api.stock_sub_families.schemas import StockSubFamilyUpdate
 from api.stock_items.template_schemas import StockSubFamily
 from api.errors.exceptions import DatabaseError
 
-router = APIRouter(prefix="/stock-sub-families", tags=["stock-sub-families"])
+from api.auth.permissions import require_authenticated
+
+router = APIRouter(prefix="/stock-sub-families", tags=["stock-sub-families"], dependencies=[Depends(require_authenticated)])
 
 
 @router.get("/", response_model=List[StockSubFamily])

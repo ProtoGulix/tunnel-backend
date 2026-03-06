@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
 from typing import List, Optional
 from pydantic import BaseModel
 from api.supplier_order_lines.repo import SupplierOrderLineRepository
@@ -9,7 +9,9 @@ from api.supplier_order_lines.schemas import (
     PurchaseRequestLink
 )
 
-router = APIRouter(prefix="/supplier-order-lines", tags=["supplier-order-lines"])
+from api.auth.permissions import require_authenticated
+
+router = APIRouter(prefix="/supplier-order-lines", tags=["supplier-order-lines"], dependencies=[Depends(require_authenticated)])
 
 
 class LinkPurchaseRequestBody(BaseModel):

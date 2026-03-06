@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
 from typing import List, Optional
 
 from api.part_templates.repo import PartTemplateRepository
@@ -7,7 +7,9 @@ from api.stock_items.template_service import TemplateService
 from api.stock_items.template_schemas import PartTemplate
 from api.errors.exceptions import DatabaseError, NotFoundError, ValidationError
 
-router = APIRouter(prefix="/part-templates", tags=["part-templates"])
+from api.auth.permissions import require_authenticated
+
+router = APIRouter(prefix="/part-templates", tags=["part-templates"], dependencies=[Depends(require_authenticated)])
 
 
 @router.get("/", response_model=List[PartTemplate])

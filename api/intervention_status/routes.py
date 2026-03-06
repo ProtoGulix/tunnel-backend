@@ -1,10 +1,12 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from typing import List, Dict, Any
 
 from api.intervention_status.repo import InterventionStatusRepository
 from api.errors.exceptions import DatabaseError
 
-router = APIRouter(prefix="/intervention-status", tags=["intervention-status"])
+from api.auth.permissions import require_authenticated
+
+router = APIRouter(prefix="/intervention-status", tags=["intervention-status"], dependencies=[Depends(require_authenticated)])
 
 repo = InterventionStatusRepository()
 

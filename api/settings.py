@@ -1,7 +1,11 @@
 import os
+import sys
+import logging
 from pydantic_settings import BaseSettings
 from urllib.parse import urlparse
 import pg8000.dbapi
+
+logger = logging.getLogger(__name__)
 
 
 class Settings(BaseSettings):
@@ -23,7 +27,7 @@ class Settings(BaseSettings):
 
     # API
     API_TITLE: str = "GMAO API"
-    API_VERSION: str = "2.7.1"
+    API_VERSION: str = "2.7.2"
     API_ENV: str = os.getenv("API_ENV", "development")
     AUTH_DISABLED: bool = os.getenv("AUTH_DISABLED", "false").lower() == "true"
     FRONTEND_URL: str = os.getenv("FRONTEND_URL", "http://localhost:5173")
@@ -102,3 +106,29 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+# --- Guards de sécurité au démarrage ---
+
+if settings.API_ENV == "production" and settings.AUTH_DISABLED:
+    logger.critical(
+        "ERREUR DE SÉCURITÉ CRITIQUE : AUTH_DISABLED=true en environnement production. "
+        "L'API refuse de démarrer. Désactiver AUTH_DISABLED ou changer API_ENV."
+    )
+    sys.exit(1)
+
+if settings.API_ENV == "production" and not settings.DIRECTUS_SECRET:
+    logger.critical(
+        "ERREUR DE SÉCURITÉ CRITIQUE : DIRECTUS_SECRET non configuré en production. "
+        "Les JWT ne peuvent pas être vérifiés. Configurer DIRECTUS_SECRET."
+    )
+    sys.exit(1)
+
+if settings.API_ENV != "production" and settings.AUTH_DISABLED:
+    logger.warning(
+        "⚠️  AUTH_DISABLED=true — authentification désactivée (mode développement uniquement)"
+    )
+
+if settings.API_ENV != "production" and not settings.DIRECTUS_SECRET:
+    logger.warning(
+        "⚠️  DIRECTUS_SECRET non configuré — les JWT sont décodés sans vérification de signature"
+    )

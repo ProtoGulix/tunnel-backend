@@ -2,6 +2,40 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [2.7.2] - 6 mars 2026
+
+### Sécurité
+
+- **Vérification de signature JWT** : les tokens Directus sont désormais validés avec `DIRECTUS_SECRET` (algorithme HS256 + vérification expiration)
+  - Si `DIRECTUS_SECRET` n'est pas configuré, un warning est loggé et le token est décodé sans vérification (comportement legacy, dev uniquement)
+
+- **Guards de démarrage** : l'API refuse de démarrer en production si :
+  - `AUTH_DISABLED=true` — bloquerait l'authentification entière
+  - `DIRECTUS_SECRET` absent — rendrait la vérification JWT impossible
+
+- **Rate limiting sur `POST /auth/login`** : limité à 10 requêtes/minute par IP (protection brute-force)
+  - Dépendance ajoutée : `slowapi==0.1.9`
+
+- **Validation du payload login** : `POST /auth/login` accepte désormais uniquement un schéma typé `LoginPayload`
+  - `email` : format email validé (`EmailStr`)
+  - `password` : taille max 256 caractères
+  - Les erreurs Directus (502) ne leakent plus l'URL interne du service
+  - Dépendance ajoutée : `email-validator==2.3.0`
+
+- **Headers de sécurité HTTP** : ajoutés sur toutes les réponses
+  - `X-Content-Type-Options: nosniff`
+  - `X-Frame-Options: DENY`
+  - `Referrer-Policy: strict-origin-when-cross-origin`
+  - `Permissions-Policy: geolocation=(), camera=(), microphone=()`
+  - `Strict-Transport-Security` (production uniquement)
+  - Suppression de `expose_headers: ["*"]` dans la config CORS
+
+- **Autorisation par authentification** : toutes les routes métier requièrent désormais un JWT valide via `Depends(require_authenticated)`
+  - Nouveau module `api/auth/permissions.py` — extensible en V3 lors de la migration vers un système d'auth indépendant de Directus
+  - Routes publiques inchangées : `/health`, `/server/ping`, `/docs`, `/auth/login`, `/qrcode`
+
+---
+
 ## [2.7.1] - 6 mars 2026
 
 ### Améliorations

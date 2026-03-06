@@ -1,10 +1,12 @@
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, HTTPException, Query, Request, Depends
 from typing import List
 
 from api.intervention_status_log.repo import InterventionStatusLogRepository
 from api.intervention_status_log.schemas import InterventionStatusLogIn, InterventionStatusLogOut
 
-router = APIRouter(prefix="/intervention-status-log", tags=["intervention-status-log"])
+from api.auth.permissions import require_authenticated
+
+router = APIRouter(prefix="/intervention-status-log", tags=["intervention-status-log"], dependencies=[Depends(require_authenticated)])
 
 
 @router.get("/", response_model=List[InterventionStatusLogOut])

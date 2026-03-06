@@ -1,12 +1,14 @@
 """Routes pour les familles de stock"""
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
 from typing import List, Optional
 
 from api.stock_families.repo import StockFamilyRepository
 from api.stock_families.schemas import StockFamilyListItem, StockFamilyDetail, StockFamilyPatch
 from api.errors.exceptions import DatabaseError, NotFoundError
 
-router = APIRouter(prefix="/stock-families", tags=["stock-families"])
+from api.auth.permissions import require_authenticated
+
+router = APIRouter(prefix="/stock-families", tags=["stock-families"], dependencies=[Depends(require_authenticated)])
 
 
 @router.get("/", response_model=List[StockFamilyListItem])

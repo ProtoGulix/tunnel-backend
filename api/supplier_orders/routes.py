@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
 from fastapi.responses import StreamingResponse
 from typing import List, Optional
 from io import StringIO
@@ -15,7 +15,9 @@ from config.export_templates import (
     get_csv_filename
 )
 
-router = APIRouter(prefix="/supplier-orders", tags=["supplier-orders"])
+from api.auth.permissions import require_authenticated
+
+router = APIRouter(prefix="/supplier-orders", tags=["supplier-orders"], dependencies=[Depends(require_authenticated)])
 
 
 @router.get("/", response_model=List[SupplierOrderListItem])

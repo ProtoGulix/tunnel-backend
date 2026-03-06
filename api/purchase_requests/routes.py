@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
 from typing import List, Optional, Literal, Union
 from datetime import date
 from api.purchase_requests.repo import PurchaseRequestRepository
@@ -11,7 +11,9 @@ from api.purchase_requests.schemas import (
     DispatchResult  # v1.2.12 nouveau
 )
 
-router = APIRouter(prefix="/purchase-requests", tags=["purchase-requests"])
+from api.auth.permissions import require_authenticated
+
+router = APIRouter(prefix="/purchase-requests", tags=["purchase-requests"], dependencies=[Depends(require_authenticated)])
 
 
 # ========== Endpoints optimisés v1.2.0 ==========

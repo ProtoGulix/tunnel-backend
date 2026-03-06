@@ -1,12 +1,14 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
 from typing import List, Optional
 from api.stock_item_suppliers.repo import StockItemSupplierRepository
 from api.stock_item_suppliers.schemas import (
     StockItemSupplierOut, StockItemSupplierIn, StockItemSupplierListItem
 )
 
+from api.auth.permissions import require_authenticated
+
 router = APIRouter(prefix="/stock-item-suppliers",
-                   tags=["stock-item-suppliers"])
+                   tags=["stock-item-suppliers"], dependencies=[Depends(require_authenticated)])
 
 
 @router.get("/", response_model=List[StockItemSupplierListItem])

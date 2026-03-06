@@ -1,7 +1,11 @@
 import logging
 import sys
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
+from slowapi.errors import RateLimitExceeded
+from slowapi import _rate_limit_exceeded_handler
+from api.limiter import limiter
 from api.settings import settings
 from api.auth.middleware import JWTMiddleware
 from api.auth.routes import router as auth_router
@@ -69,6 +73,10 @@ app = FastAPI(
     description="API Proxy - Gateway entre frontend et données"
 )
 
+# Attache le limiter à l'app (requis par slowapi)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 # Enregistre les handlers d'erreur (404, 401, 403, 500, etc.)
 register_error_handlers(app)
 
@@ -79,8 +87,24 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=["*"],
 )
+
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """Ajoute les headers de sécurité HTTP sur toutes les réponses."""
+
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Permissions-Policy"] = "geolocation=(), camera=(), microphone=()"
+        if settings.API_ENV == "production":
+            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        return response
+
+
+app.add_middleware(SecurityHeadersMiddleware)
 
 # Inclusion des routes métier (PostgreSQL)
 app.include_router(intervention_router)

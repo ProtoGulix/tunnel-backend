@@ -1,36 +1,50 @@
-from typing import Any, Dict
 from http.cookiejar import Cookie
 
 import httpx
-from fastapi import APIRouter, Body, HTTPException
+from fastapi import APIRouter, Request, HTTPException
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel, EmailStr, field_validator
 
 from api.settings import settings
+from api.limiter import limiter
 
 SESSION_COOKIE_NAME = "session_token"
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
+class LoginPayload(BaseModel):
+    email: EmailStr
+    password: str
+
+    @field_validator("password")
+    @classmethod
+    def password_max_length(cls, v: str) -> str:
+        if len(v) > 256:
+            raise ValueError("Mot de passe trop long")
+        return v
+
+
 @router.post("/login")
-async def login(payload: Dict[str, Any] = Body(..., description="Identifiants Directus (email, password)")):
+@limiter.limit("10/minute")
+async def login(request: Request, payload: LoginPayload):
     """Proxy Directus /auth/login en conservant les cookies (session)."""
     try:
         async with httpx.AsyncClient(base_url=settings.DIRECTUS_URL, timeout=10) as client:
             response = await client.post(
                 "/auth/login",
-                json=payload,
+                json=payload.model_dump(),
                 headers={"Accept": "application/json"},
             )
     except httpx.RequestError as exc:
         raise HTTPException(
-            status_code=502, detail=f"Directus indisponible: {exc}") from exc
+            status_code=502, detail="Service d'authentification indisponible") from exc
 
     if response.status_code >= 400:
         try:
             detail = response.json()
         except Exception:
-            detail = {"detail": response.text}
+            detail = {"detail": "Erreur d'authentification"}
         raise HTTPException(status_code=response.status_code, detail=detail)
 
     # Extraire le JWT du cookie Directus

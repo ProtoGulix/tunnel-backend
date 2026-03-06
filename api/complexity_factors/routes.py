@@ -1,9 +1,11 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from typing import List
 from api.complexity_factors.repo import ComplexityFactorRepository
 from api.complexity_factors.schemas import ComplexityFactorOut
 
-router = APIRouter(prefix="/complexity-factors", tags=["complexity-factors"])
+from api.auth.permissions import require_authenticated
+
+router = APIRouter(prefix="/complexity-factors", tags=["complexity-factors"], dependencies=[Depends(require_authenticated)])
 
 
 @router.get("/", response_model=List[ComplexityFactorOut])

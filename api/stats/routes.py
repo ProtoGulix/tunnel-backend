@@ -1,11 +1,13 @@
 from typing import Optional
-from fastapi import APIRouter, Request, Query
+from fastapi import APIRouter, Request, Query, Depends
 from datetime import date, datetime, timedelta
 from api.stats.repo import StatsRepository
 from api.stats.schemas import ServiceStatusResponse, ChargeTechniqueResponse, AnomaliesSaisieResponse, QualiteDonneesResponse
 from api.errors.exceptions import ValidationError
 
-router = APIRouter(prefix="/stats", tags=["stats"])
+from api.auth.permissions import require_authenticated
+
+router = APIRouter(prefix="/stats", tags=["stats"], dependencies=[Depends(require_authenticated)])
 
 
 @router.get("/service-status", response_model=ServiceStatusResponse)

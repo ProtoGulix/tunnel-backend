@@ -1,10 +1,12 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from typing import List
 from api.intervention_actions.repo import InterventionActionRepository
 from api.intervention_actions.schemas import InterventionActionOut, InterventionActionIn, InterventionActionPatch
 
+from api.auth.permissions import require_authenticated
+
 router = APIRouter(prefix="/intervention-actions",
-                   tags=["intervention-actions"])
+                   tags=["intervention-actions"], dependencies=[Depends(require_authenticated)])
 
 
 @router.get("/", response_model=List[InterventionActionOut])

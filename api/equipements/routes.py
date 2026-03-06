@@ -1,5 +1,5 @@
 """Routes pour les équipements"""
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, Query, status, Depends
 from api.equipements.repo import EquipementRepository
 from api.equipements.schemas import (
     EquipementListItem,
@@ -11,7 +11,9 @@ from api.equipements.schemas import (
     EquipementUpdate
 )
 
-router = APIRouter(prefix="/equipements", tags=["equipements"])
+from api.auth.permissions import require_authenticated
+
+router = APIRouter(prefix="/equipements", tags=["equipements"], dependencies=[Depends(require_authenticated)])
 
 
 @router.get("", response_model=list[EquipementListItem])

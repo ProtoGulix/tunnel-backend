@@ -1,11 +1,13 @@
-from fastapi import APIRouter, Request, Query
+from fastapi import APIRouter, Request, Query, Depends
 from typing import List, Dict, Any
 from api.interventions.repo import InterventionRepository
 from api.intervention_actions.repo import InterventionActionRepository
 from api.interventions.schemas import InterventionOut, InterventionIn
 from api.intervention_actions.schemas import InterventionActionOut
 
-router = APIRouter(prefix="/interventions", tags=["interventions"])
+from api.auth.permissions import require_authenticated
+
+router = APIRouter(prefix="/interventions", tags=["interventions"], dependencies=[Depends(require_authenticated)])
 
 
 def add_stats_to_intervention(intervention: Dict[str, Any], actions: List[Dict[str, Any]]) -> None:

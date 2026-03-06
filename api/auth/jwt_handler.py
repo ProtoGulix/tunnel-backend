@@ -1,6 +1,6 @@
 import jwt
 import logging
-from typing import Optional, Dict, Any
+from typing import Dict, Any
 from api.settings import settings
 from api.errors.exceptions import UnauthorizedError
 
@@ -9,20 +9,32 @@ logger = logging.getLogger(__name__)
 
 def decode_directus_token(token: str) -> Dict[str, Any]:
     """
-    Décode un JWT Directus sans vérification de signature.
+    Décode et vérifie un JWT Directus.
 
-    En production, vérifier la signature avec la clé publique de Directus.
-    Pour le MVP : extraction du payload uniquement.
+    Si DIRECTUS_SECRET est configuré : vérifie la signature HS256 (recommandé).
+    Sinon : décode sans vérification (fallback dev uniquement, log warning).
     """
     try:
-        # Decode sans vérification pour le MVP
-        # TODO: Implémenter la vérification de signature en production
-        payload = jwt.decode(token, options={"verify_signature": False})
+        if settings.DIRECTUS_SECRET:
+            payload = jwt.decode(
+                token,
+                settings.DIRECTUS_SECRET,
+                algorithms=["HS256"],
+                options={"verify_exp": True},
+            )
+        else:
+            logger.warning(
+                "DIRECTUS_SECRET non configuré — JWT décodé sans vérification de signature. "
+                "Configurer DIRECTUS_SECRET en production."
+            )
+            payload = jwt.decode(token, options={"verify_signature": False})
         return payload
-    except jwt.DecodeError:
-        raise UnauthorizedError("Token invalide")
     except jwt.ExpiredSignatureError:
         raise UnauthorizedError("Token expiré")
+    except jwt.InvalidSignatureError:
+        raise UnauthorizedError("Signature JWT invalide")
+    except jwt.DecodeError:
+        raise UnauthorizedError("Token invalide")
 
 
 def extract_user_from_token(token: str) -> Dict[str, Any]:

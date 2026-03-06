@@ -1,11 +1,13 @@
 from typing import List, Optional
 
-from fastapi import APIRouter, Query, Request, HTTPException
+from fastapi import APIRouter, Query, Request, HTTPException, Depends
 
 from api.users.repo import UserRepository
 from api.users.schemas import UserListItem, UserOut
 
-router = APIRouter(prefix="/users", tags=["users"])
+from api.auth.permissions import require_authenticated
+
+router = APIRouter(prefix="/users", tags=["users"], dependencies=[Depends(require_authenticated)])
 
 
 @router.get("/me", response_model=UserOut)

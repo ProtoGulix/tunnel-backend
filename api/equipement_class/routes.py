@@ -1,10 +1,12 @@
 """Routes API pour les classes d'équipement"""
-from fastapi import APIRouter, status
+from fastapi import APIRouter, status, Depends
 
 from .schemas import EquipementClass, EquipementClassCreate, EquipementClassUpdate
 from .repo import EquipementClassRepository
 
-router = APIRouter(prefix="/equipement-class", tags=["equipement-class"])
+from api.auth.permissions import require_authenticated
+
+router = APIRouter(prefix="/equipement-class", tags=["equipement-class"], dependencies=[Depends(require_authenticated)])
 repo = EquipementClassRepository()
 
 

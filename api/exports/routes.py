@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Request, Response
+from fastapi import APIRouter, Request, Response, Depends
 from fastapi.responses import StreamingResponse
 from io import BytesIO
 import hashlib
@@ -10,7 +10,9 @@ from api.exports.qr_generator import QRGenerator
 from api.errors.exceptions import ValidationError
 
 
-router = APIRouter(prefix="/exports", tags=["exports"])
+from api.auth.permissions import require_authenticated
+
+router = APIRouter(prefix="/exports", tags=["exports"], dependencies=[Depends(require_authenticated)])
 
 
 @router.get("/interventions/{intervention_id}/pdf")

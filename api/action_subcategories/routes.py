@@ -1,9 +1,11 @@
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, Depends
 from typing import List
 from api.action_subcategories.repo import ActionSubcategoryRepository
 from api.action_subcategories.schemas import ActionSubcategoryOut
 
-router = APIRouter(prefix="/action-subcategories", tags=["action-subcategories"])
+from api.auth.permissions import require_authenticated
+
+router = APIRouter(prefix="/action-subcategories", tags=["action-subcategories"], dependencies=[Depends(require_authenticated)])
 
 
 @router.get("/", response_model=List[ActionSubcategoryOut])
