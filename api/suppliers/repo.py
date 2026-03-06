@@ -2,6 +2,7 @@ from typing import Dict, Any, List, Optional
 from uuid import uuid4
 
 from api.settings import settings
+from api.db import get_connection, release_connection
 from api.errors.exceptions import DatabaseError, NotFoundError
 
 
@@ -9,12 +10,7 @@ class SupplierRepository:
     """Requêtes pour le domaine supplier"""
 
     def _get_connection(self):
-        """Ouvre une connexion à la base de données via settings"""
-        try:
-            return settings.get_db_connection()
-        except Exception as e:
-            raise DatabaseError(
-                f"Erreur de connexion base de données: {str(e)}") from e
+        return get_connection()
 
     def get_all(
         self,
@@ -62,7 +58,7 @@ class SupplierRepository:
         except Exception as e:
             raise DatabaseError(f"Erreur base de données: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
     def get_by_id(self, supplier_id: str) -> Dict[str, Any]:
         """Récupère un fournisseur par ID"""
@@ -85,7 +81,7 @@ class SupplierRepository:
         except Exception as e:
             raise DatabaseError(f"Erreur base de données: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
     def get_by_code(self, code: str) -> Dict[str, Any]:
         """Récupère un fournisseur par code"""
@@ -108,7 +104,7 @@ class SupplierRepository:
         except Exception as e:
             raise DatabaseError(f"Erreur base de données: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
     def add(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Crée un nouveau fournisseur"""
@@ -157,7 +153,7 @@ class SupplierRepository:
             raise DatabaseError(
                 f"Erreur lors de la création du fournisseur: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
         return self.get_by_id(supplier_id)
 
@@ -202,7 +198,7 @@ class SupplierRepository:
             raise DatabaseError(
                 f"Erreur lors de la mise à jour: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
         return self.get_by_id(supplier_id)
 
@@ -238,4 +234,4 @@ class SupplierRepository:
             raise DatabaseError(
                 f"Erreur lors de la suppression: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)

@@ -3,6 +3,7 @@ import logging
 from typing import List
 
 from api.settings import settings
+from api.db import get_connection, release_connection
 from api.errors.exceptions import DatabaseError, NotFoundError
 from api.stock_families.schemas import StockFamilyListItem, StockFamilyDetail
 from api.stock_items.template_schemas import StockSubFamily
@@ -18,12 +19,7 @@ class StockFamilyRepository:
         self.template_service = TemplateService()
 
     def _get_connection(self):
-        """Ouvre une connexion à la base de données"""
-        try:
-            return settings.get_db_connection()
-        except Exception as e:
-            raise DatabaseError(
-                f"Erreur de connexion base de données: {str(e)}") from e
+        return get_connection()
 
     def get_all(self) -> List[StockFamilyListItem]:
         """
@@ -59,7 +55,7 @@ class StockFamilyRepository:
             raise DatabaseError(
                 f"Erreur lors du chargement des familles: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
     def get_by_code(self, family_code: str, search: str = None) -> StockFamilyDetail:
         """
@@ -161,7 +157,7 @@ class StockFamilyRepository:
             raise DatabaseError(
                 f"Erreur lors du chargement de la famille: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
     def update(self, old_code: str, new_code: str, label: str = None) -> StockFamilyDetail:
         """
@@ -209,6 +205,6 @@ class StockFamilyRepository:
             raise DatabaseError(
                 f"Erreur lors de la mise à jour: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
         return self.get_by_code(new_code)

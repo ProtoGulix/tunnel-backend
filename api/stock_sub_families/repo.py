@@ -3,6 +3,7 @@ from typing import List, Optional
 from uuid import UUID
 
 from api.settings import settings
+from api.db import get_connection, release_connection
 from api.errors.exceptions import DatabaseError, NotFoundError
 from api.stock_items.template_service import TemplateService
 from api.stock_items.template_schemas import StockSubFamily
@@ -17,12 +18,7 @@ class StockSubFamilyRepository:
         self.template_service = TemplateService()
 
     def _get_connection(self):
-        """Ouvre une connexion à la base de données"""
-        try:
-            return settings.get_db_connection()
-        except Exception as e:
-            raise DatabaseError(
-                f"Erreur de connexion base de données: {str(e)}") from e
+        return get_connection()
 
     def get_template_id(self, family_code: str, sub_family_code: str) -> Optional[UUID]:
         """
@@ -60,7 +56,7 @@ class StockSubFamilyRepository:
             raise DatabaseError(
                 f"Erreur lors de la récupération du template_id: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
     def get_all_with_templates(self) -> List[StockSubFamily]:
         """
@@ -112,7 +108,7 @@ class StockSubFamilyRepository:
             raise DatabaseError(
                 f"Erreur lors du chargement des sous-familles: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
     def get_by_codes_with_template(self, family_code: str, sub_family_code: str) -> StockSubFamily:
         """
@@ -160,7 +156,7 @@ class StockSubFamilyRepository:
             raise DatabaseError(
                 f"Erreur lors du chargement de la sous-famille: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
     def update(self, family_code: str, sub_family_code: str, label: Optional[str] = None, 
                template_id: Optional[UUID] = None) -> StockSubFamily:
@@ -231,7 +227,7 @@ class StockSubFamilyRepository:
             raise DatabaseError(
                 f"Erreur lors de la mise à jour de la sous-famille: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
     def load_template_for_sub_family(self, family_code: str, sub_family_code: str) -> Optional['PartTemplate']:
         """

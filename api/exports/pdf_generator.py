@@ -14,6 +14,7 @@ class PDFGenerator:
         template_dir = Path(settings.EXPORT_TEMPLATE_DIR)
         self.env = Environment(
             loader=FileSystemLoader(str(template_dir)),
+            autoescape=True,
             auto_reload=True,
             cache_size=0
         )

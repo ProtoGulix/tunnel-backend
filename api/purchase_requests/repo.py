@@ -5,6 +5,7 @@ from decimal import Decimal
 import logging
 
 from api.settings import settings
+from api.db import get_connection, release_connection
 from api.errors.exceptions import DatabaseError, NotFoundError
 from api.constants import DERIVED_STATUS_CONFIG
 
@@ -15,12 +16,7 @@ class PurchaseRequestRepository:
     """Requêtes pour le domaine purchase_request"""
 
     def _get_connection(self):
-        """Ouvre une connexion à la base de données via settings"""
-        try:
-            return settings.get_db_connection()
-        except Exception as e:
-            raise DatabaseError(
-                f"Erreur de connexion base de données: {str(e)}") from e
+        return get_connection()
 
     def _enrich_with_stock_item(self, request_dict: Dict[str, Any], conn) -> Dict[str, Any]:
         """Enrichit une demande avec les détails du stock_item si présent"""
@@ -221,7 +217,7 @@ class PurchaseRequestRepository:
         except Exception as e:
             raise DatabaseError(f"Erreur base de données: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
     def get_by_id(self, request_id: str) -> Dict[str, Any]:
         """Récupère une demande d'achat par ID avec stock_item et intervention"""
@@ -278,7 +274,7 @@ class PurchaseRequestRepository:
         except Exception as e:
             raise DatabaseError(f"Erreur base de données: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
     def get_by_intervention(self, intervention_id: str) -> List[Dict[str, Any]]:
         """Récupère toutes les demandes d'achat liées à une intervention avec stock_item et intervention"""
@@ -335,7 +331,7 @@ class PurchaseRequestRepository:
         except Exception as e:
             raise DatabaseError(f"Erreur base de données: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
     def add(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Crée une nouvelle demande d'achat"""
@@ -380,7 +376,7 @@ class PurchaseRequestRepository:
             raise DatabaseError(
                 f"Erreur lors de la création de la demande d'achat: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
         # Retourne avec stock_item enrichi
         return self.get_by_id(request_id)
@@ -431,7 +427,7 @@ class PurchaseRequestRepository:
             raise DatabaseError(
                 f"Erreur lors de la mise à jour: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
         # Retourne avec stock_item enrichi
         return self.get_by_id(request_id)
@@ -453,7 +449,7 @@ class PurchaseRequestRepository:
             raise DatabaseError(
                 f"Erreur lors de la suppression: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
     # ========== Méthodes optimisées v1.2.0 ==========
 
@@ -681,7 +677,7 @@ class PurchaseRequestRepository:
             logger.error("Error fetching purchase request list: %s", str(e))
             raise DatabaseError(f"Erreur base de données: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
     def get_detail(self, request_id: str) -> Dict[str, Any]:
         """
@@ -793,7 +789,7 @@ class PurchaseRequestRepository:
             logger.error("Error fetching purchase request detail: %s", str(e))
             raise DatabaseError(f"Erreur base de données: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
     def _get_linked_order_lines_detail(self, purchase_request_id: str, conn) -> List[Dict[str, Any]]:
         """Récupère les order_lines enrichis avec fournisseur pour le détail"""
@@ -880,7 +876,7 @@ class PurchaseRequestRepository:
                 )
                 rows = cur.fetchall()
             finally:
-                conn.close()
+                release_connection(conn)
 
             results = []
             for row in rows:
@@ -1012,7 +1008,7 @@ class PurchaseRequestRepository:
             logger.error("Error fetching stats: %s", str(e))
             raise DatabaseError(f"Erreur base de données: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
     def _find_or_create_order(self, cur, supplier_id_str: str, orders_cache: dict) -> tuple:
         """
@@ -1243,4 +1239,4 @@ class PurchaseRequestRepository:
             logger.error("Dispatch failed: %s", str(e))
             raise DatabaseError(f"Erreur lors du dispatch: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)

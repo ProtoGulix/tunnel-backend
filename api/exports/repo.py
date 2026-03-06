@@ -1,18 +1,14 @@
 from typing import Dict, Any
 from api.errors.exceptions import NotFoundError, DatabaseError
 from api.settings import settings
+from api.db import get_connection, release_connection
 
 
 class ExportRepository:
     """Repository spécialisé pour données d'export"""
 
     def _get_connection(self):
-        """Ouvre une connexion à la base de données via settings"""
-        try:
-            return settings.get_db_connection()
-        except Exception as e:
-            raise DatabaseError(
-                f"Erreur de connexion base de données: {str(e)}") from e
+        return get_connection()
 
     def get_intervention_code(self, intervention_id: str) -> str:
         """Récupère uniquement le code intervention (lightweight pour QR)"""
@@ -29,7 +25,7 @@ class ExportRepository:
         except Exception as e:
             raise DatabaseError(f"Erreur DB: {str(e)}")
         finally:
-            conn.close()
+            release_connection(conn)
 
     def get_intervention_export_data(self, intervention_id: str) -> Dict[str, Any]:
         """
@@ -203,4 +199,4 @@ class ExportRepository:
         except Exception as e:
             raise DatabaseError(f"Erreur lors de la récupération des données: {str(e)}")
         finally:
-            conn.close()
+            release_connection(conn)

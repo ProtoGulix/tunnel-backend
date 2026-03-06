@@ -2,7 +2,7 @@ import logging
 from typing import Dict, Any
 from uuid import uuid4
 
-from api.settings import settings
+from api.db import get_connection, release_connection
 from api.errors.exceptions import DatabaseError, ValidationError
 from api.stock_items.template_service import TemplateService
 from api.stock_items.template_schemas import CharacteristicValue, StockItemWithCharacteristics
@@ -19,12 +19,7 @@ class StockItemService:
         self.sub_family_repo = StockSubFamilyRepository()
 
     def _get_connection(self):
-        """Ouvre une connexion à la base de données"""
-        try:
-            return settings.get_db_connection()
-        except Exception as e:
-            raise DatabaseError(
-                f"Erreur de connexion base de données: {str(e)}") from e
+        return get_connection()
 
     def create_stock_item(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -112,7 +107,7 @@ class StockItemService:
             logger.error("Erreur création item legacy: %s", str(e))
             raise DatabaseError(f"Erreur lors de la création: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
     def _create_template_item(self, data: Dict[str, Any], template) -> Dict[str, Any]:
         """
@@ -213,7 +208,7 @@ class StockItemService:
             logger.error("Erreur création item template: %s", str(e))
             raise DatabaseError(f"Erreur lors de la création: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
     def update_stock_item(self, item_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -259,7 +254,7 @@ class StockItemService:
             cols = [desc[0] for desc in cur.description]
             return dict(zip(cols, row))
         finally:
-            conn.close()
+            release_connection(conn)
 
     def _update_item_fields(self, item_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
         """Met à jour les champs autorisés d'un item"""
@@ -299,7 +294,7 @@ class StockItemService:
             raise DatabaseError(
                 f"Erreur lors de la mise à jour: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
     def get_item_with_characteristics(self, item_id: str) -> StockItemWithCharacteristics:
         """
@@ -342,7 +337,7 @@ class StockItemService:
             return StockItemWithCharacteristics(**item, characteristics=characteristics)
 
         finally:
-            conn.close()
+            release_connection(conn)
 
 
 def is_legacy_item(item: Dict[str, Any]) -> bool:

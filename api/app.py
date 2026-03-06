@@ -1,5 +1,6 @@
 import logging
 import sys
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -7,6 +8,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi import _rate_limit_exceeded_handler
 from api.limiter import limiter
 from api.settings import settings
+from api.db import init_pool, close_pool
 from api.auth.middleware import JWTMiddleware
 from api.auth.routes import router as auth_router
 from api.interventions.routes import router as intervention_router
@@ -65,11 +67,21 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Initialise et ferme le pool DB au démarrage/arrêt."""
+    init_pool(settings.DATABASE_URL, settings.DB_POOL_MIN, settings.DB_POOL_MAX)
+    yield
+    close_pool()
+
+
 # FastAPI Proxy Gateway
 # Frontend → API → PostgreSQL (données) / Directus (auth)
 app = FastAPI(
     title=settings.API_TITLE,
     version=settings.API_VERSION,
+    lifespan=lifespan,
     description="API Proxy - Gateway entre frontend et données"
 )
 

@@ -5,6 +5,7 @@ from decimal import Decimal
 import logging
 
 from api.settings import settings
+from api.db import get_connection, release_connection
 from api.errors.exceptions import DatabaseError, NotFoundError
 
 logger = logging.getLogger(__name__)
@@ -14,12 +15,7 @@ class SupplierOrderRepository:
     """Requêtes pour le domaine supplier_order"""
 
     def _get_connection(self):
-        """Ouvre une connexion à la base de données via settings"""
-        try:
-            return settings.get_db_connection()
-        except Exception as e:
-            raise DatabaseError(
-                f"Erreur de connexion base de données: {str(e)}") from e
+        return get_connection()
 
     def _convert_decimals(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Convertit les Decimal en float pour la sérialisation JSON"""
@@ -163,7 +159,7 @@ class SupplierOrderRepository:
         except Exception as e:
             raise DatabaseError(f"Erreur base de données: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
     def get_by_id(self, order_id: str) -> Dict[str, Any]:
         """Récupère une commande par ID avec ses lignes et fournisseur"""
@@ -199,7 +195,7 @@ class SupplierOrderRepository:
         except Exception as e:
             raise DatabaseError(f"Erreur base de données: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
     def get_by_order_number(self, order_number: str) -> Dict[str, Any]:
         """Récupère une commande par numéro avec fournisseur"""
@@ -235,7 +231,7 @@ class SupplierOrderRepository:
         except Exception as e:
             raise DatabaseError(f"Erreur base de données: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
     def add(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Crée une nouvelle commande fournisseur"""
@@ -268,7 +264,7 @@ class SupplierOrderRepository:
             raise DatabaseError(
                 f"Erreur lors de la création de la commande: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
         return self.get_by_id(order_id)
 
@@ -313,7 +309,7 @@ class SupplierOrderRepository:
             raise DatabaseError(
                 f"Erreur lors de la mise à jour: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
         return self.get_by_id(order_id)
 
@@ -334,7 +330,7 @@ class SupplierOrderRepository:
             raise DatabaseError(
                 f"Erreur lors de la suppression: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
     def _get_export_lines(self, order_id: str, conn) -> List[Dict[str, Any]]:
         """Récupère les lignes enrichies pour l'export"""
@@ -456,4 +452,4 @@ class SupplierOrderRepository:
         except Exception as e:
             raise DatabaseError(f"Erreur base de données: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)

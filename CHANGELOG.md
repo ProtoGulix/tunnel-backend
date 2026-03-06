@@ -2,6 +2,20 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [2.7.3] - 6 mars 2026
+
+### Améliorations
+
+- **Pool de connexions PostgreSQL** : migration de `pg8000` vers `psycopg2` avec `ThreadedConnectionPool`
+  - Nouveau module `api/db.py` — pool centralisé (`init_pool`, `get_connection`, `release_connection`, `close_pool`)
+  - Tous les repositories migrent de `settings.get_db_connection()` vers `get_connection()` / `release_connection()`
+  - Pool configurable via variables d'environnement : `DB_POOL_MIN` (défaut : 2), `DB_POOL_MAX` (défaut : 10)
+  - Timeout par requête : 30 secondes (`statement_timeout`)
+  - Cycle de vie géré par `lifespan` FastAPI — le pool s'ouvre au démarrage et se ferme proprement à l'arrêt
+  - Dépendance `pg8000==1.31.2` remplacée par `psycopg2-binary==2.9.11`
+
+---
+
 ## [2.7.2] - 6 mars 2026
 
 ### Sécurité

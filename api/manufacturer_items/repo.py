@@ -2,7 +2,7 @@ import logging
 from typing import Dict, Any, List
 from uuid import uuid4
 
-from api.settings import settings
+from api.db import get_connection, release_connection
 from api.errors.exceptions import DatabaseError, NotFoundError
 
 logger = logging.getLogger(__name__)
@@ -12,11 +12,7 @@ class ManufacturerItemRepository:
     """Requêtes pour le domaine manufacturer_item"""
 
     def _get_connection(self):
-        try:
-            return settings.get_db_connection()
-        except Exception as e:
-            raise DatabaseError(
-                f"Erreur de connexion base de données: {str(e)}") from e
+        return get_connection()
 
     def get_all(self, limit: int = 100, offset: int = 0, search: str = None) -> List[Dict[str, Any]]:
         """Liste les références fabricants avec recherche optionnelle"""
@@ -45,7 +41,7 @@ class ManufacturerItemRepository:
         except Exception as e:
             raise DatabaseError(f"Erreur base de données: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
     def count_all(self, search: str = None) -> int:
         """Compte les références fabricants avec filtre optionnel"""
@@ -63,7 +59,7 @@ class ManufacturerItemRepository:
         except Exception as e:
             raise DatabaseError(f"Erreur base de données: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
     def get_by_id(self, item_id: str) -> Dict[str, Any]:
         """Récupère une référence fabricant par ID"""
@@ -85,7 +81,7 @@ class ManufacturerItemRepository:
         except Exception as e:
             raise DatabaseError(f"Erreur base de données: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
     def get_by_id_with_suppliers(self, item_id: str) -> Dict[str, Any]:
         """Récupère une référence fabricant avec ses références fournisseurs liées"""
@@ -116,7 +112,7 @@ class ManufacturerItemRepository:
         except Exception as e:
             raise DatabaseError(f"Erreur base de données: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
     def add(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Crée une nouvelle référence fabricant"""
@@ -141,7 +137,7 @@ class ManufacturerItemRepository:
             conn.rollback()
             raise DatabaseError(f"Erreur lors de la création: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
         return self.get_by_id(item_id)
 
@@ -177,7 +173,7 @@ class ManufacturerItemRepository:
             raise DatabaseError(
                 f"Erreur lors de la mise à jour: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
         return self.get_by_id(item_id)
 
@@ -197,4 +193,4 @@ class ManufacturerItemRepository:
             raise DatabaseError(
                 f"Erreur lors de la suppression: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)

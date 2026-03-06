@@ -1,6 +1,7 @@
 from typing import List, Dict, Any
 
 from api.settings import settings
+from api.db import get_connection, release_connection
 from api.errors.exceptions import DatabaseError
 
 
@@ -8,12 +9,7 @@ class InterventionStatusRepository:
     """Repository pour les statuts d'intervention"""
 
     def _get_connection(self):
-        """Ouvre une connexion à la base de données"""
-        try:
-            return settings.get_db_connection()
-        except Exception as e:
-            raise DatabaseError(
-                f"Erreur de connexion base de données: {str(e)}")
+        return get_connection()
 
     def get_all(self) -> List[Dict[str, Any]]:
         """Récupère tous les statuts d'intervention"""
@@ -35,7 +31,7 @@ class InterventionStatusRepository:
         except Exception as e:
             raise DatabaseError(f"Erreur base de données: {str(e)}")
         finally:
-            conn.close()
+            release_connection(conn)
 
     def get_active_status_ids(self) -> List[str]:
         """Récupère les IDs des statuts considérés comme 'actifs' (ouvert ou en cours)"""
@@ -58,4 +54,4 @@ class InterventionStatusRepository:
         except Exception as e:
             raise DatabaseError(f"Erreur base de données: {str(e)}")
         finally:
-            conn.close()
+            release_connection(conn)

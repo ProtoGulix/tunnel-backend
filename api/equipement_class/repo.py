@@ -3,6 +3,7 @@ from typing import Dict, Any, List
 from uuid import uuid4
 
 from api.settings import settings
+from api.db import get_connection, release_connection
 from api.errors.exceptions import DatabaseError, NotFoundError, ValidationError
 
 
@@ -10,12 +11,7 @@ class EquipementClassRepository:
     """Requêtes pour le domaine classes d'équipement"""
 
     def _get_connection(self):
-        """Ouvre une connexion à la base de données via settings"""
-        try:
-            return settings.get_db_connection()
-        except Exception as e:
-            raise DatabaseError(
-                f"Erreur de connexion base de données: {str(e)}") from e
+        return get_connection()
 
     def get_all(self) -> List[Dict[str, Any]]:
         """Récupère toutes les classes d'équipement"""
@@ -33,7 +29,7 @@ class EquipementClassRepository:
         except Exception as e:
             raise DatabaseError(f"Erreur base de données: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
     def get_by_id(self, class_id: str) -> Dict[str, Any]:
         """Récupère une classe d'équipement par ID"""
@@ -57,7 +53,7 @@ class EquipementClassRepository:
         except Exception as e:
             raise DatabaseError(f"Erreur base de données: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
     def create(self, code: str, label: str, description: str | None = None) -> Dict[str, Any]:
         """Crée une nouvelle classe d'équipement"""
@@ -93,7 +89,7 @@ class EquipementClassRepository:
             conn.rollback()
             raise DatabaseError(f"Erreur base de données: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
     def update(self, class_id: str, code: str | None = None, label: str | None = None, description: str | None = None) -> Dict[str, Any]:
         """Met à jour une classe d'équipement"""
@@ -153,7 +149,7 @@ class EquipementClassRepository:
             conn.rollback()
             raise DatabaseError(f"Erreur base de données: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
     def delete(self, class_id: str) -> None:
         """Supprime une classe d'équipement"""
@@ -186,4 +182,4 @@ class EquipementClassRepository:
             conn.rollback()
             raise DatabaseError(f"Erreur base de données: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)

@@ -66,9 +66,9 @@ class InterventionStatusLogValidator:
     @staticmethod
     def validate_technician_exists(technician_id: str) -> None:
         """Vérifie que le technicien existe dans directus_users"""
-        from api.settings import settings
+        from api.db import get_connection, release_connection
 
-        conn = settings.get_db_connection()
+        conn = get_connection()
         try:
             cur = conn.cursor()
             cur.execute("SELECT id FROM directus_users WHERE id = %s", (technician_id,))
@@ -77,7 +77,7 @@ class InterventionStatusLogValidator:
             if not row:
                 raise ValueError(f"Technicien {technician_id} non trouvé")
         finally:
-            conn.close()
+            release_connection(conn)
 
     @staticmethod
     def sanitize_notes(notes: str | None) -> str | None:

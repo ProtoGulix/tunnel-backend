@@ -2,6 +2,7 @@ from typing import Dict, Any, List
 from uuid import uuid4
 
 from api.settings import settings
+from api.db import get_connection, release_connection
 from api.errors.exceptions import DatabaseError, NotFoundError
 from api.constants import PRIORITY_TYPES
 
@@ -13,12 +14,7 @@ class InterventionRepository:
     """Requêtes pour le domaine interventions"""
 
     def _get_connection(self):
-        """Ouvre une connexion à la base de données via settings"""
-        try:
-            return settings.get_db_connection()
-        except Exception as e:
-            raise DatabaseError(
-                f"Erreur de connexion base de données: {str(e)}") from e
+        return get_connection()
 
     def get_all(
         self,
@@ -177,7 +173,7 @@ class InterventionRepository:
         except Exception as e:
             raise DatabaseError(f"Erreur base de données: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
     def get_by_id(self, intervention_id: str, include_actions: bool = True) -> Dict[str, Any]:
         """Récupère une intervention par ID avec équipement et stats calculées depuis les actions"""
@@ -257,7 +253,7 @@ class InterventionRepository:
                     "Impossible de se connecter à la base de données") from e
             raise DatabaseError(f"Erreur base de données: {error_msg}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
     def add(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Crée une nouvelle intervention"""
@@ -293,7 +289,7 @@ class InterventionRepository:
             raise DatabaseError(
                 f"Erreur lors de la création de l'intervention: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
         return self.get_by_id(intervention_id)
 
@@ -337,7 +333,7 @@ class InterventionRepository:
             raise DatabaseError(
                 f"Erreur lors de la mise à jour: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
         return self.get_by_id(intervention_id)
 
@@ -359,4 +355,4 @@ class InterventionRepository:
             raise DatabaseError(
                 f"Erreur lors de la suppression: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)

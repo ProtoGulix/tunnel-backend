@@ -2,7 +2,7 @@ from typing import Dict, Any, List, Tuple
 from datetime import date, timedelta
 from calendar import monthrange
 
-from api.settings import settings
+from api.db import get_connection, release_connection
 from api.errors.exceptions import DatabaseError
 from api.stats.schemas import (
     ServiceStatusResponse,
@@ -55,11 +55,7 @@ class StatsRepository:
     """Requêtes pour les statistiques du service"""
 
     def _get_connection(self):
-        """Ouvre une connexion à la base de données via settings"""
-        try:
-            return settings.get_db_connection()
-        except Exception as e:
-            raise DatabaseError(f"Erreur de connexion base de données: {str(e)}")
+        return get_connection()
 
     def get_service_status(self, start_date: date, end_date: date) -> ServiceStatusResponse:
         """Calcule les métriques de santé du service (8 calculs en SQL)"""
@@ -206,7 +202,7 @@ class StatsRepository:
         except Exception as e:
             raise DatabaseError(f"Erreur base de données: {str(e)}")
         finally:
-            conn.close()
+            release_connection(conn)
     
     def _empty_metrics(self, start_date: date, end_date: date) -> ServiceStatusResponse:
         """Retourne des métriques vides quand pas de données"""
@@ -658,7 +654,7 @@ class StatsRepository:
         except Exception as e:
             raise DatabaseError(f"Erreur base de données: {str(e)}")
         finally:
-            conn.close()
+            release_connection(conn)
 
     def _get_taux_evitable_status(self, taux: float) -> StatusLabel:
         """Statut couleur du taux de dépannage évitable"""
@@ -991,7 +987,7 @@ class StatsRepository:
         except Exception as e:
             raise DatabaseError(f"Erreur base de données: {str(e)}")
         finally:
-            conn.close()
+            release_connection(conn)
 
     # -- Type B : Actions fragmentées --
 
@@ -1050,7 +1046,7 @@ class StatsRepository:
         except Exception as e:
             raise DatabaseError(f"Erreur base de données: {str(e)}")
         finally:
-            conn.close()
+            release_connection(conn)
 
     # -- Type C : Actions trop longues pour leur catégorie --
 
@@ -1120,7 +1116,7 @@ class StatsRepository:
         except Exception as e:
             raise DatabaseError(f"Erreur base de données: {str(e)}")
         finally:
-            conn.close()
+            release_connection(conn)
 
     # -- Type D : Mauvaise classification --
 
@@ -1188,7 +1184,7 @@ class StatsRepository:
         except Exception as e:
             raise DatabaseError(f"Erreur base de données: {str(e)}")
         finally:
-            conn.close()
+            release_connection(conn)
 
     # -- Type E : Retours back-to-back --
 
@@ -1273,7 +1269,7 @@ class StatsRepository:
         except Exception as e:
             raise DatabaseError(f"Erreur base de données: {str(e)}")
         finally:
-            conn.close()
+            release_connection(conn)
 
     # -- Type F : Faible valeur / charge élevée --
 
@@ -1336,7 +1332,7 @@ class StatsRepository:
         except Exception as e:
             raise DatabaseError(f"Erreur base de données: {str(e)}")
         finally:
-            conn.close()
+            release_connection(conn)
 
     # ── Qualité Données ───────────────────────────────────────────────
 
@@ -1469,7 +1465,7 @@ class StatsRepository:
         except Exception as e:
             raise DatabaseError(f"Erreur base de données: {str(e)}")
         finally:
-            conn.close()
+            release_connection(conn)
 
     def _qd_action_complexity_sans_facteur(self) -> List[QualiteDonneesProbleme]:
         conn = self._get_connection()
@@ -1500,7 +1496,7 @@ class StatsRepository:
         except Exception as e:
             raise DatabaseError(f"Erreur base de données: {str(e)}")
         finally:
-            conn.close()
+            release_connection(conn)
 
     def _qd_action_subcategory_null(self) -> List[QualiteDonneesProbleme]:
         conn = self._get_connection()
@@ -1530,7 +1526,7 @@ class StatsRepository:
         except Exception as e:
             raise DatabaseError(f"Erreur base de données: {str(e)}")
         finally:
-            conn.close()
+            release_connection(conn)
 
     def _qd_action_tech_null(self) -> List[QualiteDonneesProbleme]:
         conn = self._get_connection()
@@ -1560,7 +1556,7 @@ class StatsRepository:
         except Exception as e:
             raise DatabaseError(f"Erreur base de données: {str(e)}")
         finally:
-            conn.close()
+            release_connection(conn)
 
     def _qd_action_description_vide(self) -> List[QualiteDonneesProbleme]:
         conn = self._get_connection()
@@ -1591,7 +1587,7 @@ class StatsRepository:
         except Exception as e:
             raise DatabaseError(f"Erreur base de données: {str(e)}")
         finally:
-            conn.close()
+            release_connection(conn)
 
     def _qd_action_time_suspect(self) -> List[QualiteDonneesProbleme]:
         conn = self._get_connection()
@@ -1621,7 +1617,7 @@ class StatsRepository:
         except Exception as e:
             raise DatabaseError(f"Erreur base de données: {str(e)}")
         finally:
-            conn.close()
+            release_connection(conn)
 
     def _qd_action_sur_intervention_fermee(self) -> List[QualiteDonneesProbleme]:
         conn = self._get_connection()
@@ -1658,7 +1654,7 @@ class StatsRepository:
         except Exception as e:
             raise DatabaseError(f"Erreur base de données: {str(e)}")
         finally:
-            conn.close()
+            release_connection(conn)
 
     # -- Détecteurs intervention --
 
@@ -1692,7 +1688,7 @@ class StatsRepository:
         except Exception as e:
             raise DatabaseError(f"Erreur base de données: {str(e)}")
         finally:
-            conn.close()
+            release_connection(conn)
 
     def _qd_intervention_sans_type(self) -> List[QualiteDonneesProbleme]:
         conn = self._get_connection()
@@ -1720,7 +1716,7 @@ class StatsRepository:
         except Exception as e:
             raise DatabaseError(f"Erreur base de données: {str(e)}")
         finally:
-            conn.close()
+            release_connection(conn)
 
     def _qd_intervention_en_cours_inactive(self) -> List[QualiteDonneesProbleme]:
         conn = self._get_connection()
@@ -1753,7 +1749,7 @@ class StatsRepository:
         except Exception as e:
             raise DatabaseError(f"Erreur base de données: {str(e)}")
         finally:
-            conn.close()
+            release_connection(conn)
 
     # -- Détecteurs stock_item --
 
@@ -1783,7 +1779,7 @@ class StatsRepository:
         except Exception as e:
             raise DatabaseError(f"Erreur base de données: {str(e)}")
         finally:
-            conn.close()
+            release_connection(conn)
 
     def _qd_stock_sans_fournisseur(self) -> List[QualiteDonneesProbleme]:
         conn = self._get_connection()
@@ -1814,7 +1810,7 @@ class StatsRepository:
         except Exception as e:
             raise DatabaseError(f"Erreur base de données: {str(e)}")
         finally:
-            conn.close()
+            release_connection(conn)
 
     # -- Détecteur purchase_request --
 
@@ -1844,4 +1840,4 @@ class StatsRepository:
         except Exception as e:
             raise DatabaseError(f"Erreur base de données: {str(e)}")
         finally:
-            conn.close()
+            release_connection(conn)

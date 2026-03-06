@@ -2,7 +2,7 @@ import logging
 from typing import List, Dict, Any
 from uuid import uuid4
 
-from api.settings import settings
+from api.db import get_connection, release_connection
 from api.errors.exceptions import DatabaseError, NotFoundError, ValidationError
 from api.part_templates.schemas import PartTemplateIn, PartTemplateUpdate
 
@@ -13,12 +13,7 @@ class PartTemplateRepository:
     """Requêtes pour le domaine part_template"""
 
     def _get_connection(self):
-        """Ouvre une connexion à la base de données"""
-        try:
-            return settings.get_db_connection()
-        except Exception as e:
-            raise DatabaseError(
-                "Erreur de connexion base de données: %s" % str(e)) from e
+        return get_connection()
 
     def get_all(self) -> List[Dict[str, Any]]:
         """Récupère tous les templates (dernière version de chaque) avec leurs champs"""
@@ -96,7 +91,7 @@ class PartTemplateRepository:
             raise DatabaseError(
                 "Erreur lors de la récupération des templates: %s" % str(e)) from e
         finally:
-            conn.close()
+            release_connection(conn)
 
     def get_by_id_with_fields(self, template_id: str, version: int = None) -> Dict[str, Any]:
         """
@@ -196,7 +191,7 @@ class PartTemplateRepository:
             raise DatabaseError(
                 "Erreur lors de la récupération du template: %s" % str(e)) from e
         finally:
-            conn.close()
+            release_connection(conn)
 
     def get_by_id(self, template_id: str, version: int = None) -> Dict[str, Any]:
         """
@@ -243,7 +238,7 @@ class PartTemplateRepository:
             raise DatabaseError(
                 "Erreur lors de la récupération du template: %s" % str(e)) from e
         finally:
-            conn.close()
+            release_connection(conn)
 
     def get_by_code(self, code: str) -> List[Dict[str, Any]]:
         """Récupère toutes les versions d'un template par code"""
@@ -268,7 +263,7 @@ class PartTemplateRepository:
             raise DatabaseError(
                 "Erreur lors de la récupération du template: %s" % str(e)) from e
         finally:
-            conn.close()
+            release_connection(conn)
 
     def create(self, data: PartTemplateIn) -> Dict[str, Any]:
         """
@@ -348,7 +343,7 @@ class PartTemplateRepository:
             raise DatabaseError(
                 "Erreur lors de la création du template: %s" % str(e)) from e
         finally:
-            conn.close()
+            release_connection(conn)
 
     def create_new_version(self, template_id: str, data: PartTemplateUpdate) -> Dict[str, Any]:
         """
@@ -440,7 +435,7 @@ class PartTemplateRepository:
             raise DatabaseError(
                 "Erreur lors de la création de la version: %s" % str(e)) from e
         finally:
-            conn.close()
+            release_connection(conn)
 
     def delete(self, template_id: str, version: int = None) -> bool:
         """
@@ -497,4 +492,4 @@ class PartTemplateRepository:
             raise DatabaseError(
                 "Erreur lors de la suppression du template: %s" % str(e)) from e
         finally:
-            conn.close()
+            release_connection(conn)

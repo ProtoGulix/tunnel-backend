@@ -2,6 +2,7 @@ from fastapi import APIRouter, Request, Response, Depends
 from fastapi.responses import StreamingResponse
 from io import BytesIO
 import hashlib
+import re
 from uuid import UUID
 
 from api.exports.repo import ExportRepository
@@ -41,8 +42,9 @@ async def export_intervention_pdf(intervention_id: str, request: Request):
     html = generator.render_html(data)
     pdf_bytes = generator.generate_pdf(html)
 
-    # Prepare response
-    filename = f"{data['code']}.pdf"
+    # Prepare response — sanitize filename to prevent header injection
+    safe_code = re.sub(r'[^\w\-]', '_', str(data.get('code') or intervention_id))
+    filename = f"{safe_code}.pdf"
     etag = hashlib.md5(pdf_bytes).hexdigest()
 
     return Response(
@@ -89,11 +91,12 @@ async def export_intervention_qrcode(intervention_id: str):
     qr_img.save(buffer, format="PNG")
     buffer.seek(0)
 
+    safe_code = re.sub(r'[^\w\-]', '_', str(code))
     return StreamingResponse(
         buffer,
         media_type="image/png",
         headers={
-            "Content-Disposition": f'inline; filename="{code}.png"',
+            "Content-Disposition": f'inline; filename="{safe_code}.png"',
             "Cache-Control": "public, max-age=3600"
         }
     )

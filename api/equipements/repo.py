@@ -2,7 +2,7 @@
 from typing import Dict, Any, List
 from uuid import uuid4
 
-from api.settings import settings
+from api.db import get_connection, release_connection
 from api.errors.exceptions import DatabaseError, NotFoundError
 from api.constants import PRIORITY_TYPES, CLOSED_STATUS_CODE, INTERVENTION_TYPES_MAP
 
@@ -11,29 +11,18 @@ class EquipementRepository:
     """Requêtes pour le domaine equipement avec statistiques interventions"""
 
     def _get_connection(self):
-        """Ouvre une connexion à la base de données via settings"""
-        try:
-            return settings.get_db_connection()
-        except Exception as e:
-            raise DatabaseError(
-                f"Erreur de connexion base de données: {str(e)}") from e
+        return get_connection()
 
-    def _get_closed_status_id(self, conn) -> str:
-        """Récupère l'ID du statut 'ferme' depuis la DB"""
-        cur = conn.cursor()
-        cur.execute(
-            "SELECT id FROM intervention_status_ref WHERE code = %s LIMIT 1",
-            (CLOSED_STATUS_CODE,)
-        )
-        row = cur.fetchone()
-        return row[0] if row else CLOSED_STATUS_CODE
+    def _closed_status_subquery(self) -> str:
+        """Retourne une sous-requête paramétrée pour l'ID du statut fermé"""
+        return "(SELECT id FROM intervention_status_ref WHERE code = %s LIMIT 1)"
 
     def get_all(self) -> List[Dict[str, Any]]:
         """Récupère tous les équipements - liste légère avec health"""
         conn = self._get_connection()
         try:
             cur = conn.cursor()
-            ferme_id = self._get_closed_status_id(conn)
+            csq = self._closed_status_subquery()
 
             query = f"""
                 SELECT
@@ -44,8 +33,8 @@ class EquipementRepository:
                     ec.id as equipement_class_id,
                     ec.code as equipement_class_code,
                     ec.label as equipement_class_label,
-                    COUNT(CASE WHEN i.status_actual != '{ferme_id}' THEN i.id END) as open_interventions_count,
-                    COUNT(CASE WHEN i.status_actual != '{ferme_id}' AND i.priority = 'urgent' THEN i.id END) as urgent_count
+                    COUNT(CASE WHEN i.status_actual != {csq} THEN i.id END) as open_interventions_count,
+                    COUNT(CASE WHEN i.status_actual != {csq} AND i.priority = 'urgent' THEN i.id END) as urgent_count
                 FROM machine m
                 LEFT JOIN intervention i ON i.machine_id = m.id
                 LEFT JOIN equipement_class ec ON ec.id = m.equipement_class_id
@@ -53,7 +42,7 @@ class EquipementRepository:
                 ORDER BY urgent_count DESC, open_interventions_count DESC, m.name ASC
             """
 
-            cur.execute(query)
+            cur.execute(query, (CLOSED_STATUS_CODE, CLOSED_STATUS_CODE))
             rows = cur.fetchall()
             cols = [desc[0] for desc in cur.description]
             equipements = [dict(zip(cols, row)) for row in rows]
@@ -90,7 +79,7 @@ class EquipementRepository:
         except Exception as e:
             raise DatabaseError(f"Erreur base de données: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
     def get_by_id(
         self,
@@ -102,7 +91,7 @@ class EquipementRepository:
         conn = self._get_connection()
         try:
             cur = conn.cursor()
-            ferme_id = self._get_closed_status_id(conn)
+            csq = self._closed_status_subquery()
 
             query = f"""
                 SELECT
@@ -120,8 +109,8 @@ class EquipementRepository:
                     ec.id as equipement_class_id,
                     ec.code as equipement_class_code,
                     ec.label as equipement_class_label,
-                    COUNT(CASE WHEN i.status_actual != '{ferme_id}' THEN i.id END) as open_interventions_count,
-                    COUNT(CASE WHEN i.status_actual != '{ferme_id}' AND i.priority = 'urgent' THEN i.id END) as urgent_count
+                    COUNT(CASE WHEN i.status_actual != {csq} THEN i.id END) as open_interventions_count,
+                    COUNT(CASE WHEN i.status_actual != {csq} AND i.priority = 'urgent' THEN i.id END) as urgent_count
                 FROM machine m
                 LEFT JOIN intervention i ON i.machine_id = m.id
                 LEFT JOIN equipement_class ec ON ec.id = m.equipement_class_id
@@ -129,7 +118,7 @@ class EquipementRepository:
                 GROUP BY m.id, ec.id, ec.code, ec.label
             """
 
-            cur.execute(query, (equipement_id,))
+            cur.execute(query, (CLOSED_STATUS_CODE, CLOSED_STATUS_CODE, equipement_id))
             row = cur.fetchone()
             if not row:
                 raise NotFoundError(f"Équipement {equipement_id} non trouvé")
@@ -230,7 +219,7 @@ class EquipementRepository:
         except Exception as e:
             raise DatabaseError(f"Erreur base de données: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
     def get_children(
         self,
@@ -243,7 +232,7 @@ class EquipementRepository:
         conn = self._get_connection()
         try:
             cur = conn.cursor()
-            ferme_id = self._get_closed_status_id(conn)
+            csq = self._closed_status_subquery()
 
             # Vérifier que l'équipement existe
             cur.execute("SELECT id FROM machine WHERE id = %s",
@@ -253,7 +242,7 @@ class EquipementRepository:
 
             search_clause = ""
             params_count: list = [equipement_id]
-            params_items: list = [equipement_id]
+            params_items: list = [CLOSED_STATUS_CODE, CLOSED_STATUS_CODE, equipement_id]
 
             if search:
                 search_clause = " AND (m.code ILIKE %s OR m.name ILIKE %s)"
@@ -277,8 +266,8 @@ class EquipementRepository:
                     m.id,
                     m.code,
                     m.name,
-                    COUNT(CASE WHEN i.status_actual != '{ferme_id}' THEN i.id END) as open_interventions_count,
-                    COUNT(CASE WHEN i.status_actual != '{ferme_id}' AND i.priority = 'urgent' THEN i.id END) as urgent_count
+                    COUNT(CASE WHEN i.status_actual != {csq} THEN i.id END) as open_interventions_count,
+                    COUNT(CASE WHEN i.status_actual != {csq} AND i.priority = 'urgent' THEN i.id END) as urgent_count
                 FROM machine m
                 LEFT JOIN intervention i ON i.machine_id = m.id
                 WHERE m.equipement_mere = %s{search_clause}
@@ -310,7 +299,7 @@ class EquipementRepository:
         except Exception as e:
             raise DatabaseError(f"Erreur base de données: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
     def add(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Crée un nouvel équipement"""
@@ -338,7 +327,7 @@ class EquipementRepository:
             raise DatabaseError(
                 f"Erreur lors de la creation de l'equipement: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
         return self.get_by_id(equipement_id)
 
@@ -382,7 +371,7 @@ class EquipementRepository:
             raise DatabaseError(
                 f"Erreur lors de la mise a jour de l'equipement: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
         return self.get_by_id(equipement_id)
 
@@ -401,14 +390,14 @@ class EquipementRepository:
             raise DatabaseError(
                 f"Erreur lors de la suppression de l'equipement: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
     def get_by_equipement_mere(self, equipement_mere_id: str) -> List[Dict[str, Any]]:
         """Récupère les sous-équipements d'un équipement parent avec health"""
         conn = self._get_connection()
         try:
             cur = conn.cursor()
-            ferme_id = self._get_closed_status_id(conn)
+            csq = self._closed_status_subquery()
 
             query = f"""
                 SELECT
@@ -419,8 +408,8 @@ class EquipementRepository:
                     ec.id as equipement_class_id,
                     ec.code as equipement_class_code,
                     ec.label as equipement_class_label,
-                    COUNT(CASE WHEN i.status_actual != '{ferme_id}' THEN i.id END) as open_interventions_count,
-                    COUNT(CASE WHEN i.status_actual != '{ferme_id}' AND i.priority = 'urgent' THEN i.id END) as urgent_count
+                    COUNT(CASE WHEN i.status_actual != {csq} THEN i.id END) as open_interventions_count,
+                    COUNT(CASE WHEN i.status_actual != {csq} AND i.priority = 'urgent' THEN i.id END) as urgent_count
                 FROM machine m
                 LEFT JOIN intervention i ON i.machine_id = m.id
                 LEFT JOIN equipement_class ec ON ec.id = m.equipement_class_id
@@ -429,7 +418,7 @@ class EquipementRepository:
                 ORDER BY urgent_count DESC, open_interventions_count DESC, m.name ASC
             """
 
-            cur.execute(query, (equipement_mere_id,))
+            cur.execute(query, (CLOSED_STATUS_CODE, CLOSED_STATUS_CODE, equipement_mere_id))
             rows = cur.fetchall()
             cols = [desc[0] for desc in cur.description]
             equipements = [dict(zip(cols, row)) for row in rows]
@@ -465,14 +454,14 @@ class EquipementRepository:
         except Exception as e:
             raise DatabaseError(f"Erreur base de données: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
     def get_stats_by_id(self, equipement_id: str, start_date=None, end_date=None) -> Dict[str, Any]:
         """Récupère les statistiques détaillées d'un équipement, avec filtre période optionnel"""
         conn = self._get_connection()
         try:
             cur = conn.cursor()
-            ferme_id = self._get_closed_status_id(conn)
+            csq = self._closed_status_subquery()
 
             # Vérifier que l'équipement existe
             cur.execute("SELECT id FROM machine WHERE id = %s",
@@ -484,14 +473,14 @@ class EquipementRepository:
             cur.execute("SELECT id, code FROM intervention_status_ref")
             all_status = [(row[0], row[1]) for row in cur.fetchall()]
 
-            # Générer colonnes par statut
+            # Générer colonnes par statut (status_id est un UUID issu de la DB)
             status_columns = []
             for status_id, _ in all_status:
                 status_columns.append(
                     f"COUNT(CASE WHEN i.status_actual = '{status_id}' THEN i.id END) as status_{status_id}"
                 )
 
-            # Générer colonnes par priorité
+            # Générer colonnes par priorité (pid est une constante applicative)
             priority_columns = []
             for p in PRIORITY_TYPES:
                 pid = p.get('id')
@@ -500,7 +489,7 @@ class EquipementRepository:
                 )
 
             where_clauses = ["i.machine_id = %s"]
-            params = [equipement_id]
+            params: list = [CLOSED_STATUS_CODE, CLOSED_STATUS_CODE, equipement_id]
 
             # Période: start_date optionnel, end_date optionnel (defaut = NOW())
             if start_date:
@@ -513,9 +502,9 @@ class EquipementRepository:
             where_sql = "WHERE " + " AND ".join(where_clauses)
 
             query = f"""
-                SELECT 
-                    COUNT(CASE WHEN i.status_actual != '{ferme_id}' THEN i.id END) as open_count,
-                    COUNT(CASE WHEN i.status_actual = '{ferme_id}' THEN i.id END) as closed_count,
+                SELECT
+                    COUNT(CASE WHEN i.status_actual != {csq} THEN i.id END) as open_count,
+                    COUNT(CASE WHEN i.status_actual = {csq} THEN i.id END) as closed_count,
                     {', '.join(status_columns)},
                     {', '.join(priority_columns)}
                 FROM intervention i
@@ -551,26 +540,26 @@ class EquipementRepository:
         except Exception as e:
             raise DatabaseError(f"Erreur base de données: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
     def get_health_by_id(self, equipement_id: str) -> Dict[str, Any]:
         """Récupère uniquement le health d'un équipement (ultra-léger)"""
         conn = self._get_connection()
         try:
             cur = conn.cursor()
-            ferme_id = self._get_closed_status_id(conn)
+            csq = self._closed_status_subquery()
 
             query = f"""
-                SELECT 
-                    COUNT(CASE WHEN i.status_actual != '{ferme_id}' THEN i.id END) as open_count,
-                    COUNT(CASE WHEN i.status_actual != '{ferme_id}' AND i.priority = 'urgent' THEN i.id END) as urgent_count
+                SELECT
+                    COUNT(CASE WHEN i.status_actual != {csq} THEN i.id END) as open_count,
+                    COUNT(CASE WHEN i.status_actual != {csq} AND i.priority = 'urgent' THEN i.id END) as urgent_count
                 FROM machine m
                 LEFT JOIN intervention i ON i.machine_id = m.id
                 WHERE m.id = %s
                 GROUP BY m.id
             """
 
-            cur.execute(query, (equipement_id,))
+            cur.execute(query, (CLOSED_STATUS_CODE, CLOSED_STATUS_CODE, equipement_id))
             row = cur.fetchone()
 
             if row is None:
@@ -596,7 +585,7 @@ class EquipementRepository:
         except Exception as e:
             raise DatabaseError(f"Erreur base de données: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
     def _calculate_health(self, open_count: int, urgent_count: int) -> Dict[str, Any]:
         """Calcule le health d'un équipement selon interventions"""

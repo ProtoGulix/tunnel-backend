@@ -3,6 +3,7 @@ from uuid import uuid4
 from decimal import Decimal
 
 from api.settings import settings
+from api.db import get_connection, release_connection
 from api.errors.exceptions import DatabaseError, NotFoundError
 
 
@@ -10,12 +11,7 @@ class SupplierOrderLineRepository:
     """Requêtes pour le domaine supplier_order_line"""
 
     def _get_connection(self):
-        """Ouvre une connexion à la base de données via settings"""
-        try:
-            return settings.get_db_connection()
-        except Exception as e:
-            raise DatabaseError(
-                f"Erreur de connexion base de données: {str(e)}") from e
+        return get_connection()
 
     def _convert_decimals(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Convertit les Decimal en float pour la sérialisation JSON"""
@@ -128,7 +124,7 @@ class SupplierOrderLineRepository:
         except Exception as e:
             raise DatabaseError(f"Erreur base de données: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
     def get_by_id(self, line_id: str) -> Dict[str, Any]:
         """Récupère une ligne par ID avec stock_item et purchase_requests"""
@@ -160,7 +156,7 @@ class SupplierOrderLineRepository:
         except Exception as e:
             raise DatabaseError(f"Erreur base de données: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
     def get_by_order(self, supplier_order_id: str) -> List[Dict[str, Any]]:
         """Récupère toutes les lignes d'une commande avec détails"""
@@ -186,7 +182,7 @@ class SupplierOrderLineRepository:
         except Exception as e:
             raise DatabaseError(f"Erreur base de données: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
     def add(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Crée une nouvelle ligne de commande"""
@@ -268,7 +264,7 @@ class SupplierOrderLineRepository:
             raise DatabaseError(
                 f"Erreur lors de la création de la ligne: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
         return self.get_by_id(line_id)
 
@@ -360,7 +356,7 @@ class SupplierOrderLineRepository:
             raise DatabaseError(
                 f"Erreur lors de la mise à jour: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
         return self.get_by_id(line_id)
 
@@ -381,7 +377,7 @@ class SupplierOrderLineRepository:
             raise DatabaseError(
                 f"Erreur lors de la suppression: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
     def link_purchase_request(
         self,
@@ -412,7 +408,7 @@ class SupplierOrderLineRepository:
             raise DatabaseError(
                 f"Erreur lors de la liaison: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
         return self.get_by_id(line_id)
 
@@ -437,6 +433,6 @@ class SupplierOrderLineRepository:
             raise DatabaseError(
                 f"Erreur lors de la suppression du lien: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
         return self.get_by_id(line_id)

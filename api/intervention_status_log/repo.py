@@ -2,6 +2,7 @@ from typing import Any, Dict, List
 from uuid import uuid4
 
 from api.settings import settings
+from api.db import get_connection, release_connection
 from api.errors.exceptions import DatabaseError, NotFoundError
 from api.intervention_status_log.validators import InterventionStatusLogValidator
 
@@ -10,12 +11,7 @@ class InterventionStatusLogRepository:
     """Repository pour les logs de changement de statut d'intervention"""
 
     def _get_connection(self):
-        """Ouvre une connexion à la base de données via settings"""
-        try:
-            return settings.get_db_connection()
-        except Exception as e:
-            raise DatabaseError(
-                f"Erreur de connexion base de données: {str(e)}") from e
+        return get_connection()
 
     @staticmethod
     def _safe_int_value(value: Any) -> int | None:
@@ -123,7 +119,7 @@ class InterventionStatusLogRepository:
         except Exception as e:
             raise DatabaseError(f"Erreur base de données: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
     def get_by_id(self, log_id: str) -> Dict[str, Any]:
         """Récupère un log par ID avec détails enrichis"""
@@ -199,7 +195,7 @@ class InterventionStatusLogRepository:
         except Exception as e:
             raise DatabaseError(f"Erreur base de données: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
     def get_by_intervention(self, intervention_id: str) -> List[Dict[str, Any]]:
         """Récupère tous les logs d'une intervention, triés par date DESC"""
@@ -246,4 +242,4 @@ class InterventionStatusLogRepository:
             conn.rollback()
             raise DatabaseError(f"Erreur lors de l'ajout du log: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)

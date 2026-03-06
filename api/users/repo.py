@@ -1,7 +1,7 @@
 from typing import List, Dict, Any, Optional
 
 from api.errors.exceptions import DatabaseError, NotFoundError
-from api.settings import settings
+from api.db import get_connection, release_connection
 
 
 # Champs exposés (exclusion des champs sensibles)
@@ -15,10 +15,7 @@ DETAIL_COLUMNS = (
 class UserRepository:
 
     def _get_connection(self):
-        try:
-            return settings.get_db_connection()
-        except Exception as e:
-            raise DatabaseError(f"Erreur de connexion: {str(e)}") from e
+        return get_connection()
 
     def get_all(
         self,
@@ -61,7 +58,7 @@ class UserRepository:
         except Exception as e:
             raise DatabaseError(f"Erreur base de données: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
     def get_by_id(self, user_id: str) -> Dict[str, Any]:
         conn = self._get_connection()
@@ -81,4 +78,4 @@ class UserRepository:
         except Exception as e:
             raise DatabaseError(f"Erreur base de données: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)

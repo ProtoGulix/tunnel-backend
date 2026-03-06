@@ -1,5 +1,6 @@
 import httpx
 from api.settings import settings
+from api.db import check_connection
 from pydantic import BaseModel
 
 __version__ = settings.API_VERSION
@@ -14,14 +15,8 @@ class HealthCheckResponse(BaseModel):
 
 
 def check_database_connection() -> str:
-    """Vérifie la connexion à PostgreSQL"""
-    try:
-        conn = settings.get_db_connection()
-        conn.close()
-        return "connected"
-    except Exception as e:
-        error_type = type(e).__name__
-        return f"error: {error_type} - {str(e)[:100]}"
+    """Vérifie la connexion à PostgreSQL via le pool."""
+    return check_connection()
 
 
 def check_auth_service_connection() -> str:

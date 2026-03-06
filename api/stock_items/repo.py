@@ -2,6 +2,7 @@ from typing import Dict, Any, List, Optional
 from uuid import uuid4
 
 from api.settings import settings
+from api.db import get_connection, release_connection
 from api.errors.exceptions import DatabaseError, NotFoundError
 
 
@@ -9,12 +10,7 @@ class StockItemRepository:
     """Requêtes pour le domaine stock_item"""
 
     def _get_connection(self):
-        """Ouvre une connexion à la base de données via settings"""
-        try:
-            return settings.get_db_connection()
-        except Exception as e:
-            raise DatabaseError(
-                f"Erreur de connexion base de données: {str(e)}") from e
+        return get_connection()
 
     def _build_where(
         self,
@@ -75,7 +71,7 @@ class StockItemRepository:
         except Exception as e:
             raise DatabaseError(f"Erreur base de données: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
     def get_all(
         self,
@@ -144,7 +140,7 @@ class StockItemRepository:
         except Exception as e:
             raise DatabaseError(f"Erreur base de données: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
     def get_facets(self, search: Optional[str] = None) -> Dict[str, Any]:
         """
@@ -206,7 +202,7 @@ class StockItemRepository:
         except Exception as e:
             raise DatabaseError(f"Erreur base de données: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
     def get_by_id(self, item_id: str) -> Dict[str, Any]:
         """Récupère un article par ID avec ses fournisseurs et le template de sous-famille"""
@@ -268,7 +264,7 @@ class StockItemRepository:
         except Exception as e:
             raise DatabaseError(f"Erreur base de données: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
     def get_by_ref(self, ref: str) -> Dict[str, Any]:
         """Récupère un article par référence"""
@@ -285,7 +281,7 @@ class StockItemRepository:
         except Exception as e:
             raise DatabaseError(f"Erreur base de données: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
     def add(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Crée un nouvel article en stock"""
@@ -323,7 +319,7 @@ class StockItemRepository:
             raise DatabaseError(
                 f"Erreur lors de la création de l'article: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
     def update(self, item_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
         """Met à jour un article existant"""
@@ -365,7 +361,7 @@ class StockItemRepository:
             raise DatabaseError(
                 f"Erreur lors de la mise à jour: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
     def delete(self, item_id: str) -> bool:
         """Supprime un article"""
@@ -382,7 +378,7 @@ class StockItemRepository:
             raise DatabaseError(
                 f"Erreur lors de la suppression: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
     def update_quantity(self, item_id: str, quantity: int) -> Dict[str, Any]:
         """Met à jour uniquement la quantité d'un article"""
@@ -406,4 +402,4 @@ class StockItemRepository:
             raise DatabaseError(
                 f"Erreur lors de la mise à jour de la quantité: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)

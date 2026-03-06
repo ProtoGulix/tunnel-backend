@@ -1,6 +1,7 @@
 from typing import Dict, Any, List
 
 from api.settings import settings
+from api.db import get_connection, release_connection
 from api.errors.exceptions import DatabaseError, NotFoundError
 
 
@@ -8,12 +9,7 @@ class ActionSubcategoryRepository:
     """Requêtes pour le domaine action_subcategory"""
 
     def _get_connection(self):
-        """Ouvre une connexion à la base de données via settings"""
-        try:
-            return settings.get_db_connection()
-        except Exception as e:
-            raise DatabaseError(
-                f"Erreur de connexion base de données: {str(e)}")
+        return get_connection()
 
     def get_all(self) -> List[Dict[str, Any]]:
         """Récupère toutes les sous-catégories avec leur catégorie"""
@@ -57,7 +53,7 @@ class ActionSubcategoryRepository:
         except Exception as e:
             raise DatabaseError(f"Erreur base de données: {str(e)}")
         finally:
-            conn.close()
+            release_connection(conn)
 
     def get_by_id(self, subcategory_id: int) -> Dict[str, Any]:
         """Récupère une sous-catégorie par ID"""
@@ -79,7 +75,7 @@ class ActionSubcategoryRepository:
         except Exception as e:
             raise DatabaseError(f"Erreur base de données: {str(e)}")
         finally:
-            conn.close()
+            release_connection(conn)
 
     def get_by_category(self, category_id: int) -> List[Dict[str, Any]]:
         """Récupère les sous-catégories d'une catégorie"""
@@ -96,4 +92,4 @@ class ActionSubcategoryRepository:
         except Exception as e:
             raise DatabaseError(f"Erreur base de données: {str(e)}")
         finally:
-            conn.close()
+            release_connection(conn)

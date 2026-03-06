@@ -3,6 +3,7 @@ from uuid import uuid4
 from datetime import datetime
 
 from api.settings import settings
+from api.db import get_connection, release_connection
 from api.errors.exceptions import DatabaseError, NotFoundError
 from api.utils.sanitizer import strip_html
 from api.intervention_actions.validators import InterventionActionValidator
@@ -12,12 +13,7 @@ class InterventionActionRepository:
     """Requêtes pour le domaine intervention_action"""
 
     def _get_connection(self):
-        """Ouvre une connexion à la base de données via settings"""
-        try:
-            return settings.get_db_connection()
-        except Exception as e:
-            raise DatabaseError(
-                f"Erreur de connexion base de données: {str(e)}") from e
+        return get_connection()
 
     def _map_action_with_subcategory(self, row_dict: Dict[str, Any]) -> Dict[str, Any]:
         """Mappe une row avec subcategory et category imbriquées"""
@@ -122,7 +118,7 @@ class InterventionActionRepository:
         except Exception as e:
             raise DatabaseError(f"Erreur base de données: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
     def get_by_id(self, action_id: str) -> Dict[str, Any]:
         """Récupère une action par ID avec tech hydraté"""
@@ -151,7 +147,7 @@ class InterventionActionRepository:
         except Exception as e:
             raise DatabaseError(f"Erreur base de données: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
     def get_by_intervention(self, intervention_id: str) -> List[Dict[str, Any]]:
         """Récupère les actions d'une intervention avec détail de sous-catégorie et couleur"""
@@ -194,7 +190,7 @@ class InterventionActionRepository:
         except Exception as e:
             raise DatabaseError(f"Erreur base de données: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
     def get_by_id_with_subcategory(self, action_id: str) -> Dict[str, Any]:
         """Récupère une action avec détail de sous-catégorie et couleur"""
@@ -235,7 +231,7 @@ class InterventionActionRepository:
         except Exception as e:
             raise DatabaseError(f"Erreur base de données: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
     def add(self, action_data: Dict[str, Any]) -> Dict[str, Any]:
         """Ajoute une nouvelle action à une intervention"""
@@ -284,7 +280,7 @@ class InterventionActionRepository:
             raise DatabaseError(
                 f"Erreur lors de l'ajout de l'action: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
     def update(self, action_id: str, patch_data: Dict[str, Any]) -> Dict[str, Any]:
         """Met à jour partiellement une action existante"""
@@ -347,6 +343,6 @@ class InterventionActionRepository:
             raise DatabaseError(
                 f"Erreur lors de la mise à jour: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
         return self.get_by_id_with_subcategory(action_id)

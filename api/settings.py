@@ -2,8 +2,6 @@ import os
 import sys
 import logging
 from pydantic_settings import BaseSettings
-from urllib.parse import urlparse
-import pg8000.dbapi
 
 logger = logging.getLogger(__name__)
 
@@ -16,6 +14,8 @@ class Settings(BaseSettings):
         "DATABASE_URL",
         "postgresql://user:password@localhost:5432/gmao"
     )
+    DB_POOL_MIN: int = int(os.getenv("DB_POOL_MIN", "2"))
+    DB_POOL_MAX: int = int(os.getenv("DB_POOL_MAX", "10"))
 
     # Directus
     DIRECTUS_URL: str = os.getenv(
@@ -27,7 +27,7 @@ class Settings(BaseSettings):
 
     # API
     API_TITLE: str = "GMAO API"
-    API_VERSION: str = "2.7.2"
+    API_VERSION: str = "2.7.3"
     API_ENV: str = os.getenv("API_ENV", "development")
     AUTH_DISABLED: bool = os.getenv("AUTH_DISABLED", "false").lower() == "true"
     FRONTEND_URL: str = os.getenv("FRONTEND_URL", "http://localhost:5173")
@@ -72,33 +72,6 @@ class Settings(BaseSettings):
             ]
         # En prod: uniquement l'origine configurée
         return [self.FRONTEND_URL]
-
-    def get_db_connection(self):
-        """Créé une connexion PostgreSQL"""
-        try:
-            parsed = urlparse(self.DATABASE_URL)
-            return pg8000.dbapi.connect(
-                host=parsed.hostname,
-                port=parsed.port or 5432,
-                user=parsed.username,
-                password=parsed.password,
-                database=parsed.path.lstrip("/"),
-                timeout=3
-            )
-        except TimeoutError:
-            raise Exception(
-                f"PostgreSQL indisponible: {parsed.hostname}:{parsed.port or 5432} - vérifier que Docker est actif"
-            )
-        except ConnectionRefusedError:
-            raise Exception(
-                f"PostgreSQL refuse la connexion: {parsed.hostname}:{parsed.port or 5432} - vérifier que le service est démarré"
-            )
-        except Exception as e:
-            if "timeout" in str(e).lower():
-                raise Exception(
-                    f"PostgreSQL indisponible: {parsed.hostname}:{parsed.port or 5432} - vérifier que Docker est actif"
-                )
-            raise
 
     class Config:
         env_file = ".env"

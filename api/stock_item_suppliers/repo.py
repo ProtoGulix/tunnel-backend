@@ -3,6 +3,7 @@ from uuid import uuid4
 from decimal import Decimal
 
 from api.settings import settings
+from api.db import get_connection, release_connection
 from api.errors.exceptions import DatabaseError, NotFoundError
 
 
@@ -10,12 +11,7 @@ class StockItemSupplierRepository:
     """Requêtes pour le domaine stock_item_supplier"""
 
     def _get_connection(self):
-        """Ouvre une connexion à la base de données via settings"""
-        try:
-            return settings.get_db_connection()
-        except Exception as e:
-            raise DatabaseError(
-                f"Erreur de connexion base de données: {str(e)}") from e
+        return get_connection()
 
     def _convert_decimals(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Convertit les Decimal en float pour la sérialisation JSON"""
@@ -97,7 +93,7 @@ class StockItemSupplierRepository:
         except Exception as e:
             raise DatabaseError(f"Erreur base de données: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
     def get_by_id(self, ref_id: str) -> Dict[str, Any]:
         """Récupère une référence fournisseur par ID"""
@@ -133,7 +129,7 @@ class StockItemSupplierRepository:
         except Exception as e:
             raise DatabaseError(f"Erreur base de données: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
     def get_by_stock_item(self, stock_item_id: str) -> List[Dict[str, Any]]:
         """Récupère toutes les références fournisseurs d'un article"""
@@ -164,7 +160,7 @@ class StockItemSupplierRepository:
         except Exception as e:
             raise DatabaseError(f"Erreur base de données: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
     def get_by_supplier(self, supplier_id: str) -> List[Dict[str, Any]]:
         """Récupère toutes les références fournisseurs d'un fournisseur"""
@@ -195,7 +191,7 @@ class StockItemSupplierRepository:
         except Exception as e:
             raise DatabaseError(f"Erreur base de données: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
     def add(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Crée une nouvelle référence fournisseur"""
@@ -270,7 +266,7 @@ class StockItemSupplierRepository:
             raise DatabaseError(
                 f"Erreur lors de la création de la référence fournisseur: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
         return self.get_by_id(ref_id)
 
@@ -332,7 +328,7 @@ class StockItemSupplierRepository:
             raise DatabaseError(
                 f"Erreur lors de la mise à jour: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
         return self.get_by_id(ref_id)
 
@@ -371,7 +367,7 @@ class StockItemSupplierRepository:
             raise DatabaseError(
                 f"Erreur lors de la suppression: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
     def set_preferred(self, ref_id: str) -> Dict[str, Any]:
         """Définit une référence comme préférée (et désactive les autres)"""
@@ -407,6 +403,6 @@ class StockItemSupplierRepository:
             raise DatabaseError(
                 f"Erreur lors de la mise à jour du préféré: {str(e)}") from e
         finally:
-            conn.close()
+            release_connection(conn)
 
         return self.get_by_id(ref_id)
