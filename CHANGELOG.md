@@ -2,6 +2,24 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [2.7.5] - 6 mars 2026
+
+### Corrections
+
+- **`PATCH /stock-sub-families/{fc}/{sfc}` — 500** : psycopg2 ne sait pas adapter les objets `UUID` Python nativement — ajout de `register_uuid()` dans `api/db.py` à l'initialisation du pool, ce qui résout l'erreur `can't adapt type 'UUID'` pour toutes les requêtes de l'API
+
+### Améliorations
+
+- **`POST /stock-items` — support du format frontend** : le champ `characteristics` accepte désormais deux formats en entrée :
+  - Format liste (existant) : `[{ "key": "DIAM", "value": 12 }, ...]`
+  - Format objet plat (frontend) : `{ "DIAM": "12", "MAT": "ACIER", ... }` — converti automatiquement par un validator Pydantic
+
+- **`GET /stock-items/{id}` — fusion avec `with-characteristics`** : l'endpoint détail retourne désormais directement les champs `template_id`, `template_version` et `characteristics` (tableau vide pour les items legacy). L'endpoint `GET /stock-items/{id}/with-characteristics` est supprimé
+
+- **`CharacteristicValue` — ajout du champ `label`** : les caractéristiques retournées dans `GET /stock-items/{id}` incluent maintenant le libellé du champ template (`f.label` ajouté dans le `SELECT` sur `part_template_field`)
+
+---
+
 ## [2.7.4] - 6 mars 2026
 
 ### Sécurité

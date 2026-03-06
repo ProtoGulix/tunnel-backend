@@ -47,7 +47,8 @@ class StockItemRepository:
                 f"NOT EXISTS (SELECT 1 FROM stock_item_supplier sis WHERE sis.stock_item_id = {a}id)"
             )
 
-        where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
+        where_sql = ("WHERE " + " AND ".join(where_clauses)
+                     ) if where_clauses else ""
         return where_sql, params
 
     def count_all(
@@ -224,9 +225,11 @@ class StockItemRepository:
                 SELECT
                     sis.id, sis.supplier_id, s.name AS supplier_name,
                     sis.supplier_ref, sis.unit_price, sis.min_order_quantity,
-                    sis.delivery_time_days, sis.is_preferred, sis.manufacturer_item_id
+                    sis.delivery_time_days, sis.is_preferred,
+                    mi.id AS mi_id, mi.manufacturer_name, mi.manufacturer_ref
                 FROM stock_item_supplier sis
                 LEFT JOIN supplier s ON s.id = sis.supplier_id
+                LEFT JOIN manufacturer_item mi ON mi.id = sis.manufacturer_item_id
                 WHERE sis.stock_item_id = %s
                 ORDER BY sis.is_preferred DESC, s.name ASC
                 """,
@@ -239,6 +242,15 @@ class StockItemRepository:
                 s = dict(zip(sup_cols, sup_row))
                 if s.get('unit_price') is not None:
                     s['unit_price'] = float(s['unit_price'])
+                if s.get('mi_id'):
+                    s['manufacturer_item'] = {
+                        'id': s['mi_id'],
+                        'manufacturer_name': s['manufacturer_name'],
+                        'manufacturer_ref': s['manufacturer_ref'],
+                    }
+                else:
+                    s['manufacturer_item'] = None
+                del s['mi_id'], s['manufacturer_name'], s['manufacturer_ref']
                 item['suppliers'].append(s)
 
             # Template de la sous-famille
@@ -257,6 +269,26 @@ class StockItemRepository:
                 item['sub_family_template'] = dict(zip(tmpl_cols, tmpl_row))
             else:
                 item['sub_family_template'] = None
+
+            # Caractéristiques (template-based uniquement)
+            if item.get('template_id'):
+                cur.execute(
+                    """
+                    SELECT sc.field_id, f.field_key AS key, f.label,
+                           sc.value_text, sc.value_number, sc.value_enum
+                    FROM stock_item_characteristic sc
+                    JOIN part_template_field f ON f.id = sc.field_id
+                    WHERE sc.stock_item_id = %s
+                    ORDER BY f.sort_order, f.field_key
+                    """,
+                    (item_id,)
+                )
+                char_rows = cur.fetchall()
+                char_cols = [desc[0] for desc in cur.description]
+                item['characteristics'] = [
+                    dict(zip(char_cols, r)) for r in char_rows]
+            else:
+                item['characteristics'] = []
 
             return item
         except NotFoundError:

@@ -140,7 +140,12 @@ class StockSubFamilyRepository:
 
             # Charger le template si présent
             if template_id:
-                template = self.template_service.load_template(template_id)
+                try:
+                    template = self.template_service.load_template(template_id)
+                except (NotFoundError, DatabaseError) as e:
+                    logger.warning("Template %s introuvable pour %s/%s: %s",
+                                   template_id, family_code, sub_family_code, e)
+                    template = None
             else:
                 template = None
 
@@ -158,24 +163,59 @@ class StockSubFamilyRepository:
         finally:
             release_connection(conn)
 
-    def update(self, family_code: str, sub_family_code: str, label: Optional[str] = None, 
+    def create(self, family_code: str, code: str, label: Optional[str] = None,
+               template_id=None) -> StockSubFamily:
+        """Crée une nouvelle sous-famille de stock"""
+        conn = self._get_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT 1 FROM stock_sub_family WHERE family_code = %s AND code = %s",
+                (family_code, code)
+            )
+            if cur.fetchone():
+                from api.errors.exceptions import ValidationError
+                raise ValidationError(
+                    f"Sous-famille {family_code}/{code} existe déjà")
+
+            cur.execute(
+                """
+                INSERT INTO stock_sub_family (family_code, code, label, template_id)
+                VALUES (%s, %s, %s, %s)
+                """,
+                (family_code, code, label, str(template_id) if template_id else None)
+            )
+            conn.commit()
+            logger.info("Sous-famille %s/%s créée", family_code, code)
+            return self.get_by_codes_with_template(family_code, code)
+        except (NotFoundError, DatabaseError):
+            conn.rollback()
+            raise
+        except Exception as e:
+            conn.rollback()
+            raise DatabaseError(
+                f"Erreur lors de la création: {str(e)}") from e
+        finally:
+            release_connection(conn)
+
+    def update(self, family_code: str, sub_family_code: str, label: Optional[str] = None,
                template_id: Optional[UUID] = None) -> StockSubFamily:
         """
         Met à jour une sous-famille de stock
-        
+
         Args:
             family_code: Code de la famille
             sub_family_code: Code de la sous-famille
             label: Nouveau label (optionnel)
             template_id: UUID du template à associer ou None pour dissocier (optionnel)
-            
+
         Returns:
             StockSubFamily mis à jour avec son template
         """
         conn = self._get_connection()
         try:
             cur = conn.cursor()
-            
+
             # Vérifier que la sous-famille existe
             cur.execute(
                 "SELECT 1 FROM stock_sub_family WHERE family_code = %s AND code = %s",
@@ -184,46 +224,48 @@ class StockSubFamilyRepository:
             if not cur.fetchone():
                 raise NotFoundError(
                     f"Sous-famille {family_code}/{sub_family_code} non trouvée")
-            
+
             # Construire la requête UPDATE dynamiquement
             update_fields = []
             params = []
-            
+
             if label is not None:
                 update_fields.append("label = %s")
                 params.append(label)
-            
+
             if template_id is not None:
                 update_fields.append("template_id = %s")
                 params.append(template_id)
-            
+
             if not update_fields:
                 # Aucun champ à mettre à jour, retourner l'objet actuel
                 return self.get_by_codes_with_template(family_code, sub_family_code)
-            
+
             # Ajouter les paramètres pour WHERE
             params.extend([family_code, sub_family_code])
-            
+
             query = f"""
                 UPDATE stock_sub_family
                 SET {', '.join(update_fields)}
                 WHERE family_code = %s AND code = %s
             """
-            
+
             cur.execute(query, params)
             conn.commit()
-            
-            logger.info("Sous-famille %s/%s mise à jour", family_code, sub_family_code)
-            
+
+            logger.info("Sous-famille %s/%s mise à jour",
+                        family_code, sub_family_code)
+
             # Retourner l'objet mis à jour
             return self.get_by_codes_with_template(family_code, sub_family_code)
-            
+
         except NotFoundError:
             conn.rollback()
             raise
         except Exception as e:
             conn.rollback()
-            logger.error("Erreur lors de la mise à jour de la sous-famille: %s", str(e))
+            logger.error(
+                "Erreur lors de la mise à jour de la sous-famille: %s", str(e))
             raise DatabaseError(
                 f"Erreur lors de la mise à jour de la sous-famille: {str(e)}") from e
         finally:

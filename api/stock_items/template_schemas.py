@@ -67,6 +67,7 @@ class CharacteristicValue(BaseModel):
         default=None, description="ID du champ template (pour insertion en base)")
     key: str = Field(..., max_length=50,
                      description="Clé du champ (doit correspondre au template)")
+    label: Optional[str] = Field(default=None, description="Libellé du champ")
     value_text: Optional[str] = Field(default=None, description="Valeur texte")
     value_number: Optional[float] = Field(
         default=None, description="Valeur numérique")

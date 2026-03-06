@@ -4,7 +4,6 @@ from pydantic import BaseModel
 from api.stock_items.repo import StockItemRepository
 from api.stock_items.schemas import StockItemOut, StockItemIn
 from api.stock_items.stock_item_service import StockItemService
-from api.stock_items.template_schemas import StockItemWithCharacteristics
 from api.errors.exceptions import ValidationError, NotFoundError, DatabaseError
 from api.utils.pagination import create_pagination_meta
 
@@ -79,21 +78,9 @@ async def get_stock_item_by_ref(ref: str):
 
 @router.get("/{item_id}", response_model=StockItemOut)
 async def get_stock_item(item_id: str):
-    """Récupère un article par ID avec ses fournisseurs et le template de sous-famille"""
+    """Récupère un article par ID avec ses fournisseurs, template et caractéristiques"""
     repo = StockItemRepository()
     return repo.get_by_id(item_id)
-
-
-@router.get("/{item_id}/with-characteristics", response_model=StockItemWithCharacteristics)
-async def get_stock_item_with_characteristics(item_id: str):
-    """Récupère un article avec ses caractéristiques (si template)"""
-    service = StockItemService()
-    try:
-        return service.get_item_with_characteristics(item_id)
-    except (NotFoundError, DatabaseError) as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post("/", response_model=StockItemOut)

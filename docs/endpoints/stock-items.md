@@ -19,14 +19,14 @@ Liste les articles avec filtres, pagination et facettes.
 
 ### Query params
 
-| Param             | Type   | Défaut | Description                                          |
-| ----------------- | ------ | ------ | ---------------------------------------------------- |
-| `skip`            | int    | 0      | Offset                                               |
-| `limit`           | int    | 50     | Max par page: 1000                                   |
-| `family_code`     | string | —      | Filtrer par famille                                  |
-| `sub_family_code` | string | —      | Filtrer par sous-famille                             |
-| `search`          | string | —      | Recherche nom ou référence (ILIKE)                   |
-| `has_supplier`    | bool   | —      | `true` = articles avec au moins un fournisseur       |
+| Param             | Type   | Défaut | Description                                           |
+| ----------------- | ------ | ------ | ----------------------------------------------------- |
+| `skip`            | int    | 0      | Offset                                                |
+| `limit`           | int    | 50     | Max par page: 1000                                    |
+| `family_code`     | string | —      | Filtrer par famille                                   |
+| `sub_family_code` | string | —      | Filtrer par sous-famille                              |
+| `search`          | string | —      | Recherche nom ou référence (ILIKE)                    |
+| `has_supplier`    | bool   | —      | `true` = articles avec au moins un fournisseur        |
 | `sort_by`         | string | `name` | Tri : `name`, `ref`, `family_code`, `sub_family_code` |
 
 ### Réponse `200`
@@ -98,33 +98,35 @@ Liste les articles avec filtres, pagination et facettes.
 
 Les facettes permettent au front d'afficher les filtres famille/sous-famille avec leurs compteurs sans calcul supplémentaire.
 
-| Champ                          | Description                                        |
-| ------------------------------ | -------------------------------------------------- |
-| `facets.families`              | Liste des familles avec compteur d'articles        |
-| `facets.families[].count`      | Nombre d'articles dans cette famille               |
-| `facets.families[].sub_families` | Sous-familles avec leurs compteurs individuels   |
+| Champ                            | Description                                    |
+| -------------------------------- | ---------------------------------------------- |
+| `facets.families`                | Liste des familles avec compteur d'articles    |
+| `facets.families[].count`        | Nombre d'articles dans cette famille           |
+| `facets.families[].sub_families` | Sous-familles avec leurs compteurs individuels |
 
 ---
 
 ## `GET /stock-items/{id}`
 
-Détail complet avec fournisseurs et template de sous-famille.
+Détail complet avec fournisseurs, template de sous-famille et caractéristiques.
 
 ### Réponse `200` — StockItemOut
 
 ```json
 {
   "id": "uuid",
-  "name": "Roulement SKF 6205",
+  "name": "Roulement à billes 6205",
   "family_code": "OUT",
   "sub_family_code": "ROUL",
   "spec": "SKF",
-  "dimension": "6205",
-  "ref": "OUT-ROUL-SKF-6205",
+  "dimension": "25x52x15",
+  "ref": "OUT-ROUL-SKF-25x52x15",
   "quantity": 15,
   "unit": "pcs",
   "location": "Étagère A3",
   "standars_spec": null,
+  "template_id": "uuid",
+  "template_version": 1,
   "supplier_refs_count": 2,
   "suppliers": [
     {
@@ -136,7 +138,11 @@ Détail complet avec fournisseurs et template de sous-famille.
       "min_order_quantity": 5,
       "delivery_time_days": 3,
       "is_preferred": true,
-      "manufacturer_item_id": "uuid"
+      "manufacturer_item": {
+        "id": "uuid",
+        "manufacturer_name": "SKF",
+        "manufacturer_ref": "6205-2RS"
+      }
     },
     {
       "id": "uuid",
@@ -147,7 +153,7 @@ Détail complet avec fournisseurs et template de sous-famille.
       "min_order_quantity": 1,
       "delivery_time_days": 7,
       "is_preferred": false,
-      "manufacturer_item_id": null
+      "manufacturer_item": null
     }
   ],
   "sub_family_template": {
@@ -155,42 +161,12 @@ Détail complet avec fournisseurs et template de sous-famille.
     "code": "ROUL_STANDARD",
     "version": 1,
     "pattern": "{DIAM_INT}x{DIAM_EXT}x{LARG}"
-  }
-}
-```
-
-> `suppliers` est trié `is_preferred` DESC, nom fournisseur ASC. Tableau vide si aucun fournisseur référencé.
->
-> `suppliers[].manufacturer_item_id` = référence fabricant telle que référencée par ce fournisseur (peut différer selon le canal d'achat).
->
-> `sub_family_template` est `null` pour un item legacy (sous-famille sans template associé).
-
----
-
-## `GET /stock-items/{id}/with-characteristics`
-
-Récupère un article avec ses caractéristiques (si template-based).
-
-### Réponse `200` — StockItemWithCharacteristics
-
-```json
-{
-  "id": "uuid",
-  "name": "Roulement à billes 6205",
-  "family_code": "OUT",
-  "sub_family_code": "ROUL",
-  "spec": "SKF",
-  "dimension": "25x52x15",
-  "ref": "OUT-ROUL-SKF-25x52x15",
-  "quantity": 10,
-  "unit": "pcs",
-  "location": "Étagère A3",
-  "template_id": "uuid",
-  "template_version": 1,
+  },
   "characteristics": [
     {
       "field_id": "uuid",
       "key": "DIAM_INT",
+      "label": "Diamètre intérieur",
       "value_text": null,
       "value_number": 25,
       "value_enum": null
@@ -198,6 +174,7 @@ Récupère un article avec ses caractéristiques (si template-based).
     {
       "field_id": "uuid",
       "key": "DIAM_EXT",
+      "label": "Diamètre extérieur",
       "value_text": null,
       "value_number": 52,
       "value_enum": null
@@ -205,6 +182,7 @@ Récupère un article avec ses caractéristiques (si template-based).
     {
       "field_id": "uuid",
       "key": "LARG",
+      "label": "Largeur",
       "value_text": null,
       "value_number": 15,
       "value_enum": null
@@ -213,7 +191,13 @@ Récupère un article avec ses caractéristiques (si template-based).
 }
 ```
 
-> Pour un item legacy (`template_id = null`), `characteristics` est un tableau vide.
+> `suppliers` est trié `is_preferred` DESC, nom fournisseur ASC. Tableau vide si aucun fournisseur référencé.
+>
+> `suppliers[].manufacturer_item` : objet fabricant complet (`id`, `manufacturer_name`, `manufacturer_ref`) si une référence fabricant est associée à cet achat fournisseur, `null` sinon. Voir [Manufacturer Items](manufacturer-items.md).
+>
+> `sub_family_template` est `null` pour un item legacy (sous-famille sans template associé).
+>
+> `characteristics` : liste des caractéristiques enregistrées pour cet article. Tableau vide pour les items legacy (`template_id = null`).
 
 ---
 
@@ -277,18 +261,18 @@ Pour les sous-familles **avec** template. Les caractéristiques sont obligatoire
 
 ### Champs d'entrée — StockItemIn
 
-| Champ                  | Type   | Requis              | Description                                                  |
-| ---------------------- | ------ | ------------------- | ------------------------------------------------------------ |
-| `name`                 | string | oui                 | Nom de l'article                                             |
-| `family_code`          | string | oui                 | Code famille (max 20)                                        |
-| `sub_family_code`      | string | oui                 | Code sous-famille (max 20)                                   |
-| `dimension`            | string | legacy uniquement   | Dimension (obligatoire en legacy, **interdit** en template)  |
-| `spec`                 | string | non                 | Spécification (max 50)                                       |
-| `quantity`             | int    | non                 | Défaut: 0                                                    |
-| `unit`                 | string | non                 | Unité (max 50)                                               |
-| `location`             | string | non                 | Emplacement                                                  |
-| `standars_spec`        | uuid   | non                 | ID spec standard                                             |
-| `characteristics`      | array  | template uniquement | Caractéristiques (obligatoire en template, ignoré en legacy) |
+| Champ             | Type   | Requis              | Description                                                  |
+| ----------------- | ------ | ------------------- | ------------------------------------------------------------ |
+| `name`            | string | oui                 | Nom de l'article                                             |
+| `family_code`     | string | oui                 | Code famille (max 20)                                        |
+| `sub_family_code` | string | oui                 | Code sous-famille (max 20)                                   |
+| `dimension`       | string | legacy uniquement   | Dimension (obligatoire en legacy, **interdit** en template)  |
+| `spec`            | string | non                 | Spécification (max 50)                                       |
+| `quantity`        | int    | non                 | Défaut: 0                                                    |
+| `unit`            | string | non                 | Unité (max 50)                                               |
+| `location`        | string | non                 | Emplacement                                                  |
+| `standars_spec`   | uuid   | non                 | ID spec standard                                             |
+| `characteristics` | array  | template uniquement | Caractéristiques (obligatoire en template, ignoré en legacy) |
 
 ### Format des caractéristiques (mode template)
 
@@ -329,9 +313,12 @@ La réponse inclut `ref` calculée immédiatement par le trigger `BEFORE INSERT`
   "unit": "pcs",
   "location": "Étagère A3",
   "standars_spec": null,
+  "template_id": null,
+  "template_version": null,
   "supplier_refs_count": 0,
   "suppliers": [],
-  "sub_family_template": null
+  "sub_family_template": null,
+  "characteristics": []
 }
 ```
 

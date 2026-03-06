@@ -1,6 +1,8 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List, Dict, Any
 from uuid import UUID
+from api.manufacturer_items.schemas import ManufacturerItemOut
+from api.stock_items.template_schemas import CharacteristicValue
 
 
 class PreferredSupplierInfo(BaseModel):
@@ -25,9 +27,9 @@ class EmbeddedSupplier(BaseModel):
     min_order_quantity: Optional[int] = Field(default=None)
     delivery_time_days: Optional[int] = Field(default=None)
     is_preferred: bool = Field(default=False)
-    manufacturer_item_id: Optional[UUID] = Field(
+    manufacturer_item: Optional[ManufacturerItemOut] = Field(
         default=None,
-        description="Ref fabricant telle que référencée par ce fournisseur"
+        description="Référence fabricant liée à cet achat fournisseur"
     )
 
     class Config:
@@ -65,6 +67,14 @@ class StockItemIn(BaseModel):
     characteristics: Optional[List[Dict[str, Any]]] = Field(
         default=None, description="Caractéristiques (obligatoire si template)")
 
+    @field_validator('characteristics', mode='before')
+    @classmethod
+    def normalize_characteristics(cls, v):
+        """Accepte un objet plat {KEY: value} ou une liste [{key, value}]"""
+        if isinstance(v, dict):
+            return [{"key": k, "value": val} for k, val in v.items()]
+        return v
+
     class Config:
         from_attributes = True
 
@@ -83,6 +93,10 @@ class StockItemOut(BaseModel):
     unit: Optional[str] = Field(default=None)
     location: Optional[str] = Field(default=None)
     standars_spec: Optional[UUID] = Field(default=None)
+    template_id: Optional[UUID] = Field(
+        default=None, description="ID du template (null = legacy)")
+    template_version: Optional[int] = Field(
+        default=None, description="Version du template utilisée")
     supplier_refs_count: Optional[int] = Field(
         default=0, description="Nombre de références fournisseurs")
     suppliers: List[EmbeddedSupplier] = Field(
@@ -92,6 +106,10 @@ class StockItemOut(BaseModel):
     sub_family_template: Optional[SubFamilyTemplate] = Field(
         default=None,
         description="Template de la sous-famille (null si legacy)"
+    )
+    characteristics: List[CharacteristicValue] = Field(
+        default_factory=list,
+        description="Caractéristiques de la pièce (vide si legacy)"
     )
 
     class Config:

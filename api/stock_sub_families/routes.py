@@ -2,13 +2,14 @@ from fastapi import APIRouter, HTTPException, Depends
 from typing import List
 
 from api.stock_sub_families.repo import StockSubFamilyRepository
-from api.stock_sub_families.schemas import StockSubFamilyUpdate
+from api.stock_sub_families.schemas import StockSubFamilyCreate, StockSubFamilyCreateInFamily, StockSubFamilyUpdate
 from api.stock_items.template_schemas import StockSubFamily
-from api.errors.exceptions import DatabaseError
+from api.errors.exceptions import DatabaseError, NotFoundError, ValidationError
 
 from api.auth.permissions import require_authenticated
 
-router = APIRouter(prefix="/stock-sub-families", tags=["stock-sub-families"], dependencies=[Depends(require_authenticated)])
+router = APIRouter(prefix="/stock-sub-families",
+                   tags=["stock-sub-families"], dependencies=[Depends(require_authenticated)])
 
 
 @router.get("/", response_model=List[StockSubFamily])
@@ -28,6 +29,40 @@ async def list_stock_sub_families():
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
+@router.post("/", response_model=StockSubFamily, status_code=201)
+async def create_stock_sub_family(data: StockSubFamilyCreate):
+    """Crée une nouvelle sous-famille de stock (family_code dans le body)"""
+    repo = StockSubFamilyRepository()
+    try:
+        return repo.create(
+            family_code=data.family_code,
+            code=data.code,
+            label=data.label,
+            template_id=data.template_id
+        )
+    except ValidationError as e:
+        raise HTTPException(status_code=409, detail=e.detail) from e
+    except (DatabaseError, Exception) as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.post("/{family_code}", response_model=StockSubFamily, status_code=201)
+async def create_stock_sub_family_in_family(family_code: str, data: StockSubFamilyCreateInFamily):
+    """Crée une nouvelle sous-famille sous la famille donnée dans l'URL"""
+    repo = StockSubFamilyRepository()
+    try:
+        return repo.create(
+            family_code=family_code,
+            code=data.code,
+            label=data.label,
+            template_id=data.template_id
+        )
+    except ValidationError as e:
+        raise HTTPException(status_code=409, detail=e.detail) from e
+    except (DatabaseError, Exception) as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
 @router.get("/{family_code}/{sub_family_code}", response_model=StockSubFamily)
 async def get_stock_sub_family(family_code: str, sub_family_code: str):
     """
@@ -36,9 +71,9 @@ async def get_stock_sub_family(family_code: str, sub_family_code: str):
     repo = StockSubFamilyRepository()
     try:
         return repo.get_by_codes_with_template(family_code, sub_family_code)
-    except DatabaseError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    except Exception as e:
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=e.detail) from e
+    except (DatabaseError, Exception) as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
@@ -50,7 +85,7 @@ async def update_stock_sub_family(
 ):
     """
     Met à jour une sous-famille de stock
-    
+
     Champs modifiables :
     - label : libellé de la sous-famille
     - template_id : UUID du template à associer (null pour dissocier)
@@ -63,7 +98,7 @@ async def update_stock_sub_family(
             label=data.label,
             template_id=data.template_id
         )
-    except DatabaseError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    except Exception as e:
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=e.detail) from e
+    except (DatabaseError, Exception) as e:
         raise HTTPException(status_code=500, detail=str(e)) from e

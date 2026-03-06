@@ -12,15 +12,18 @@ Usage dans les repos :
         release_connection(conn)
 """
 
+from api.errors.exceptions import DatabaseError
 import logging
 from contextlib import contextmanager
 from urllib.parse import urlparse
 
 import psycopg2
 from psycopg2 import pool
-from psycopg2.extras import RealDictCursor
+from psycopg2.extras import RealDictCursor, register_uuid
 
-from api.errors.exceptions import DatabaseError
+# Enable native UUID adaptation for all connections
+register_uuid()
+
 
 logger = logging.getLogger(__name__)
 
