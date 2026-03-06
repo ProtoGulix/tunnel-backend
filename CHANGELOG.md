@@ -2,6 +2,14 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [2.7.6] - 6 mars 2026
+
+### Corrections
+
+- **`PUT /stock-items/{id}` — faux 400 sur items template** : la vérification d'immutabilité bloquait la présence de `family_code`, `sub_family_code` etc. dans le body même si la valeur n'avait pas changé — un PUT envoie naturellement tous les champs. La comparaison s'effectue désormais sur la **valeur** : seul un changement réel de valeur déclenche l'erreur
+
+---
+
 ## [2.7.5] - 6 mars 2026
 
 ### Corrections

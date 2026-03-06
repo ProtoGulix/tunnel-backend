@@ -229,11 +229,12 @@ class StockItemService:
 
         if is_template_item:
             # Interdire modification des champs liés au template
+            # (seul un changement de valeur est refusé, pas la présence du champ)
             forbidden_fields = ['template_id', 'template_version', 'dimension',
                                 'family_code', 'sub_family_code', 'characteristics']
 
             for field in forbidden_fields:
-                if field in data:
+                if field in data and str(data[field]) != str(item.get(field)):
                     raise ValidationError(
                         f"Le champ {field} ne peut pas être modifié pour un item avec template")
 
