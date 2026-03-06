@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from typing import List
 from api.intervention_actions.repo import InterventionActionRepository
-from api.intervention_actions.schemas import InterventionActionOut, InterventionActionIn
+from api.intervention_actions.schemas import InterventionActionOut, InterventionActionIn, InterventionActionPatch
 
 router = APIRouter(prefix="/intervention-actions",
                    tags=["intervention-actions"])
@@ -27,5 +27,15 @@ async def add_action(action: InterventionActionIn):
     repo = InterventionActionRepository()
     try:
         return repo.add(action.model_dump())
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+@router.patch("/{action_id}", response_model=InterventionActionOut)
+async def patch_action(action_id: str, patch: InterventionActionPatch):
+    """Met à jour partiellement une action d'intervention"""
+    repo = InterventionActionRepository()
+    try:
+        return repo.update(action_id, patch.model_dump(exclude_none=True))
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e)) from e

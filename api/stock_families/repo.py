@@ -38,12 +38,14 @@ class StockFamilyRepository:
 
             cur.execute(
                 """
-                SELECT 
-                    family_code,
-                    COUNT(*) as sub_family_count
-                FROM stock_sub_family
-                GROUP BY family_code
-                ORDER BY family_code
+                SELECT
+                    sf.code AS family_code,
+                    sf.label,
+                    COUNT(ssf.code) AS sub_family_count
+                FROM stock_family sf
+                LEFT JOIN stock_sub_family ssf ON ssf.family_code = sf.code
+                GROUP BY sf.code, sf.label
+                ORDER BY sf.code
                 """
             )
 
@@ -77,9 +79,19 @@ class StockFamilyRepository:
         try:
             cur = conn.cursor()
 
+            # Vérifier que la famille existe et récupérer son label
+            cur.execute(
+                "SELECT code, label FROM stock_family WHERE code = %s",
+                (family_code,)
+            )
+            family_row = cur.fetchone()
+            if not family_row:
+                raise NotFoundError(f"Famille {family_code} non trouvée")
+            family_label = family_row[1]
+
             # Construction de la requête avec filtre optionnel
             query = """
-                SELECT 
+                SELECT
                     family_code,
                     code,
                     label,
@@ -100,9 +112,6 @@ class StockFamilyRepository:
             cur.execute(query, params)
 
             rows = cur.fetchall()
-
-            if not rows:
-                raise NotFoundError(f"Famille {family_code} non trouvée")
 
             cols = [desc[0] for desc in cur.description]
             sub_families_data = [dict(zip(cols, row)) for row in rows]
@@ -137,6 +146,7 @@ class StockFamilyRepository:
 
             return StockFamilyDetail(
                 family_code=family_code,
+                label=family_label,
                 sub_families=sub_families,
                 sub_family_count=len(sub_families),
                 with_template_count=with_template,
@@ -152,3 +162,53 @@ class StockFamilyRepository:
                 f"Erreur lors du chargement de la famille: {str(e)}") from e
         finally:
             conn.close()
+
+    def update(self, old_code: str, new_code: str, label: str = None) -> StockFamilyDetail:
+        """
+        Met à jour une famille de stock (code et/ou label).
+        Si le code change, met à jour family_code en cascade sur toutes ses sous-familles.
+
+        Raises:
+            NotFoundError: Si la famille n'existe pas
+            DatabaseError: Si le nouveau code est déjà utilisé
+        """
+        # Vérifier que la famille existe
+        self.get_by_code(old_code)
+
+        conn = self._get_connection()
+        try:
+            cur = conn.cursor()
+
+            set_clauses = []
+            params = []
+            if new_code != old_code:
+                set_clauses.append("code = %s")
+                params.append(new_code)
+            if label is not None:
+                set_clauses.append("label = %s")
+                params.append(label)
+
+            if set_clauses:
+                params.append(old_code)
+                cur.execute(
+                    f"UPDATE stock_family SET {', '.join(set_clauses)} WHERE code = %s",
+                    params
+                )
+
+            if new_code != old_code:
+                cur.execute(
+                    "UPDATE stock_sub_family SET family_code = %s WHERE family_code = %s",
+                    (new_code, old_code)
+                )
+
+            conn.commit()
+            logger.info("Famille %s mise à jour (new_code=%s, label=%s)",
+                        old_code, new_code, label)
+        except Exception as e:
+            conn.rollback()
+            raise DatabaseError(
+                f"Erreur lors de la mise à jour: {str(e)}") from e
+        finally:
+            conn.close()
+
+        return self.get_by_code(new_code)

@@ -285,3 +285,68 @@ class InterventionActionRepository:
                 f"Erreur lors de l'ajout de l'action: {str(e)}") from e
         finally:
             conn.close()
+
+    def update(self, action_id: str, patch_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Met à jour partiellement une action existante"""
+        self.get_by_id_with_subcategory(action_id)
+
+        updatable_fields = {
+            'description': None,
+            'time_spent': None,
+            'action_subcategory': None,
+            'tech': None,
+            'complexity_score': None,
+            'complexity_factor': None,
+        }
+
+        updates = {k: v for k, v in patch_data.items(
+        ) if k in updatable_fields and v is not None}
+
+        if not updates:
+            return self.get_by_id_with_subcategory(action_id)
+
+        # Validation partielle des champs fournis
+        if 'description' in updates:
+            updates['description'] = InterventionActionValidator.sanitize_description(
+                updates['description'])
+        if 'time_spent' in updates:
+            InterventionActionValidator.validate_time_spent(
+                updates['time_spent'])
+        if 'complexity_score' in updates:
+            InterventionActionValidator.validate_complexity_score(
+                updates['complexity_score'])
+        if 'complexity_factor' in updates:
+            updates['complexity_factor'] = InterventionActionValidator.validate_complexity_factor(
+                updates['complexity_factor'])
+
+        # Si l'un des deux score/factor est fourni, on valide la règle score > 5
+        current = self.get_by_id_with_subcategory(action_id)
+        score = updates.get('complexity_score',
+                            current.get('complexity_score'))
+        factor = updates.get('complexity_factor',
+                             current.get('complexity_factor'))
+        InterventionActionValidator.validate_complexity_with_factor(
+            score, factor)
+
+        conn = self._get_connection()
+        try:
+            cur = conn.cursor()
+            set_clauses = [f"{field} = %s" for field in updates]
+            params = list(updates.values())
+            set_clauses.append("updated_at = %s")
+            params.append(datetime.now())
+            params.append(action_id)
+
+            cur.execute(
+                f"UPDATE intervention_action SET {', '.join(set_clauses)} WHERE id = %s",
+                params
+            )
+            conn.commit()
+        except Exception as e:
+            conn.rollback()
+            raise DatabaseError(
+                f"Erreur lors de la mise à jour: {str(e)}") from e
+        finally:
+            conn.close()
+
+        return self.get_by_id_with_subcategory(action_id)

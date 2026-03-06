@@ -2,6 +2,42 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [2.7.0] - 6 mars 2026
+
+### Nouveautés
+
+- **Nouvel endpoint `manufacturer-items`** : CRUD complet pour les références fabricants
+  - `GET /manufacturer-items` : liste (skip/limit)
+  - `GET /manufacturer-items/{id}` : détail
+  - `POST /manufacturer-items` : création
+  - `PATCH /manufacturer-items/{id}` : mise à jour partielle
+  - `DELETE /manufacturer-items/{id}` : suppression
+  - Champs : `id`, `manufacturer_name`, `manufacturer_ref`
+
+- **`PATCH /intervention-actions/{id}`** : mise à jour partielle d'une action d'intervention
+  - Champs modifiables : `description`, `time_spent`, `action_subcategory`, `tech`, `complexity_score`, `complexity_factor`
+  - Validation métier appliquée sur les valeurs finales (règle score > 5 → factor obligatoire)
+
+- **`PATCH /stock-families/{code}`** : mise à jour d'une famille de stock
+  - Champs modifiables : `code` (avec cascade sur `stock_sub_family.family_code`), `label`
+  - La table `stock_family` est désormais exploitée correctement
+
+### Améliorations
+
+- **`GET /stock-families`** et **`GET /stock-families/{code}`** : le champ `label` est maintenant retourné depuis la table `stock_family`
+
+- **`GET /stock-item-suppliers/*`** : toutes les réponses incluent désormais l'objet `manufacturer_item` embarqué (via JOIN sur `manufacturer_item`)
+  - Plus besoin d'une requête supplémentaire pour connaître le fabricant d'une référence fournisseur
+
+### Documentation
+
+- [manufacturer-items.md](docs/endpoints/manufacturer-items.md) : créé
+- [stock-item-suppliers.md](docs/endpoints/stock-item-suppliers.md) : ajout objet `manufacturer_item` embarqué
+- [stock-families.md](docs/endpoints/stock-families.md) : ajout `label`, section `PATCH`
+- [intervention-actions.md](docs/endpoints/intervention-actions.md) : section `PATCH` ajoutée
+
+---
+
 ## [2.5.0] - 27 février 2026
 
 ### Améliorations

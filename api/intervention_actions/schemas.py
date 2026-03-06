@@ -42,6 +42,19 @@ class ActionSubcategoryDetail(BaseModel):
         from_attributes = True
 
 
+class InterventionActionPatch(BaseModel):
+    """Schéma de mise à jour partielle d'une action d'intervention"""
+    description: Optional[str] = Field(default=None)
+    time_spent: Optional[float] = Field(default=None)
+    action_subcategory: Optional[int] = Field(default=None)
+    tech: Optional[UUID] = Field(default=None)
+    complexity_score: Optional[int] = Field(default=None)
+    complexity_factor: Optional[str] = Field(default=None)
+
+    class Config:
+        from_attributes = True
+
+
 class InterventionActionOut(BaseModel):
     """Schéma de sortie pour une action d'intervention"""
     id: UUID

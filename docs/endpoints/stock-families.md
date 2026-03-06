@@ -2,14 +2,15 @@
 
 Gestion des familles de stock. Les familles regroupent des sous-familles d'articles.
 
-> **Note** : Les familles ne sont pas des entités distinctes en base. Ce sont les codes `family_code` présents dans la table `stock_sub_family`.
+> **Note** : Les familles sont stockées dans la table `stock_family` (`code`, `label`). Les sous-familles référencent leur famille via `family_code`.
 
 ## Endpoints
 
-| Méthode | Route                    | Description               |
-| ------- | ------------------------ | ------------------------- |
-| GET     | `/stock-families`        | Liste toutes les familles |
-| GET     | `/stock-families/{code}` | Détail d'une famille      |
+| Méthode | Route                    | Description                       |
+| ------- | ------------------------ | --------------------------------- |
+| GET     | `/stock-families`        | Liste toutes les familles         |
+| GET     | `/stock-families/{code}` | Détail d'une famille              |
+| PATCH   | `/stock-families/{code}` | Met à jour le code et/ou le label |
 
 ---
 
@@ -23,10 +24,12 @@ Liste toutes les familles de stock avec le nombre de sous-familles associées.
 [
   {
     "family_code": "OUT",
+    "label": "Outillage",
     "sub_family_count": 12
   },
   {
     "family_code": "ELE",
+    "label": "Électrique",
     "sub_family_count": 8
   }
 ]
@@ -55,6 +58,7 @@ Récupère une famille par son code avec la liste de toutes ses sous-familles et
 ```json
 {
   "family_code": "OUT",
+  "label": "Outillage",
   "sub_family_count": 12,
   "with_template_count": 5,
   "without_template_count": 7,
@@ -137,6 +141,7 @@ Famille inexistante.
 ```json
 {
   "family_code": "string (max 20)",
+  "label": "string | null",
   "sub_family_count": "int"
 }
 ```
@@ -146,6 +151,7 @@ Famille inexistante.
 ```json
 {
   "family_code": "string (max 20)",
+  "label": "string | null",
   "sub_family_count": "int",
   "with_template_count": "int",
   "without_template_count": "int",
@@ -159,8 +165,37 @@ Voir [Stock Sub-Families](stock-sub-families.md) pour le schéma complet incluan
 
 ---
 
+## `PATCH /stock-families/{family_code}`
+
+Met à jour le code et/ou le label d'une famille. Si le code change, `family_code` est mis à jour en cascade sur toutes les sous-familles.
+
+### Entrée — `StockFamilyPatch`
+
+```json
+{
+  "code": "CHAPE_NEW",
+  "label": "Chappe male / Vis à œil"
+}
+```
+
+| Champ   | Type   | Requis | Description                |
+| ------- | ------ | ------ | -------------------------- |
+| `code`  | string | oui    | Nouveau code (max 20 car.) |
+| `label` | string | non    | Nouveau libellé            |
+
+### Réponse `200` — StockFamilyDetail
+
+La famille avec le nouveau code et toutes ses sous-familles.
+
+### Erreurs
+
+| Code | Cas                                       |
+| ---- | ----------------------------------------- |
+| 404  | Famille `{family_code}` introuvable       |
+| 400  | Nouveau code déjà utilisé (contrainte DB) |
+
+---
+
 ## Notes
 
-- **Lecture seule** : Pas d'opération de création/modification/suppression sur les familles. Elles sont gérées via les sous-familles.
-- **Source de données** : Les familles sont extraites des codes `family_code` présents dans `stock_sub_family`.
 - Pour gérer les sous-familles, voir [Stock Sub-Families](stock-sub-families.md).

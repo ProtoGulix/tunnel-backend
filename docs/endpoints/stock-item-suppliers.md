@@ -2,6 +2,8 @@
 
 Références fournisseurs pour les articles en stock. Table de liaison entre [Stock Items](stock-items.md) et [Suppliers](suppliers.md).
 
+> Voir aussi : [Manufacturer Items](manufacturer-items.md) | [Purchase Requests](purchase-requests.md)
+
 ---
 
 ## `GET /stock-item-suppliers`
@@ -31,6 +33,11 @@ Liste les références avec filtres.
     "min_order_quantity": 5,
     "delivery_time_days": 3,
     "is_preferred": true,
+    "manufacturer_item": {
+      "id": "uuid",
+      "manufacturer_name": "SKF",
+      "manufacturer_ref": "6205-2RS"
+    },
     "stock_item_name": "Foret pilote D7",
     "stock_item_ref": "OUT-COUP-FORET-PILOTE-D7",
     "supplier_name": "PONS & SABOT",
@@ -80,16 +87,18 @@ Crée une référence fournisseur.
 }
 ```
 
-| Champ                  | Type   | Requis | Description                                      |
-| ---------------------- | ------ | ------ | ------------------------------------------------ |
-| `stock_item_id`        | uuid   | oui    | Article en stock                                 |
-| `supplier_id`          | uuid   | oui    | Fournisseur                                      |
-| `supplier_ref`         | string | oui    | Référence chez le fournisseur (min 2 caractères) |
-| `unit_price`           | float  | non    | Prix unitaire                                    |
-| `min_order_quantity`   | int    | non    | Quantité minimale de commande                    |
-| `delivery_time_days`   | int    | non    | Délai de livraison en jours                      |
-| `is_preferred`         | bool   | non    | Défaut: false                                    |
+| Champ                  | Type   | Requis | Description                                                                                 |
+| ---------------------- | ------ | ------ | ------------------------------------------------------------------------------------------- |
+| `stock_item_id`        | uuid   | oui    | Article en stock                                                                            |
+| `supplier_id`          | uuid   | oui    | Fournisseur                                                                                 |
+| `supplier_ref`         | string | oui    | Référence chez le fournisseur (min 2 caractères)                                            |
+| `unit_price`           | float  | non    | Prix unitaire                                                                               |
+| `min_order_quantity`   | int    | non    | Quantité minimale de commande                                                               |
+| `delivery_time_days`   | int    | non    | Délai de livraison en jours                                                                 |
+| `is_preferred`         | bool   | non    | Défaut: false                                                                               |
 | `manufacturer_item_id` | uuid   | non    | Ref fabricant telle que référencée par ce fournisseur (peut différer de celle de l'article) |
+
+> Le détail complet de la référence fabricant est retourné en objet embarqué `manufacturer_item` dans toutes les réponses. Voir [Manufacturer Items](manufacturer-items.md).
 
 ### Règles métier
 
@@ -104,11 +113,11 @@ Crée une référence fournisseur.
 
 Le flag `is_preferred` pilote le comportement du [dispatch automatique](purchase-requests.md#post-purchase-requestsdispatch) :
 
-| Situation | Comportement |
-|---|---|
-| `is_preferred = true` sur un fournisseur | Dispatch uniquement vers lui (commande directe) |
-| Aucun `is_preferred` sur l'article | Dispatch vers tous les fournisseurs (consultation) |
-| Aucun fournisseur référencé | Erreur — demande non dispatchée |
+| Situation                                | Comportement                                       |
+| ---------------------------------------- | -------------------------------------------------- |
+| `is_preferred = true` sur un fournisseur | Dispatch uniquement vers lui (commande directe)    |
+| Aucun `is_preferred` sur l'article       | Dispatch vers tous les fournisseurs (consultation) |
+| Aucun fournisseur référencé              | Erreur — demande non dispatchée                    |
 
 ### Erreurs
 

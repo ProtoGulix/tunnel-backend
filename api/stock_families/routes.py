@@ -3,7 +3,7 @@ from fastapi import APIRouter, HTTPException, Query
 from typing import List, Optional
 
 from api.stock_families.repo import StockFamilyRepository
-from api.stock_families.schemas import StockFamilyListItem, StockFamilyDetail
+from api.stock_families.schemas import StockFamilyListItem, StockFamilyDetail, StockFamilyPatch
 from api.errors.exceptions import DatabaseError, NotFoundError
 
 router = APIRouter(prefix="/stock-families", tags=["stock-families"])
@@ -48,3 +48,15 @@ async def get_stock_family(
         raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.patch("/{family_code}", response_model=StockFamilyDetail)
+async def patch_stock_family(family_code: str, data: StockFamilyPatch):
+    """Renomme une famille de stock (met à jour family_code sur toutes les sous-familles)"""
+    repo = StockFamilyRepository()
+    try:
+        return repo.update(family_code, data.code, data.label)
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e

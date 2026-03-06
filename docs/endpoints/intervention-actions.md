@@ -99,3 +99,37 @@ Ajoute une action à une intervention.
 ### Réponse `201`
 
 Action complète avec sous-catégorie enrichie.
+
+---
+
+## `PATCH /intervention-actions/{id}`
+
+Met à jour partiellement une action existante. Seuls les champs fournis sont modifiés.
+
+### Entrée
+
+```json
+{
+  "description": "Remplacement roulement + graissage",
+  "time_spent": 2.0,
+  "action_subcategory": 30,
+  "tech": "a1b2c3d4-...",
+  "complexity_score": 6,
+  "complexity_factor": "PCE"
+}
+```
+
+| Champ                | Type   | Requis | Description                                                                                      |
+| -------------------- | ------ | ------ | ------------------------------------------------------------------------------------------------ |
+| `description`        | string | non    | Description (HTML nettoyé)                                                                       |
+| `time_spent`         | float  | non    | Quarts d'heure uniquement : 0.25, 0.5, 0.75, 1.0… Min: 0.25                                      |
+| `action_subcategory` | int    | non    | ID de la sous-catégorie                                                                          |
+| `tech`               | uuid   | non    | Technicien                                                                                       |
+| `complexity_score`   | int    | non    | Score 1-10                                                                                       |
+| `complexity_factor`  | string | non    | **Obligatoire si le score résultant > 5**. Code dans [complexity_factors](complexity-factors.md) |
+
+> Les règles métier s'appliquent également sur les champs partiels : si `complexity_score > 5` (valeur finale), `complexity_factor` doit être renseigné (valeur courante ou fournie).
+
+### Réponse `200`
+
+Action complète avec sous-catégorie enrichie (`InterventionActionOut`).

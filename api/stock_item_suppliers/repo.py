@@ -24,6 +24,20 @@ class StockItemSupplierRepository:
                 data[key] = float(value)
         return data
 
+    def _map_manufacturer(self, row: Dict[str, Any]) -> Dict[str, Any]:
+        """Extrait les colonnes mi_* en objet manufacturer_item imbriqué"""
+        if row.get('mi_id') is not None:
+            row['manufacturer_item'] = {
+                'id': row['mi_id'],
+                'manufacturer_name': row.get('mi_manufacturer_name'),
+                'manufacturer_ref': row.get('mi_manufacturer_ref'),
+            }
+        else:
+            row['manufacturer_item'] = None
+        for key in ['mi_id', 'mi_manufacturer_name', 'mi_manufacturer_ref']:
+            row.pop(key, None)
+        return row
+
     def get_all(
         self,
         limit: int = 100,
@@ -61,12 +75,15 @@ class StockItemSupplierRepository:
                 SELECT
                     sis.id, sis.stock_item_id, sis.supplier_id, sis.supplier_ref,
                     sis.unit_price, sis.min_order_quantity, sis.delivery_time_days,
-                    sis.is_preferred,
+                    sis.is_preferred, sis.manufacturer_item_id,
                     si.name as stock_item_name, si.ref as stock_item_ref,
-                    s.name as supplier_name, s.code as supplier_code
+                    s.name as supplier_name, s.code as supplier_code,
+                    mi.id as mi_id, mi.manufacturer_name as mi_manufacturer_name,
+                    mi.manufacturer_ref as mi_manufacturer_ref
                 FROM stock_item_supplier sis
                 LEFT JOIN stock_item si ON sis.stock_item_id = si.id
                 LEFT JOIN supplier s ON sis.supplier_id = s.id
+                LEFT JOIN manufacturer_item mi ON sis.manufacturer_item_id = mi.id
                 {where_sql}
                 ORDER BY sis.is_preferred DESC, s.name ASC
                 LIMIT %s OFFSET %s
@@ -76,7 +93,7 @@ class StockItemSupplierRepository:
             rows = cur.fetchall()
             cols = [desc[0] for desc in cur.description]
 
-            return [self._convert_decimals(dict(zip(cols, row))) for row in rows]
+            return [self._map_manufacturer(self._convert_decimals(dict(zip(cols, row)))) for row in rows]
         except Exception as e:
             raise DatabaseError(f"Erreur base de données: {str(e)}") from e
         finally:
@@ -92,10 +109,13 @@ class StockItemSupplierRepository:
                 SELECT
                     sis.*,
                     si.name as stock_item_name, si.ref as stock_item_ref,
-                    s.name as supplier_name, s.code as supplier_code
+                    s.name as supplier_name, s.code as supplier_code,
+                    mi.id as mi_id, mi.manufacturer_name as mi_manufacturer_name,
+                    mi.manufacturer_ref as mi_manufacturer_ref
                 FROM stock_item_supplier sis
                 LEFT JOIN stock_item si ON sis.stock_item_id = si.id
                 LEFT JOIN supplier s ON sis.supplier_id = s.id
+                LEFT JOIN manufacturer_item mi ON sis.manufacturer_item_id = mi.id
                 WHERE sis.id = %s
                 """,
                 (ref_id,)
@@ -107,7 +127,7 @@ class StockItemSupplierRepository:
                     f"Référence fournisseur {ref_id} non trouvée")
 
             cols = [desc[0] for desc in cur.description]
-            return self._convert_decimals(dict(zip(cols, row)))
+            return self._map_manufacturer(self._convert_decimals(dict(zip(cols, row))))
         except NotFoundError:
             raise
         except Exception as e:
@@ -125,10 +145,13 @@ class StockItemSupplierRepository:
                 SELECT
                     sis.*,
                     si.name as stock_item_name, si.ref as stock_item_ref,
-                    s.name as supplier_name, s.code as supplier_code
+                    s.name as supplier_name, s.code as supplier_code,
+                    mi.id as mi_id, mi.manufacturer_name as mi_manufacturer_name,
+                    mi.manufacturer_ref as mi_manufacturer_ref
                 FROM stock_item_supplier sis
                 LEFT JOIN stock_item si ON sis.stock_item_id = si.id
                 LEFT JOIN supplier s ON sis.supplier_id = s.id
+                LEFT JOIN manufacturer_item mi ON sis.manufacturer_item_id = mi.id
                 WHERE sis.stock_item_id = %s
                 ORDER BY sis.is_preferred DESC, s.name ASC
                 """,
@@ -137,7 +160,7 @@ class StockItemSupplierRepository:
             rows = cur.fetchall()
             cols = [desc[0] for desc in cur.description]
 
-            return [self._convert_decimals(dict(zip(cols, row))) for row in rows]
+            return [self._map_manufacturer(self._convert_decimals(dict(zip(cols, row)))) for row in rows]
         except Exception as e:
             raise DatabaseError(f"Erreur base de données: {str(e)}") from e
         finally:
@@ -153,10 +176,13 @@ class StockItemSupplierRepository:
                 SELECT
                     sis.*,
                     si.name as stock_item_name, si.ref as stock_item_ref,
-                    s.name as supplier_name, s.code as supplier_code
+                    s.name as supplier_name, s.code as supplier_code,
+                    mi.id as mi_id, mi.manufacturer_name as mi_manufacturer_name,
+                    mi.manufacturer_ref as mi_manufacturer_ref
                 FROM stock_item_supplier sis
                 LEFT JOIN stock_item si ON sis.stock_item_id = si.id
                 LEFT JOIN supplier s ON sis.supplier_id = s.id
+                LEFT JOIN manufacturer_item mi ON sis.manufacturer_item_id = mi.id
                 WHERE sis.supplier_id = %s
                 ORDER BY si.name ASC
                 """,
@@ -165,7 +191,7 @@ class StockItemSupplierRepository:
             rows = cur.fetchall()
             cols = [desc[0] for desc in cur.description]
 
-            return [self._convert_decimals(dict(zip(cols, row))) for row in rows]
+            return [self._map_manufacturer(self._convert_decimals(dict(zip(cols, row)))) for row in rows]
         except Exception as e:
             raise DatabaseError(f"Erreur base de données: {str(e)}") from e
         finally:
