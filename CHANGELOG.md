@@ -2,6 +2,14 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [2.7.7] - 6 mars 2026
+
+### Corrections
+
+- **`PUT /stock-item-suppliers/{id}` — 422 validation** : le schéma `StockItemSupplierIn` imposait `stock_item_id` et `supplier_id` comme champs requis, alors que le frontend les omet correctement en PUT (ces champs sont immutables après création). Ajout du schéma dédié `StockItemSupplierUpdate` sans ces deux champs, utilisé exclusivement sur la route PUT
+
+---
+
 ## [2.7.6] - 6 mars 2026
 
 ### Corrections

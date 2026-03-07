@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Query, Depends
 from typing import List, Optional
 from api.stock_item_suppliers.repo import StockItemSupplierRepository
 from api.stock_item_suppliers.schemas import (
-    StockItemSupplierOut, StockItemSupplierIn, StockItemSupplierListItem
+    StockItemSupplierOut, StockItemSupplierIn, StockItemSupplierUpdate, StockItemSupplierListItem
 )
 
 from api.auth.permissions import require_authenticated
@@ -66,7 +66,7 @@ async def create_stock_item_supplier(ref: StockItemSupplierIn):
 
 
 @router.put("/{ref_id}", response_model=StockItemSupplierOut)
-async def update_stock_item_supplier(ref_id: str, ref: StockItemSupplierIn):
+async def update_stock_item_supplier(ref_id: str, ref: StockItemSupplierUpdate):
     """Met à jour une référence fournisseur existante"""
     repo = StockItemSupplierRepository()
     try:

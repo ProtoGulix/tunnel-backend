@@ -229,16 +229,20 @@ class StockItemSupplierRepository:
                 raise ValueError(
                     "Cette référence existe déjà pour ce fournisseur")
 
-            # Si is_preferred = true, désactive les autres préférés pour cet article
+            # Si is_preferred = true, vérifier qu'il n'y en a pas déjà un
             if data.get('is_preferred') is True:
                 cur.execute(
                     """
-                    UPDATE stock_item_supplier
-                    SET is_preferred = false
+                    SELECT id FROM stock_item_supplier
                     WHERE stock_item_id = %s AND is_preferred = true
                     """,
                     (str(data['stock_item_id']),)
                 )
+                if cur.fetchone():
+                    raise ValueError(
+                        "Un fournisseur préféré existe déjà pour cet article. "
+                        "Utilisez POST /{id}/set-preferred pour changer le préféré."
+                    )
 
             cur.execute(
                 """
@@ -261,6 +265,9 @@ class StockItemSupplierRepository:
                 )
             )
             conn.commit()
+        except ValueError:
+            conn.rollback()
+            raise
         except Exception as e:
             conn.rollback()
             raise DatabaseError(
@@ -279,18 +286,22 @@ class StockItemSupplierRepository:
         try:
             cur = conn.cursor()
 
-            # Si is_preferred = true, désactive les autres préférés pour cet article
+            # Si is_preferred = true, vérifier qu'il n'y en a pas déjà un autre
             if data.get('is_preferred') is True:
                 stock_item_id = data.get(
                     'stock_item_id', existing['stock_item_id'])
                 cur.execute(
                     """
-                    UPDATE stock_item_supplier
-                    SET is_preferred = false
+                    SELECT id FROM stock_item_supplier
                     WHERE stock_item_id = %s AND is_preferred = true AND id != %s
                     """,
                     (str(stock_item_id), ref_id)
                 )
+                if cur.fetchone():
+                    raise ValueError(
+                        "Un fournisseur préféré existe déjà pour cet article. "
+                        "Utilisez POST /{id}/set-preferred pour changer le préféré."
+                    )
 
             # Champs modifiables
             updatable_fields = [
@@ -323,6 +334,9 @@ class StockItemSupplierRepository:
 
             cur.execute(query, params)
             conn.commit()
+        except ValueError:
+            conn.rollback()
+            raise
         except Exception as e:
             conn.rollback()
             raise DatabaseError(

@@ -6,7 +6,7 @@ from api.manufacturer_items.schemas import ManufacturerItemOut
 
 
 class StockItemSupplierIn(BaseModel):
-    """Schéma d'entrée pour créer/modifier une référence fournisseur"""
+    """Schéma d'entrée pour créer une référence fournisseur"""
     stock_item_id: UUID = Field(..., description="ID de l'article en stock")
     supplier_id: UUID = Field(..., description="ID du fournisseur")
     supplier_ref: str = Field(..., description="Référence fournisseur")
@@ -18,6 +18,25 @@ class StockItemSupplierIn(BaseModel):
         default=None, description="Délai de livraison en jours")
     is_preferred: Optional[bool] = Field(
         default=False, description="Fournisseur préféré")
+    manufacturer_item_id: Optional[UUID] = Field(
+        default=None, description="ID de l'article fabricant")
+
+    class Config:
+        from_attributes = True
+
+
+class StockItemSupplierUpdate(BaseModel):
+    """Schéma d'entrée pour modifier une référence fournisseur (stock_item_id et supplier_id immutables)"""
+    supplier_ref: Optional[str] = Field(
+        default=None, description="Référence fournisseur")
+    unit_price: Optional[float] = Field(
+        default=None, description="Prix unitaire")
+    min_order_quantity: Optional[int] = Field(
+        default=None, description="Quantité minimum de commande")
+    delivery_time_days: Optional[int] = Field(
+        default=None, description="Délai de livraison en jours")
+    is_preferred: Optional[bool] = Field(
+        default=None, description="Fournisseur préféré")
     manufacturer_item_id: Optional[UUID] = Field(
         default=None, description="ID de l'article fabricant")
 
