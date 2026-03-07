@@ -106,10 +106,9 @@ Crée une nouvelle sous-famille avec `family_code` dans le body.
 
 ### Erreurs
 
-| Code | Cas                         |
-| ---- | --------------------------- |
-| 409  | La sous-famille existe déjà |
-| 500  | Erreur base de données      |
+| Code | Cas                                                          |
+| ---- | ------------------------------------------------------------ |
+| 400  | Sous-famille déjà existante — `Sous-famille X/Y existe déjà` |
 
 ---
 
@@ -137,10 +136,9 @@ Crée une nouvelle sous-famille avec le `family_code` dans l'URL. C'est le forma
 
 ### Erreurs
 
-| Code | Cas                         |
-| ---- | --------------------------- |
-| 409  | La sous-famille existe déjà |
-| 500  | Erreur base de données      |
+| Code | Cas                                                          |
+| ---- | ------------------------------------------------------------ |
+| 400  | Sous-famille déjà existante — `Sous-famille X/Y existe déjà` |
 
 ---
 

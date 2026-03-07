@@ -15,6 +15,15 @@ class StockFamilyListItem(BaseModel):
         from_attributes = True
 
 
+class StockFamilyIn(BaseModel):
+    """Schéma de création d'une famille de stock"""
+    code: str = Field(..., max_length=20, description="Code famille")
+    label: str = Field(None, description="Libellé de la famille")
+
+    class Config:
+        from_attributes = True
+
+
 class StockFamilyPatch(BaseModel):
     """Schéma de mise à jour d'une famille de stock"""
     code: str = Field(..., max_length=20, description="Nouveau code famille")

@@ -2,6 +2,16 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [2.7.9] - 7 mars 2026
+
+### Améliorations
+
+- **`POST /stock-families`** : nouvel endpoint de création d'une famille de stock (code + label optionnel, réponse `201`)
+- **Unicité des codes famille et sous-famille** : vérification explicite avant INSERT/UPDATE — retourne `400` avec message clair (`"La famille 'X' existe déjà"` / `"Sous-famille X/Y existe déjà"`) au lieu d'un `500` sur contrainte PostgreSQL
+- **`stock_sub_families/repo.py`** : `ValidationError` importé en tête de fichier, `except` dans `create()` corrigé pour re-lever `ValidationError` sans la transformer en `DatabaseError`
+
+---
+
 ## [2.7.8] - 7 mars 2026
 
 ### Améliorations

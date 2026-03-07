@@ -1,14 +1,15 @@
 """Routes pour les familles de stock"""
-from fastapi import APIRouter, HTTPException, Query, Depends
+from fastapi import APIRouter, Query, Depends
 from typing import List, Optional
 
 from api.stock_families.repo import StockFamilyRepository
-from api.stock_families.schemas import StockFamilyListItem, StockFamilyDetail, StockFamilyPatch
+from api.stock_families.schemas import StockFamilyListItem, StockFamilyDetail, StockFamilyPatch, StockFamilyIn
 from api.errors.exceptions import DatabaseError, NotFoundError
 
 from api.auth.permissions import require_authenticated
 
-router = APIRouter(prefix="/stock-families", tags=["stock-families"], dependencies=[Depends(require_authenticated)])
+router = APIRouter(prefix="/stock-families",
+                   tags=["stock-families"], dependencies=[Depends(require_authenticated)])
 
 
 @router.get("/", response_model=List[StockFamilyListItem])
@@ -42,6 +43,13 @@ async def get_stock_family(
     """
     repo = StockFamilyRepository()
     return repo.get_by_code(family_code, search=search)
+
+
+@router.post("/", response_model=StockFamilyDetail, status_code=201)
+async def create_stock_family(data: StockFamilyIn):
+    """Crée une nouvelle famille de stock"""
+    repo = StockFamilyRepository()
+    return repo.create(data)
 
 
 @router.patch("/{family_code}", response_model=StockFamilyDetail)

@@ -4,7 +4,7 @@ from uuid import UUID
 
 from api.settings import settings
 from api.db import get_connection, release_connection
-from api.errors.exceptions import DatabaseError, NotFoundError
+from api.errors.exceptions import DatabaseError, NotFoundError, ValidationError
 from api.stock_items.template_service import TemplateService
 from api.stock_items.template_schemas import StockSubFamily
 
@@ -174,7 +174,6 @@ class StockSubFamilyRepository:
                 (family_code, code)
             )
             if cur.fetchone():
-                from api.errors.exceptions import ValidationError
                 raise ValidationError(
                     f"Sous-famille {family_code}/{code} existe déjà")
 
@@ -188,7 +187,7 @@ class StockSubFamilyRepository:
             conn.commit()
             logger.info("Sous-famille %s/%s créée", family_code, code)
             return self.get_by_codes_with_template(family_code, code)
-        except (NotFoundError, DatabaseError):
+        except (NotFoundError, DatabaseError, ValidationError):
             conn.rollback()
             raise
         except Exception as e:

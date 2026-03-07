@@ -10,6 +10,7 @@ Gestion des familles de stock. Les familles regroupent des sous-familles d'artic
 | ------- | ------------------------ | --------------------------------- |
 | GET     | `/stock-families`        | Liste toutes les familles         |
 | GET     | `/stock-families/{code}` | Détail d'une famille              |
+| POST    | `/stock-families`        | Crée une nouvelle famille         |
 | PATCH   | `/stock-families/{code}` | Met à jour le code et/ou le label |
 
 ---
@@ -136,6 +137,15 @@ Famille inexistante.
 
 ## Schémas
 
+### StockFamilyIn
+
+```json
+{
+  "code": "string (max 20)",
+  "label": "string | null"
+}
+```
+
 ### StockFamilyListItem
 
 ```json
@@ -165,6 +175,36 @@ Voir [Stock Sub-Families](stock-sub-families.md) pour le schéma complet incluan
 
 ---
 
+## `POST /stock-families`
+
+Crée une nouvelle famille de stock.
+
+### Entrée — `StockFamilyIn`
+
+```json
+{
+  "code": "OUT",
+  "label": "Outillage"
+}
+```
+
+| Champ   | Type   | Requis | Description                |
+| ------- | ------ | ------ | -------------------------- |
+| `code`  | string | oui    | Code famille (max 20 car.) |
+| `label` | string | non    | Libellé de la famille      |
+
+### Réponse `201` — StockFamilyDetail
+
+La famille créée sans sous-familles.
+
+### Erreurs
+
+| Code | Cas                                              |
+| ---- | ------------------------------------------------ |
+| 400  | Code déjà utilisé — `La famille 'X' existe déjà` |
+
+---
+
 ## `PATCH /stock-families/{family_code}`
 
 Met à jour le code et/ou le label d'une famille. Si le code change, `family_code` est mis à jour en cascade sur toutes les sous-familles.
@@ -189,10 +229,10 @@ La famille avec le nouveau code et toutes ses sous-familles.
 
 ### Erreurs
 
-| Code | Cas                                       |
-| ---- | ----------------------------------------- |
-| 404  | Famille `{family_code}` introuvable       |
-| 400  | Nouveau code déjà utilisé (contrainte DB) |
+| Code | Cas                                                      |
+| ---- | -------------------------------------------------------- |
+| 404  | Famille `{family_code}` introuvable                      |
+| 400  | Nouveau code déjà utilisé — `La famille 'X' existe déjà` |
 
 ---
 

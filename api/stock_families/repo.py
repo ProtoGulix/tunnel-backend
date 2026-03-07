@@ -4,8 +4,8 @@ from typing import List
 
 from api.settings import settings
 from api.db import get_connection, release_connection
-from api.errors.exceptions import DatabaseError, NotFoundError
-from api.stock_families.schemas import StockFamilyListItem, StockFamilyDetail
+from api.errors.exceptions import DatabaseError, NotFoundError, ValidationError
+from api.stock_families.schemas import StockFamilyListItem, StockFamilyDetail, StockFamilyIn
 from api.stock_items.template_schemas import StockSubFamily
 from api.stock_items.template_service import TemplateService
 
@@ -171,6 +171,18 @@ class StockFamilyRepository:
         # Vérifier que la famille existe
         self.get_by_code(old_code)
 
+        if new_code != old_code:
+            conn_check = self._get_connection()
+            try:
+                cur = conn_check.cursor()
+                cur.execute(
+                    "SELECT 1 FROM stock_family WHERE code = %s", (new_code,))
+                if cur.fetchone():
+                    raise ValidationError(
+                        f"La famille '{new_code}' existe déjà")
+            finally:
+                release_connection(conn_check)
+
         conn = self._get_connection()
         try:
             cur = conn.cursor()
@@ -200,6 +212,9 @@ class StockFamilyRepository:
             conn.commit()
             logger.info("Famille %s mise à jour (new_code=%s, label=%s)",
                         old_code, new_code, label)
+        except ValidationError:
+            conn.rollback()
+            raise
         except Exception as e:
             conn.rollback()
             raise DatabaseError(
@@ -208,3 +223,34 @@ class StockFamilyRepository:
             release_connection(conn)
 
         return self.get_by_code(new_code)
+
+    def create(self, data: StockFamilyIn) -> StockFamilyDetail:
+        """
+        Crée une nouvelle famille de stock.
+
+        Raises:
+            ValidationError: Si le code est déjà utilisé
+        """
+        conn = self._get_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT 1 FROM stock_family WHERE code = %s", (data.code,))
+            if cur.fetchone():
+                raise ValidationError(f"La famille '{data.code}' existe déjà")
+            cur.execute(
+                "INSERT INTO stock_family (code, label) VALUES (%s, %s)",
+                (data.code, data.label)
+            )
+            conn.commit()
+            logger.info("Famille %s créée", data.code)
+        except ValidationError:
+            conn.rollback()
+            raise
+        except Exception as e:
+            conn.rollback()
+            raise DatabaseError(f"Erreur lors de la création: {str(e)}") from e
+        finally:
+            release_connection(conn)
+
+        return self.get_by_code(data.code)
