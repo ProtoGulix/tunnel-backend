@@ -1,3 +1,4 @@
+from fastapi import HTTPException
 from typing import Dict, Any, List, Optional, Literal
 from uuid import uuid4
 from datetime import datetime, date, timedelta
@@ -6,7 +7,7 @@ import logging
 
 from api.settings import settings
 from api.db import get_connection, release_connection
-from api.errors.exceptions import DatabaseError, NotFoundError
+from api.errors.exceptions import DatabaseError, raise_db_error, NotFoundError
 from api.constants import DERIVED_STATUS_CONFIG
 
 logger = logging.getLogger(__name__)
@@ -214,8 +215,10 @@ class PurchaseRequestRepository:
 
                 results.append(pr)
             return results
+        except HTTPException:
+            raise
         except Exception as e:
-            raise DatabaseError(f"Erreur base de données: {str(e)}") from e
+            raise_db_error(e, "opération")
         finally:
             release_connection(conn)
 
@@ -271,8 +274,10 @@ class PurchaseRequestRepository:
             return result
         except NotFoundError:
             raise
+        except HTTPException:
+            raise
         except Exception as e:
-            raise DatabaseError(f"Erreur base de données: {str(e)}") from e
+            raise_db_error(e, "opération")
         finally:
             release_connection(conn)
 
@@ -328,8 +333,10 @@ class PurchaseRequestRepository:
 
                 results.append(pr)
             return results
+        except HTTPException:
+            raise
         except Exception as e:
-            raise DatabaseError(f"Erreur base de données: {str(e)}") from e
+            raise_db_error(e, "opération")
         finally:
             release_connection(conn)
 
@@ -673,9 +680,11 @@ class PurchaseRequestRepository:
             logger.info(
                 "Fetched %d purchase requests (list view)", len(results))
             return results
+        except HTTPException:
+            raise
         except Exception as e:
             logger.error("Error fetching purchase request list: %s", str(e))
-            raise DatabaseError(f"Erreur base de données: {str(e)}") from e
+            raise_db_error(e, "opération")
         finally:
             release_connection(conn)
 
@@ -785,9 +794,11 @@ class PurchaseRequestRepository:
 
         except NotFoundError:
             raise
+        except HTTPException:
+            raise
         except Exception as e:
             logger.error("Error fetching purchase request detail: %s", str(e))
-            raise DatabaseError(f"Erreur base de données: {str(e)}") from e
+            raise_db_error(e, "opération")
         finally:
             release_connection(conn)
 
@@ -1004,9 +1015,11 @@ class PurchaseRequestRepository:
                 'top_items': top_items
             }
 
+        except HTTPException:
+            raise
         except Exception as e:
             logger.error("Error fetching stats: %s", str(e))
-            raise DatabaseError(f"Erreur base de données: {str(e)}") from e
+            raise_db_error(e, "opération")
         finally:
             release_connection(conn)
 

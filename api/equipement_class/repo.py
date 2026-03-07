@@ -1,10 +1,11 @@
+from fastapi import HTTPException
 """Requêtes pour le domaine classes d'équipement"""
 from typing import Dict, Any, List
 from uuid import uuid4
 
 from api.settings import settings
 from api.db import get_connection, release_connection
-from api.errors.exceptions import DatabaseError, NotFoundError, ValidationError
+from api.errors.exceptions import DatabaseError, raise_db_error, NotFoundError, ValidationError
 
 
 class EquipementClassRepository:
@@ -26,8 +27,10 @@ class EquipementClassRepository:
             rows = cur.fetchall()
             cols = [desc[0] for desc in cur.description]
             return [dict(zip(cols, row)) for row in rows]
+        except HTTPException:
+            raise
         except Exception as e:
-            raise DatabaseError(f"Erreur base de données: {str(e)}") from e
+            raise_db_error(e, "opération")
         finally:
             release_connection(conn)
 
@@ -50,8 +53,10 @@ class EquipementClassRepository:
             return dict(zip(cols, row))
         except NotFoundError:
             raise
+        except HTTPException:
+            raise
         except Exception as e:
-            raise DatabaseError(f"Erreur base de données: {str(e)}") from e
+            raise_db_error(e, "opération")
         finally:
             release_connection(conn)
 
@@ -85,9 +90,11 @@ class EquipementClassRepository:
             return dict(zip(cols, row))
         except ValidationError:
             raise
+        except HTTPException:
+            raise
         except Exception as e:
             conn.rollback()
-            raise DatabaseError(f"Erreur base de données: {str(e)}") from e
+            raise_db_error(e, "opération")
         finally:
             release_connection(conn)
 
@@ -145,9 +152,11 @@ class EquipementClassRepository:
             return dict(zip(cols, row))
         except (NotFoundError, ValidationError):
             raise
+        except HTTPException:
+            raise
         except Exception as e:
             conn.rollback()
-            raise DatabaseError(f"Erreur base de données: {str(e)}") from e
+            raise_db_error(e, "opération")
         finally:
             release_connection(conn)
 
@@ -178,8 +187,10 @@ class EquipementClassRepository:
             conn.commit()
         except (NotFoundError, ValidationError):
             raise
+        except HTTPException:
+            raise
         except Exception as e:
             conn.rollback()
-            raise DatabaseError(f"Erreur base de données: {str(e)}") from e
+            raise_db_error(e, "opération")
         finally:
             release_connection(conn)

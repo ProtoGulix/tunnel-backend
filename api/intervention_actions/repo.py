@@ -1,10 +1,11 @@
+from fastapi import HTTPException
 from typing import Dict, Any, List
 from uuid import uuid4
 from datetime import datetime
 
 from api.settings import settings
 from api.db import get_connection, release_connection
-from api.errors.exceptions import DatabaseError, NotFoundError
+from api.errors.exceptions import DatabaseError, raise_db_error, NotFoundError
 from api.utils.sanitizer import strip_html
 from api.intervention_actions.validators import InterventionActionValidator
 
@@ -115,8 +116,10 @@ class InterventionActionRepository:
             rows = cur.fetchall()
             cols = [desc[0] for desc in cur.description]
             return [self._map_tech_user(dict(zip(cols, row))) for row in rows]
+        except HTTPException:
+            raise
         except Exception as e:
-            raise DatabaseError(f"Erreur base de données: {str(e)}") from e
+            raise_db_error(e, "opération")
         finally:
             release_connection(conn)
 
@@ -144,8 +147,10 @@ class InterventionActionRepository:
             return self._map_tech_user(dict(zip(cols, row)))
         except NotFoundError:
             raise
+        except HTTPException:
+            raise
         except Exception as e:
-            raise DatabaseError(f"Erreur base de données: {str(e)}") from e
+            raise_db_error(e, "opération")
         finally:
             release_connection(conn)
 
@@ -187,8 +192,10 @@ class InterventionActionRepository:
                     str(action['id']), conn)
                 results.append(action)
             return results
+        except HTTPException:
+            raise
         except Exception as e:
-            raise DatabaseError(f"Erreur base de données: {str(e)}") from e
+            raise_db_error(e, "opération")
         finally:
             release_connection(conn)
 
@@ -228,8 +235,10 @@ class InterventionActionRepository:
             return action
         except NotFoundError:
             raise
+        except HTTPException:
+            raise
         except Exception as e:
-            raise DatabaseError(f"Erreur base de données: {str(e)}") from e
+            raise_db_error(e, "opération")
         finally:
             release_connection(conn)
 

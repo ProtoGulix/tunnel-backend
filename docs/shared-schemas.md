@@ -265,10 +265,20 @@ Les dates invalides (ex: `2026-01-36`) sont rejetées.
 
 ### Erreurs
 
-| Code | Signification                                         |
-| ---- | ----------------------------------------------------- |
-| 400  | Validation échouée (format UUID, champs requis, etc.) |
-| 401  | JWT manquant ou invalide                              |
-| 404  | Ressource non trouvée                                 |
-| 409  | Conflit (contrainte d'unicité, suppression bloquée)   |
-| 500  | Erreur serveur                                        |
+Toutes les réponses d'erreur suivent le format :
+
+```json
+{
+  "detail": "Message lisible",
+  "error_type": "ValidationError"
+}
+```
+
+| Code | `error_type`          | Signification                                                        |
+| ---- | --------------------- | -------------------------------------------------------------------- |
+| 400  | `ValidationError`     | Validation échouée (format UUID, champs requis, règle métier, FK)   |
+| 401  | `UnauthorizedError`   | JWT manquant ou invalide                                             |
+| 403  | `ForbiddenError`      | Accès refusé                                                         |
+| 404  | `NotFoundError`       | Ressource non trouvée                                                |
+| 409  | `ConflictError`       | Ressource déjà existante (contrainte d'unicité)                      |
+| 500  | `DatabaseError`       | Erreur serveur — détail technique loggé côté serveur uniquement      |

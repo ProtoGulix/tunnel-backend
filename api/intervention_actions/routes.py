@@ -27,17 +27,11 @@ async def get_action(action_id: str):
 async def add_action(action: InterventionActionIn):
     """Ajoute une action à une intervention"""
     repo = InterventionActionRepository()
-    try:
-        return repo.add(action.model_dump())
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+    return repo.add(action.model_dump())
 
 
 @router.patch("/{action_id}", response_model=InterventionActionOut)
 async def patch_action(action_id: str, patch: InterventionActionPatch):
     """Met à jour partiellement une action d'intervention"""
     repo = InterventionActionRepository()
-    try:
-        return repo.update(action_id, patch.model_dump(exclude_none=True))
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+    return repo.update(action_id, patch.model_dump(exclude_none=True))

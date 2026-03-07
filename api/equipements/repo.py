@@ -1,9 +1,10 @@
+from fastapi import HTTPException
 """Requêtes pour le domaine équipements"""
 from typing import Dict, Any, List
 from uuid import uuid4
 
 from api.db import get_connection, release_connection
-from api.errors.exceptions import DatabaseError, NotFoundError
+from api.errors.exceptions import DatabaseError, raise_db_error, NotFoundError
 from api.constants import PRIORITY_TYPES, CLOSED_STATUS_CODE, INTERVENTION_TYPES_MAP
 
 
@@ -76,8 +77,10 @@ class EquipementRepository:
 
             return equipements
 
+        except HTTPException:
+            raise
         except Exception as e:
-            raise DatabaseError(f"Erreur base de données: {str(e)}") from e
+            raise_db_error(e, "opération")
         finally:
             release_connection(conn)
 
@@ -216,8 +219,10 @@ class EquipementRepository:
             return equipement
         except NotFoundError:
             raise
+        except HTTPException:
+            raise
         except Exception as e:
-            raise DatabaseError(f"Erreur base de données: {str(e)}") from e
+            raise_db_error(e, "opération")
         finally:
             release_connection(conn)
 
@@ -296,8 +301,10 @@ class EquipementRepository:
             }
         except NotFoundError:
             raise
+        except HTTPException:
+            raise
         except Exception as e:
-            raise DatabaseError(f"Erreur base de données: {str(e)}") from e
+            raise_db_error(e, "opération")
         finally:
             release_connection(conn)
 
@@ -451,8 +458,10 @@ class EquipementRepository:
                     equipement['equipement_class'] = None
 
             return equipements
+        except HTTPException:
+            raise
         except Exception as e:
-            raise DatabaseError(f"Erreur base de données: {str(e)}") from e
+            raise_db_error(e, "opération")
         finally:
             release_connection(conn)
 
@@ -537,8 +546,10 @@ class EquipementRepository:
             }
         except NotFoundError:
             raise
+        except HTTPException:
+            raise
         except Exception as e:
-            raise DatabaseError(f"Erreur base de données: {str(e)}") from e
+            raise_db_error(e, "opération")
         finally:
             release_connection(conn)
 
@@ -582,8 +593,10 @@ class EquipementRepository:
             }
         except NotFoundError:
             raise
+        except HTTPException:
+            raise
         except Exception as e:
-            raise DatabaseError(f"Erreur base de données: {str(e)}") from e
+            raise_db_error(e, "opération")
         finally:
             release_connection(conn)
 

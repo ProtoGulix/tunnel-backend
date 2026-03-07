@@ -20,10 +20,7 @@ async def list_stock_families():
     Triées par code famille.
     """
     repo = StockFamilyRepository()
-    try:
-        return repo.get_all()
-    except (DatabaseError, Exception) as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+    return repo.get_all()
 
 
 @router.get("/{family_code}", response_model=StockFamilyDetail)
@@ -44,21 +41,11 @@ async def get_stock_family(
         avec indication si elles ont un template associé
     """
     repo = StockFamilyRepository()
-    try:
-        return repo.get_by_code(family_code, search=search)
-    except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+    return repo.get_by_code(family_code, search=search)
 
 
 @router.patch("/{family_code}", response_model=StockFamilyDetail)
 async def patch_stock_family(family_code: str, data: StockFamilyPatch):
     """Renomme une famille de stock (met à jour family_code sur toutes les sous-familles)"""
     repo = StockFamilyRepository()
-    try:
-        return repo.update(family_code, data.code, data.label)
-    except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+    return repo.update(family_code, data.code, data.label)

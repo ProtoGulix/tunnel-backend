@@ -1,10 +1,11 @@
+from fastapi import HTTPException
 from typing import Dict, Any, List, Optional
 from uuid import uuid4
 from decimal import Decimal
 
 from api.settings import settings
 from api.db import get_connection, release_connection
-from api.errors.exceptions import DatabaseError, NotFoundError
+from api.errors.exceptions import DatabaseError, raise_db_error, NotFoundError
 
 
 class StockItemSupplierRepository:
@@ -90,8 +91,10 @@ class StockItemSupplierRepository:
             cols = [desc[0] for desc in cur.description]
 
             return [self._map_manufacturer(self._convert_decimals(dict(zip(cols, row)))) for row in rows]
+        except HTTPException:
+            raise
         except Exception as e:
-            raise DatabaseError(f"Erreur base de données: {str(e)}") from e
+            raise_db_error(e, "opération")
         finally:
             release_connection(conn)
 
@@ -126,8 +129,10 @@ class StockItemSupplierRepository:
             return self._map_manufacturer(self._convert_decimals(dict(zip(cols, row))))
         except NotFoundError:
             raise
+        except HTTPException:
+            raise
         except Exception as e:
-            raise DatabaseError(f"Erreur base de données: {str(e)}") from e
+            raise_db_error(e, "opération")
         finally:
             release_connection(conn)
 
@@ -157,8 +162,10 @@ class StockItemSupplierRepository:
             cols = [desc[0] for desc in cur.description]
 
             return [self._map_manufacturer(self._convert_decimals(dict(zip(cols, row)))) for row in rows]
+        except HTTPException:
+            raise
         except Exception as e:
-            raise DatabaseError(f"Erreur base de données: {str(e)}") from e
+            raise_db_error(e, "opération")
         finally:
             release_connection(conn)
 
@@ -188,8 +195,10 @@ class StockItemSupplierRepository:
             cols = [desc[0] for desc in cur.description]
 
             return [self._map_manufacturer(self._convert_decimals(dict(zip(cols, row)))) for row in rows]
+        except HTTPException:
+            raise
         except Exception as e:
-            raise DatabaseError(f"Erreur base de données: {str(e)}") from e
+            raise_db_error(e, "opération")
         finally:
             release_connection(conn)
 

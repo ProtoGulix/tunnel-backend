@@ -32,14 +32,11 @@ async def get_purchase_requests_stats(
     Retourne compteurs totaux, par statut, par urgence, top articles.
     """
     repo = PurchaseRequestRepository()
-    try:
-        return repo.get_stats(
-            start_date=start_date,
-            end_date=end_date,
-            group_by=group_by
-        )
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+    return repo.get_stats(
+        start_date=start_date,
+        end_date=end_date,
+        group_by=group_by
+    )
 
 
 @router.get("/list", response_model=List[PurchaseRequestListItem])
@@ -61,16 +58,13 @@ async def list_purchase_requests_optimized(
     - Payload ~95% plus léger que version legacy
     """
     repo = PurchaseRequestRepository()
-    try:
-        return repo.get_list(
-            limit=limit,
-            offset=skip,
-            status=status,
-            intervention_id=intervention_id,
-            urgency=urgency
-        )
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+    return repo.get_list(
+        limit=limit,
+        offset=skip,
+        status=status,
+        intervention_id=intervention_id,
+        urgency=urgency
+    )
 
 
 @router.get("/detail/{request_id}", response_model=PurchaseRequestDetail)
@@ -102,10 +96,7 @@ async def get_purchase_requests_by_intervention_optimized(
     - view=full : retourne PurchaseRequestDetail (complet avec contexte)
     """
     repo = PurchaseRequestRepository()
-    try:
-        return repo.get_by_intervention_optimized(intervention_id, view=view)
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+    return repo.get_by_intervention_optimized(intervention_id, view=view)
 
 
 @router.post("/dispatch", response_model=DispatchResult)
@@ -121,10 +112,7 @@ async def dispatch_pending_requests():
     Les demandes passent automatiquement de PENDING_DISPATCH à OPEN.
     """
     repo = PurchaseRequestRepository()
-    try:
-        return repo.dispatch_all()
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+    return repo.dispatch_all()
 
 
 # ========== Endpoints legacy (maintien compatibilité) ==========
@@ -179,28 +167,19 @@ async def get_purchase_request(request_id: str):
 async def create_purchase_request(purchase_request: PurchaseRequestIn):
     """Crée une nouvelle demande d'achat"""
     repo = PurchaseRequestRepository()
-    try:
-        return repo.add(purchase_request.model_dump())
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+    return repo.add(purchase_request.model_dump())
 
 
 @router.put("/{request_id}", response_model=PurchaseRequestOut)
 async def update_purchase_request(request_id: str, purchase_request: PurchaseRequestIn):
     """Met à jour une demande d'achat existante"""
     repo = PurchaseRequestRepository()
-    try:
-        return repo.update(request_id, purchase_request.model_dump(exclude_unset=True))
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+    return repo.update(request_id, purchase_request.model_dump(exclude_unset=True))
 
 
 @router.delete("/{request_id}")
 async def delete_purchase_request(request_id: str):
     """Supprime une demande d'achat"""
     repo = PurchaseRequestRepository()
-    try:
-        repo.delete(request_id)
-        return {"message": f"Demande d'achat {request_id} supprimée"}
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+    repo.delete(request_id)
+    return {"message": f"Demande d'achat {request_id} supprimée"}

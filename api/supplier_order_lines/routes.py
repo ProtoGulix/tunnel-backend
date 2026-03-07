@@ -57,66 +57,51 @@ async def get_supplier_order_line(line_id: str):
 async def create_supplier_order_line(line: SupplierOrderLineIn):
     """Crée une nouvelle ligne de commande fournisseur"""
     repo = SupplierOrderLineRepository()
-    try:
-        data = line.model_dump()
-        # Convertit les purchase_requests en dict si présents
-        if data.get('purchase_requests'):
-            data['purchase_requests'] = [
-                {'purchase_request_id': str(pr['purchase_request_id']), 'quantity': pr['quantity']}
-                for pr in data['purchase_requests']
-            ]
-        return repo.add(data)
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+    data = line.model_dump()
+    # Convertit les purchase_requests en dict si présents
+    if data.get('purchase_requests'):
+        data['purchase_requests'] = [
+            {'purchase_request_id': str(pr['purchase_request_id']), 'quantity': pr['quantity']}
+            for pr in data['purchase_requests']
+        ]
+    return repo.add(data)
 
 
 @router.put("/{line_id}", response_model=SupplierOrderLineOut)
 async def update_supplier_order_line(line_id: str, line: SupplierOrderLineIn):
     """Met à jour une ligne de commande existante"""
     repo = SupplierOrderLineRepository()
-    try:
-        data = line.model_dump(exclude_unset=True)
-        # Convertit les purchase_requests en dict si présents
-        if data.get('purchase_requests'):
-            data['purchase_requests'] = [
-                {'purchase_request_id': str(pr['purchase_request_id']), 'quantity': pr['quantity']}
-                for pr in data['purchase_requests']
-            ]
-        return repo.update(line_id, data)
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+    data = line.model_dump(exclude_unset=True)
+    # Convertit les purchase_requests en dict si présents
+    if data.get('purchase_requests'):
+        data['purchase_requests'] = [
+            {'purchase_request_id': str(pr['purchase_request_id']), 'quantity': pr['quantity']}
+            for pr in data['purchase_requests']
+        ]
+    return repo.update(line_id, data)
 
 
 @router.delete("/{line_id}")
 async def delete_supplier_order_line(line_id: str):
     """Supprime une ligne de commande"""
     repo = SupplierOrderLineRepository()
-    try:
-        repo.delete(line_id)
-        return {"message": f"Ligne {line_id} supprimée"}
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+    repo.delete(line_id)
+    return {"message": f"Ligne {line_id} supprimée"}
 
 
 @router.post("/{line_id}/purchase-requests", response_model=SupplierOrderLineOut)
 async def link_purchase_request(line_id: str, body: LinkPurchaseRequestBody):
     """Lie une demande d'achat à une ligne de commande"""
     repo = SupplierOrderLineRepository()
-    try:
-        return repo.link_purchase_request(
-            line_id,
-            body.purchase_request_id,
-            body.quantity
-        )
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+    return repo.link_purchase_request(
+        line_id,
+        body.purchase_request_id,
+        body.quantity
+    )
 
 
 @router.delete("/{line_id}/purchase-requests/{purchase_request_id}", response_model=SupplierOrderLineOut)
 async def unlink_purchase_request(line_id: str, purchase_request_id: str):
     """Retire le lien avec une demande d'achat"""
     repo = SupplierOrderLineRepository()
-    try:
-        return repo.unlink_purchase_request(line_id, purchase_request_id)
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+    return repo.unlink_purchase_request(line_id, purchase_request_id)

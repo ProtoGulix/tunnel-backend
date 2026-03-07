@@ -1,9 +1,10 @@
+from fastapi import HTTPException
 from typing import Any, Dict, List
 from uuid import uuid4
 
 from api.settings import settings
 from api.db import get_connection, release_connection
-from api.errors.exceptions import DatabaseError, NotFoundError
+from api.errors.exceptions import DatabaseError, raise_db_error, NotFoundError
 from api.intervention_status_log.validators import InterventionStatusLogValidator
 
 
@@ -116,8 +117,10 @@ class InterventionStatusLogRepository:
 
             return result
 
+        except HTTPException:
+            raise
         except Exception as e:
-            raise DatabaseError(f"Erreur base de données: {str(e)}") from e
+            raise_db_error(e, "opération")
         finally:
             release_connection(conn)
 
@@ -192,8 +195,10 @@ class InterventionStatusLogRepository:
 
         except NotFoundError:
             raise
+        except HTTPException:
+            raise
         except Exception as e:
-            raise DatabaseError(f"Erreur base de données: {str(e)}") from e
+            raise_db_error(e, "opération")
         finally:
             release_connection(conn)
 

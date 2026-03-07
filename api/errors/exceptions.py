@@ -38,6 +38,17 @@ class ForbiddenError(HTTPException):
         )
 
 
+class ConflictError(HTTPException):
+    """Conflit — ressource déjà existante (409)"""
+
+    def __init__(self, detail: str = "Conflit : la ressource existe déjà"):
+        logger.warning(f"409 Conflict: {detail}")
+        super().__init__(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=detail
+        )
+
+
 class DatabaseError(HTTPException):
     """Erreur de base de données (500)"""
 
@@ -80,3 +91,22 @@ class RenderError(HTTPException):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Erreur lors du rendu"
         )
+
+
+def raise_db_error(e: Exception, context: str = "opération") -> None:
+    """
+    Convertit une exception psycopg2 en exception HTTP appropriée.
+    - Violation de contrainte unique (23505) → ConflictError 409
+    - Violation de clé étrangère (23503) → ValidationError 400
+    - Tout le reste → DatabaseError 500 (message générique)
+    """
+    pgcode = getattr(e, "pgcode", None) or (
+        getattr(getattr(e, "orig", None), "pgcode", None)
+    )
+
+    if pgcode == "23505":
+        raise ConflictError(f"Cette ressource existe déjà ({context})")
+    if pgcode == "23503":
+        raise ValidationError(f"Référence invalide : une ressource liée est introuvable ({context})")
+
+    raise DatabaseError(str(e))

@@ -1,3 +1,4 @@
+from fastapi import HTTPException
 from typing import Dict, Any, List, Optional
 from uuid import uuid4
 from datetime import datetime, timezone
@@ -6,7 +7,7 @@ import logging
 
 from api.settings import settings
 from api.db import get_connection, release_connection
-from api.errors.exceptions import DatabaseError, NotFoundError
+from api.errors.exceptions import DatabaseError, raise_db_error, NotFoundError
 
 logger = logging.getLogger(__name__)
 
@@ -156,8 +157,10 @@ class SupplierOrderRepository:
                 order = self._compute_age_fields(order)
                 results.append(order)
             return results
+        except HTTPException:
+            raise
         except Exception as e:
-            raise DatabaseError(f"Erreur base de données: {str(e)}") from e
+            raise_db_error(e, "opération")
         finally:
             release_connection(conn)
 
@@ -192,8 +195,10 @@ class SupplierOrderRepository:
             return result
         except NotFoundError:
             raise
+        except HTTPException:
+            raise
         except Exception as e:
-            raise DatabaseError(f"Erreur base de données: {str(e)}") from e
+            raise_db_error(e, "opération")
         finally:
             release_connection(conn)
 
@@ -228,8 +233,10 @@ class SupplierOrderRepository:
             return result
         except NotFoundError:
             raise
+        except HTTPException:
+            raise
         except Exception as e:
-            raise DatabaseError(f"Erreur base de données: {str(e)}") from e
+            raise_db_error(e, "opération")
         finally:
             release_connection(conn)
 
@@ -449,7 +456,9 @@ class SupplierOrderRepository:
             return result
         except NotFoundError:
             raise
+        except HTTPException:
+            raise
         except Exception as e:
-            raise DatabaseError(f"Erreur base de données: {str(e)}") from e
+            raise_db_error(e, "opération")
         finally:
             release_connection(conn)

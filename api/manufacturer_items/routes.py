@@ -33,41 +33,25 @@ async def list_manufacturer_items(
 async def get_manufacturer_item(item_id: str):
     """Récupère une référence fabricant avec ses références fournisseurs liées"""
     repo = ManufacturerItemRepository()
-    try:
-        return repo.get_by_id_with_suppliers(item_id)
-    except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
+    return repo.get_by_id_with_suppliers(item_id)
 
 
 @router.post("/", response_model=ManufacturerItemOut, status_code=201)
 async def create_manufacturer_item(data: ManufacturerItemIn):
     """Crée une nouvelle référence fabricant"""
     repo = ManufacturerItemRepository()
-    try:
-        return repo.add(data.model_dump())
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+    return repo.add(data.model_dump())
 
 
 @router.patch("/{item_id}", response_model=ManufacturerItemOut)
 async def patch_manufacturer_item(item_id: str, data: ManufacturerItemIn):
     """Met à jour une référence fabricant"""
     repo = ManufacturerItemRepository()
-    try:
-        return repo.update(item_id, data.model_dump(exclude_none=True))
-    except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+    return repo.update(item_id, data.model_dump(exclude_none=True))
 
 
 @router.delete("/{item_id}", status_code=204)
 async def delete_manufacturer_item(item_id: str):
     """Supprime une référence fabricant"""
     repo = ManufacturerItemRepository()
-    try:
-        repo.delete(item_id)
-    except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+    repo.delete(item_id)

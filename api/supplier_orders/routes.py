@@ -57,31 +57,22 @@ async def get_supplier_order_by_number(order_number: str):
 async def create_supplier_order(supplier_order: SupplierOrderIn):
     """Crée une nouvelle commande fournisseur"""
     repo = SupplierOrderRepository()
-    try:
-        return repo.add(supplier_order.model_dump())
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+    return repo.add(supplier_order.model_dump())
 
 
 @router.put("/{order_id}", response_model=SupplierOrderOut)
 async def update_supplier_order(order_id: str, supplier_order: SupplierOrderUpdate):
     """Met à jour une commande fournisseur existante"""
     repo = SupplierOrderRepository()
-    try:
-        return repo.update(order_id, supplier_order.model_dump(exclude_unset=True))
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+    return repo.update(order_id, supplier_order.model_dump(exclude_unset=True))
 
 
 @router.delete("/{order_id}")
 async def delete_supplier_order(order_id: str):
     """Supprime une commande fournisseur"""
     repo = SupplierOrderRepository()
-    try:
-        repo.delete(order_id)
-        return {"message": f"Commande fournisseur {order_id} supprimée"}
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+    repo.delete(order_id)
+    return {"message": f"Commande fournisseur {order_id} supprimée"}
 
 
 @router.post("/{order_id}/export/csv")
@@ -95,29 +86,26 @@ async def export_supplier_order_csv(order_id: str):
     - get_csv_filename() : Nom du fichier
     """
     repo = SupplierOrderRepository()
-    try:
-        data = repo.get_export_data(order_id)
+    data = repo.get_export_data(order_id)
 
-        output = StringIO()
-        writer = csv.writer(output, delimiter=';')
+    output = StringIO()
+    writer = csv.writer(output, delimiter=';')
 
-        # En-tête (depuis template)
-        writer.writerow(get_csv_headers())
+    # En-tête (depuis template)
+    writer.writerow(get_csv_headers())
 
-        # Lignes de la commande (depuis template)
-        for line in data.get('lines', []):
-            writer.writerow(format_csv_row(line))
+    # Lignes de la commande (depuis template)
+    for line in data.get('lines', []):
+        writer.writerow(format_csv_row(line))
 
-        output.seek(0)
-        filename = get_csv_filename(data.get('order_number', order_id))
+    output.seek(0)
+    filename = get_csv_filename(data.get('order_number', order_id))
 
-        return StreamingResponse(
-            iter([output.getvalue()]),
-            media_type="text/csv",
-            headers={"Content-Disposition": f"attachment; filename={filename}"}
-        )
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
 
 
 @router.post("/{order_id}/export/email", response_model=EmailExportOut)
@@ -131,25 +119,22 @@ async def export_supplier_order_email(order_id: str):
     - get_email_body_html() : Corps HTML avec tableau
     """
     repo = SupplierOrderRepository()
-    try:
-        data = repo.get_export_data(order_id)
+    data = repo.get_export_data(order_id)
 
-        order_number = data.get('order_number', '')
-        supplier = data.get('supplier') or {}
-        supplier_name = supplier.get('name', 'Fournisseur')
-        supplier_email = supplier.get('email')
-        lines = data.get('lines', [])
+    order_number = data.get('order_number', '')
+    supplier = data.get('supplier') or {}
+    supplier_name = supplier.get('name', 'Fournisseur')
+    supplier_email = supplier.get('email')
+    lines = data.get('lines', [])
 
-        # Génération depuis templates
-        subject = get_email_subject(order_number)
-        body_text = get_email_body_text(order_number, supplier_name, lines)
-        body_html = get_email_body_html(order_number, supplier_name, lines)
+    # Génération depuis templates
+    subject = get_email_subject(order_number)
+    body_text = get_email_body_text(order_number, supplier_name, lines)
+    body_html = get_email_body_html(order_number, supplier_name, lines)
 
-        return EmailExportOut(
-            subject=subject,
-            body_text=body_text,
-            body_html=body_html,
-            supplier_email=supplier_email
-        )
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+    return EmailExportOut(
+        subject=subject,
+        body_text=body_text,
+        body_html=body_html,
+        supplier_email=supplier_email
+    )

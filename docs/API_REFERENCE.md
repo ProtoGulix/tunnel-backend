@@ -1540,16 +1540,27 @@ Recherche insensible à la casse implémentée en `ILIKE %terme%` sur :
 
 ### Codes HTTP
 
-| Code  | Signification                               |
-| ----- | ------------------------------------------- |
-| `200` | Succès                                      |
-| `201` | Créé avec succès                            |
-| `204` | Suppression réussie (pas de contenu)        |
-| `400` | Erreur de validation ou règle métier violée |
-| `401` | Non authentifié                             |
-| `404` | Ressource introuvable                       |
-| `502` | Service Directus indisponible               |
+Toutes les réponses d'erreur suivent le format :
+
+```json
+{
+  "detail": "Message lisible",
+  "error_type": "ValidationError"
+}
+```
+
+| Code  | `error_type`        | Signification                                                      |
+| ----- | ------------------- | ------------------------------------------------------------------ |
+| `200` | —                   | Succès                                                             |
+| `201` | —                   | Créé avec succès                                                   |
+| `400` | `ValidationError`   | Validation échouée (format, champs requis, règle métier, FK)       |
+| `401` | `UnauthorizedError` | JWT manquant ou invalide                                           |
+| `403` | `ForbiddenError`    | Accès refusé                                                       |
+| `404` | `NotFoundError`     | Ressource introuvable                                              |
+| `409` | `ConflictError`     | Ressource déjà existante (contrainte d'unicité)                    |
+| `500` | `DatabaseError`     | Erreur serveur — détail technique loggé côté serveur uniquement    |
+| `502` | —                   | Service Directus indisponible                                      |
 
 ---
 
-_Document généré le 2026-03-02 — Source : docs/endpoints/_ — _web.tunnel-backend v2.6.0_
+_Document généré le 2026-03-07 — Source : docs/endpoints/_ — _web.tunnel-backend v2.7.8_

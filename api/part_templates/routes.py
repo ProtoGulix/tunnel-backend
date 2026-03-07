@@ -19,10 +19,7 @@ async def list_templates():
     Retourne les données complètes (optimisé pour pages de gestion)
     """
     repo = PartTemplateRepository()
-    try:
-        return repo.get_all()
-    except DatabaseError as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+    return repo.get_all()
 
 
 @router.get("/code/{code}", response_model=List[dict])
@@ -31,14 +28,11 @@ async def get_template_versions_by_code(code: str):
     Récupère toutes les versions d'un template par code
     """
     repo = PartTemplateRepository()
-    try:
-        versions = repo.get_by_code(code)
-        if not versions:
-            raise HTTPException(
-                status_code=404, detail="Template %s non trouvé" % code)
-        return versions
-    except DatabaseError as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+    versions = repo.get_by_code(code)
+    if not versions:
+        raise HTTPException(
+            status_code=404, detail="Template %s non trouvé" % code)
+    return versions
 
 
 @router.get("/{template_id}", response_model=PartTemplate)
@@ -52,12 +46,7 @@ async def get_template(
     Si version est omise, retourne la version la plus récente
     """
     service = TemplateService()
-    try:
-        return service.load_template(template_id, version)
-    except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    except DatabaseError as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+    return service.load_template(template_id, version)
 
 
 @router.post("/", response_model=dict, status_code=201)
@@ -72,10 +61,7 @@ async def create_template(data: PartTemplateIn):
     - valeurs enum si applicable
     """
     repo = PartTemplateRepository()
-    try:
-        return repo.create(data)
-    except (ValidationError, DatabaseError) as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+    return repo.create(data)
 
 
 @router.post("/{template_id}/versions", response_model=dict, status_code=201)
@@ -87,12 +73,7 @@ async def create_template_version(template_id: str, data: PartTemplateUpdate):
     Le numéro de version est incrémenté automatiquement
     """
     repo = PartTemplateRepository()
-    try:
-        return repo.create_new_version(template_id, data)
-    except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    except (ValidationError, DatabaseError) as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+    return repo.create_new_version(template_id, data)
 
 
 @router.delete("/{template_id}")
@@ -108,12 +89,7 @@ async def delete_template(
     Refuse la suppression si des pièces utilisent ce template
     """
     repo = PartTemplateRepository()
-    try:
-        repo.delete(template_id, version)
-        if version:
-            return {"message": "Template %s version %s supprimé" % (template_id, version)}
-        return {"message": "Template %s supprimé (toutes versions)" % template_id}
-    except ValidationError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except DatabaseError as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+    repo.delete(template_id, version)
+    if version:
+        return {"message": "Template %s version %s supprimé" % (template_id, version)}
+    return {"message": "Template %s supprimé (toutes versions)" % template_id}

@@ -43,28 +43,19 @@ async def get_supplier_by_code(code: str):
 async def create_supplier(supplier: SupplierIn):
     """Crée un nouveau fournisseur"""
     repo = SupplierRepository()
-    try:
-        return repo.add(supplier.model_dump())
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+    return repo.add(supplier.model_dump())
 
 
 @router.put("/{supplier_id}", response_model=SupplierOut)
 async def update_supplier(supplier_id: str, supplier: SupplierIn):
     """Met à jour un fournisseur existant"""
     repo = SupplierRepository()
-    try:
-        return repo.update(supplier_id, supplier.model_dump(exclude_unset=True))
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+    return repo.update(supplier_id, supplier.model_dump(exclude_unset=True))
 
 
 @router.delete("/{supplier_id}")
 async def delete_supplier(supplier_id: str):
     """Supprime un fournisseur"""
     repo = SupplierRepository()
-    try:
-        repo.delete(supplier_id)
-        return {"message": f"Fournisseur {supplier_id} supprimé"}
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+    repo.delete(supplier_id)
+    return {"message": f"Fournisseur {supplier_id} supprimé"}

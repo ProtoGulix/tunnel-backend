@@ -1,9 +1,10 @@
+from fastapi import HTTPException
 import logging
 from typing import Dict, Any
 from uuid import uuid4
 
 from api.db import get_connection, release_connection
-from api.errors.exceptions import DatabaseError, ValidationError
+from api.errors.exceptions import DatabaseError, raise_db_error, ValidationError
 from api.stock_items.template_service import TemplateService
 from api.stock_items.template_schemas import CharacteristicValue, StockItemWithCharacteristics
 from api.stock_sub_families.repo import StockSubFamilyRepository
@@ -102,10 +103,12 @@ class StockItemService:
             logger.info("Item legacy créé: %s", result['id'])
             return result
 
+        except HTTPException:
+            raise
         except Exception as e:
             conn.rollback()
             logger.error("Erreur création item legacy: %s", str(e))
-            raise DatabaseError(f"Erreur lors de la création: {str(e)}") from e
+            raise_db_error(e, "création")
         finally:
             release_connection(conn)
 
@@ -203,10 +206,12 @@ class StockItemService:
         except ValidationError:
             conn.rollback()
             raise
+        except HTTPException:
+            raise
         except Exception as e:
             conn.rollback()
             logger.error("Erreur création item template: %s", str(e))
-            raise DatabaseError(f"Erreur lors de la création: {str(e)}") from e
+            raise_db_error(e, "création")
         finally:
             release_connection(conn)
 

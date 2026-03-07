@@ -2,6 +2,23 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [2.7.8] - 7 mars 2026
+
+### Améliorations
+
+- **Erreurs DB sémantiques** : les violations de contraintes PostgreSQL remontent désormais avec le bon code HTTP et un message lisible, sans fuiter de détails techniques
+  - Contrainte d'unicité (`23505`) → `409 Conflict` : `"Cette ressource existe déjà (création)"`
+  - Contrainte de clé étrangère (`23503`) → `400 Bad Request` : `"Référence invalide : une ressource liée est introuvable"`
+  - Autres erreurs DB → `500` avec message générique (inchangé)
+  - Nouveau utilitaire centralisé `raise_db_error(e, context)` dans `api/errors/exceptions.py`
+  - Nouvelle exception `ConflictError` (409) avec handler dédié dans `api/errors/handlers.py`
+
+- **Nettoyage des routes** : suppression des blocs `try/except` qui wrappaient toutes les exceptions en `HTTPException(400/500, str(e))`, écrasant le status code réel — 13 fichiers de routes corrigés
+  - Les exceptions métier (`NotFoundError`, `ValidationError`, `ConflictError`, `DatabaseError`) remontent désormais directement aux handlers FastAPI enregistrés
+  - `ValueError` du validator `InterventionStatusLogValidator` converti en `ValidationError(400)` proprement
+
+---
+
 ## [2.7.7] - 6 mars 2026
 
 ### Corrections

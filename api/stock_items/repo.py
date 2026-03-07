@@ -1,9 +1,10 @@
+from fastapi import HTTPException
 from typing import Dict, Any, List, Optional
 from uuid import uuid4
 
 from api.settings import settings
 from api.db import get_connection, release_connection
-from api.errors.exceptions import DatabaseError, NotFoundError
+from api.errors.exceptions import DatabaseError, raise_db_error, NotFoundError
 
 
 class StockItemRepository:
@@ -69,8 +70,10 @@ class StockItemRepository:
             cur.execute(query, params)
             result = cur.fetchone()
             return result[0] if result else 0
+        except HTTPException:
+            raise
         except Exception as e:
-            raise DatabaseError(f"Erreur base de données: {str(e)}") from e
+            raise_db_error(e, "opération")
         finally:
             release_connection(conn)
 
@@ -138,8 +141,10 @@ class StockItemRepository:
                     d.pop(k, None)
                 results.append(d)
             return results
+        except HTTPException:
+            raise
         except Exception as e:
-            raise DatabaseError(f"Erreur base de données: {str(e)}") from e
+            raise_db_error(e, "opération")
         finally:
             release_connection(conn)
 
@@ -200,8 +205,10 @@ class StockItemRepository:
                 })
 
             return {'families': list(families.values())}
+        except HTTPException:
+            raise
         except Exception as e:
-            raise DatabaseError(f"Erreur base de données: {str(e)}") from e
+            raise_db_error(e, "opération")
         finally:
             release_connection(conn)
 
@@ -293,8 +300,10 @@ class StockItemRepository:
             return item
         except NotFoundError:
             raise
+        except HTTPException:
+            raise
         except Exception as e:
-            raise DatabaseError(f"Erreur base de données: {str(e)}") from e
+            raise_db_error(e, "opération")
         finally:
             release_connection(conn)
 
@@ -310,8 +319,10 @@ class StockItemRepository:
             return self.get_by_id(str(row[0]))
         except NotFoundError:
             raise
+        except HTTPException:
+            raise
         except Exception as e:
-            raise DatabaseError(f"Erreur base de données: {str(e)}") from e
+            raise_db_error(e, "opération")
         finally:
             release_connection(conn)
 

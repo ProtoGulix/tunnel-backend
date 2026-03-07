@@ -12,7 +12,8 @@ from api.errors.exceptions import (
     NotFoundError,
     UnauthorizedError,
     ForbiddenError,
-    ValidationError
+    ValidationError,
+    ConflictError
 )
 
 logger = logging.getLogger(__name__)
@@ -44,6 +45,14 @@ def register_error_handlers(app: FastAPI):
         return JSONResponse(
             status_code=status.HTTP_403_FORBIDDEN,
             content={"detail": exc.detail, "error_type": "ForbiddenError"}
+        )
+
+    # Handler pour les erreurs 409 (ConflictError)
+    @app.exception_handler(ConflictError)
+    async def conflict_error_handler(request: Request, exc: ConflictError):
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={"detail": exc.detail, "error_type": "ConflictError"}
         )
 
     # Handler pour les erreurs 500 (DatabaseError)

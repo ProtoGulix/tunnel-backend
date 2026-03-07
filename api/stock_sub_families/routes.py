@@ -23,44 +23,31 @@ async def list_stock_sub_families():
     - template = null si la sous-famille n'a pas de template
     """
     repo = StockSubFamilyRepository()
-    try:
-        return repo.get_all_with_templates()
-    except (DatabaseError, Exception) as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+    return repo.get_all_with_templates()
 
 
 @router.post("/", response_model=StockSubFamily, status_code=201)
 async def create_stock_sub_family(data: StockSubFamilyCreate):
     """Crée une nouvelle sous-famille de stock (family_code dans le body)"""
     repo = StockSubFamilyRepository()
-    try:
-        return repo.create(
-            family_code=data.family_code,
-            code=data.code,
-            label=data.label,
-            template_id=data.template_id
-        )
-    except ValidationError as e:
-        raise HTTPException(status_code=409, detail=e.detail) from e
-    except (DatabaseError, Exception) as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+    return repo.create(
+        family_code=data.family_code,
+        code=data.code,
+        label=data.label,
+        template_id=data.template_id
+    )
 
 
 @router.post("/{family_code}", response_model=StockSubFamily, status_code=201)
 async def create_stock_sub_family_in_family(family_code: str, data: StockSubFamilyCreateInFamily):
     """Crée une nouvelle sous-famille sous la famille donnée dans l'URL"""
     repo = StockSubFamilyRepository()
-    try:
-        return repo.create(
-            family_code=family_code,
-            code=data.code,
-            label=data.label,
-            template_id=data.template_id
-        )
-    except ValidationError as e:
-        raise HTTPException(status_code=409, detail=e.detail) from e
-    except (DatabaseError, Exception) as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+    return repo.create(
+        family_code=family_code,
+        code=data.code,
+        label=data.label,
+        template_id=data.template_id
+    )
 
 
 @router.get("/{family_code}/{sub_family_code}", response_model=StockSubFamily)
@@ -69,12 +56,7 @@ async def get_stock_sub_family(family_code: str, sub_family_code: str):
     Récupère une sous-famille par ses codes avec son template associé
     """
     repo = StockSubFamilyRepository()
-    try:
-        return repo.get_by_codes_with_template(family_code, sub_family_code)
-    except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=e.detail) from e
-    except (DatabaseError, Exception) as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+    return repo.get_by_codes_with_template(family_code, sub_family_code)
 
 
 @router.patch("/{family_code}/{sub_family_code}", response_model=StockSubFamily)
@@ -91,14 +73,9 @@ async def update_stock_sub_family(
     - template_id : UUID du template à associer (null pour dissocier)
     """
     repo = StockSubFamilyRepository()
-    try:
-        return repo.update(
-            family_code=family_code,
-            sub_family_code=sub_family_code,
-            label=data.label,
-            template_id=data.template_id
-        )
-    except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=e.detail) from e
-    except (DatabaseError, Exception) as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+    return repo.update(
+        family_code=family_code,
+        sub_family_code=sub_family_code,
+        label=data.label,
+        template_id=data.template_id
+    )

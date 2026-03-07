@@ -1,9 +1,10 @@
+from fastapi import HTTPException
 import logging
 from typing import Dict, Any, List
 from uuid import uuid4
 
 from api.db import get_connection, release_connection
-from api.errors.exceptions import DatabaseError, NotFoundError
+from api.errors.exceptions import DatabaseError, raise_db_error, NotFoundError
 
 logger = logging.getLogger(__name__)
 
@@ -38,8 +39,10 @@ class ManufacturerItemRepository:
             rows = cur.fetchall()
             cols = [desc[0] for desc in cur.description]
             return [dict(zip(cols, row)) for row in rows]
+        except HTTPException:
+            raise
         except Exception as e:
-            raise DatabaseError(f"Erreur base de données: {str(e)}") from e
+            raise_db_error(e, "opération")
         finally:
             release_connection(conn)
 
@@ -56,8 +59,10 @@ class ManufacturerItemRepository:
             else:
                 cur.execute("SELECT COUNT(*) FROM manufacturer_item")
             return cur.fetchone()[0]
+        except HTTPException:
+            raise
         except Exception as e:
-            raise DatabaseError(f"Erreur base de données: {str(e)}") from e
+            raise_db_error(e, "opération")
         finally:
             release_connection(conn)
 
@@ -78,8 +83,10 @@ class ManufacturerItemRepository:
             return dict(zip(cols, row))
         except NotFoundError:
             raise
+        except HTTPException:
+            raise
         except Exception as e:
-            raise DatabaseError(f"Erreur base de données: {str(e)}") from e
+            raise_db_error(e, "opération")
         finally:
             release_connection(conn)
 
@@ -109,8 +116,10 @@ class ManufacturerItemRepository:
             cols = [desc[0] for desc in cur.description]
             item['supplier_items'] = [dict(zip(cols, row)) for row in rows]
             return item
+        except HTTPException:
+            raise
         except Exception as e:
-            raise DatabaseError(f"Erreur base de données: {str(e)}") from e
+            raise_db_error(e, "opération")
         finally:
             release_connection(conn)
 
@@ -133,9 +142,11 @@ class ManufacturerItemRepository:
             )
             conn.commit()
             logger.info("Référence fabricant créée: %s", item_id)
+        except HTTPException:
+            raise
         except Exception as e:
             conn.rollback()
-            raise DatabaseError(f"Erreur lors de la création: {str(e)}") from e
+            raise_db_error(e, "création")
         finally:
             release_connection(conn)
 

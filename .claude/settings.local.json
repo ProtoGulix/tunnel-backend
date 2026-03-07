@@ -39,7 +39,13 @@
       "Bash(cmd /c \"wmic process get processid,name,commandline | findstr 8000\")",
       "Bash(powershell -Command \"Get-Process -Name ''python3.12'' | Select-Object Id, Name, StartTime | Sort-Object StartTime\")",
       "Bash(powershell -Command \"Get-Process -Name ''python3.12'' | Stop-Process -Force; Write-Host ''Done''\")",
-      "Bash(python -c \":*)"
+      "Bash(python -c \":*)",
+      "Bash(for f in api/equipements/repo.py api/equipement_class/repo.py api/interventions/repo.py api/intervention_actions/repo.py api/intervention_status_log/repo.py api/manufacturer_items/repo.py api/purchase_requests/repo.py api/stock_items/repo.py api/stock_items/stock_item_service.py api/stock_item_suppliers/repo.py api/suppliers/repo.py api/supplier_orders/repo.py api/supplier_order_lines/repo.py)",
+      "Bash(do)",
+      "Read(//c/Users/Quentin/DEV/web.tunnel-backend/**)",
+      "Bash(echo \"MISSING: $f\")",
+      "Bash(done)",
+      "Bash(echo \"STILL MISSING: $f\")"
     ]
   }
 }

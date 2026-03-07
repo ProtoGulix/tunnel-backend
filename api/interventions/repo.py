@@ -1,9 +1,10 @@
+from fastapi import HTTPException
 from typing import Dict, Any, List
 from uuid import uuid4
 
 from api.settings import settings
 from api.db import get_connection, release_connection
-from api.errors.exceptions import DatabaseError, NotFoundError
+from api.errors.exceptions import DatabaseError, raise_db_error, NotFoundError
 from api.constants import PRIORITY_TYPES
 
 from api.intervention_actions.repo import InterventionActionRepository
@@ -170,8 +171,10 @@ class InterventionRepository:
                 result.append(row_dict)
 
             return result
+        except HTTPException:
+            raise
         except Exception as e:
-            raise DatabaseError(f"Erreur base de données: {str(e)}") from e
+            raise_db_error(e, "opération")
         finally:
             release_connection(conn)
 
@@ -251,7 +254,7 @@ class InterventionRepository:
             if "connection" in error_msg.lower():
                 raise DatabaseError(
                     "Impossible de se connecter à la base de données") from e
-            raise DatabaseError(f"Erreur base de données: {error_msg}") from e
+            raise_db_error(e, "opération")
         finally:
             release_connection(conn)
 

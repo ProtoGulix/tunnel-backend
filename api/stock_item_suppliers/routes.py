@@ -59,39 +59,25 @@ async def get_stock_items_by_supplier(supplier_id: str):
 async def create_stock_item_supplier(ref: StockItemSupplierIn):
     """Crée une nouvelle référence fournisseur"""
     repo = StockItemSupplierRepository()
-    try:
-        return repo.add(ref.model_dump())
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+    return repo.add(ref.model_dump())
 
 
 @router.put("/{ref_id}", response_model=StockItemSupplierOut)
 async def update_stock_item_supplier(ref_id: str, ref: StockItemSupplierUpdate):
     """Met à jour une référence fournisseur existante"""
     repo = StockItemSupplierRepository()
-    try:
-        return repo.update(ref_id, ref.model_dump(exclude_unset=True))
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+    return repo.update(ref_id, ref.model_dump(exclude_unset=True))
 
 
 @router.post("/{ref_id}/set-preferred", response_model=StockItemSupplierOut)
 async def set_preferred_supplier(ref_id: str):
     """Définit cette référence comme fournisseur préféré pour l'article"""
     repo = StockItemSupplierRepository()
-    try:
-        return repo.set_preferred(ref_id)
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+    return repo.set_preferred(ref_id)
 
 
 @router.delete("/{ref_id}", status_code=204)
 async def delete_stock_item_supplier(ref_id: str):
     """Supprime une référence fournisseur"""
     repo = StockItemSupplierRepository()
-    try:
-        repo.delete(ref_id)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+    repo.delete(ref_id)

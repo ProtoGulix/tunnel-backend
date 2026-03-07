@@ -3,6 +3,7 @@ from typing import List
 
 from api.intervention_status_log.repo import InterventionStatusLogRepository
 from api.intervention_status_log.schemas import InterventionStatusLogIn, InterventionStatusLogOut
+from api.errors.exceptions import ValidationError
 
 from api.auth.permissions import require_authenticated
 
@@ -24,10 +25,7 @@ async def list_status_logs(
 async def get_status_log(log_id: str):
     """Récupère un log de changement de statut par ID"""
     repo = InterventionStatusLogRepository()
-    try:
-        return repo.get_by_id(log_id)
-    except Exception as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
+    return repo.get_by_id(log_id)
 
 
 @router.post("/", response_model=InterventionStatusLogOut, status_code=201)
@@ -46,8 +44,4 @@ async def create_status_log(log: InterventionStatusLogIn, request: Request):
     try:
         return repo.add(log.model_dump())
     except ValueError as e:
-        # Erreurs de validation métier
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except Exception as e:
-        # Autres erreurs (DB, etc.)
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise ValidationError(str(e)) from e

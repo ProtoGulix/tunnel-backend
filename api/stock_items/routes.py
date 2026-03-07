@@ -87,42 +87,26 @@ async def get_stock_item(item_id: str):
 async def create_stock_item(item: StockItemIn):
     """Crée un nouvel article en stock (legacy ou template-based)"""
     service = StockItemService()
-    try:
-        return service.create_stock_item(item.model_dump())
-    except (ValidationError, NotFoundError, DatabaseError) as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+    return service.create_stock_item(item.model_dump())
 
 
 @router.put("/{item_id}", response_model=StockItemOut)
 async def update_stock_item(item_id: str, item: StockItemIn):
     """Met à jour un article existant (respect immutabilité template)"""
     service = StockItemService()
-    try:
-        return service.update_stock_item(item_id, item.model_dump(exclude_unset=True))
-    except (ValidationError, NotFoundError, DatabaseError) as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+    return service.update_stock_item(item_id, item.model_dump(exclude_unset=True))
 
 
 @router.patch("/{item_id}/quantity", response_model=StockItemOut)
 async def update_stock_quantity(item_id: str, data: QuantityUpdate):
     """Met à jour uniquement la quantité d'un article"""
     repo = StockItemRepository()
-    try:
-        return repo.update_quantity(item_id, data.quantity)
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+    return repo.update_quantity(item_id, data.quantity)
 
 
 @router.delete("/{item_id}")
 async def delete_stock_item(item_id: str):
     """Supprime un article"""
     repo = StockItemRepository()
-    try:
-        repo.delete(item_id)
-        return {"message": f"Article {item_id} supprimé"}
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+    repo.delete(item_id)
+    return {"message": f"Article {item_id} supprimé"}
