@@ -45,7 +45,20 @@
       "Read(//c/Users/Quentin/DEV/web.tunnel-backend/**)",
       "Bash(echo \"MISSING: $f\")",
       "Bash(done)",
-      "Bash(echo \"STILL MISSING: $f\")"
+      "Bash(echo \"STILL MISSING: $f\")",
+      "Bash(taskkill /PID 152472 /F)",
+      "Bash(cmd /c \"taskkill /PID 152472 /F\")",
+      "Bash(cmd /c \"taskkill /IM python.exe /F\")",
+      "Bash(cmd /c \"taskkill /IM python3.exe /F 2>nul & taskkill /IM uvicorn.exe /F 2>nul & echo done\")",
+      "Bash(cmd /c \"tasklist | findstr python\")",
+      "Bash(cmd /c \"cd /d c:\\\\Users\\\\Quentin\\\\DEV\\\\web.tunnel-backend && .venv\\\\Scripts\\\\python.exe -m uvicorn api.app:app --reload --host 0.0.0.0 --port 8000\")",
+      "Bash(cmd /c \"curl -s http://localhost:8000/health 2>&1 || echo NOT_RESPONDING\")",
+      "Bash(cmd /c \"cd /d c:\\\\Users\\\\Quentin\\\\DEV\\\\web.tunnel-backend && .venv\\\\Scripts\\\\python.exe -m uvicorn api.app:app --host 0.0.0.0 --port 8000 2>&1\")",
+      "Bash(cmd /c \"cd /d c:\\\\Users\\\\Quentin\\\\DEV\\\\web.tunnel-backend && .venv\\\\Scripts\\\\python.exe --version && .venv\\\\Scripts\\\\python.exe -c \"\"import uvicorn; print\\(uvicorn.__version__\\)\"\"\")",
+      "Bash(cmd /c \"netstat -ano | findstr :8000\")",
+      "Bash(cmd /c \"curl -s http://localhost:8000/health\")",
+      "Bash(cmd /c \"curl -v http://localhost:8000/server/ping 2>&1\")",
+      "Bash(cmd /c \"netstat -ano | findstr LISTENING | findstr :8000\")"
     ]
   }
 }

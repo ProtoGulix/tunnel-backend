@@ -717,7 +717,7 @@ class PurchaseRequestRepository:
                 FROM purchase_request pr
                 LEFT JOIN stock_item si ON pr.stock_item_id = si.id
                 LEFT JOIN intervention i ON pr.intervention_id = i.id
-                LEFT JOIN equipement e ON i.equipement_id = e.id
+                LEFT JOIN machine e ON i.machine_id = e.id
                 WHERE pr.id = %s
                 """,
                 (request_id,)

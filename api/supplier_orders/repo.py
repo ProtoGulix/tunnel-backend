@@ -8,6 +8,7 @@ import logging
 from api.settings import settings
 from api.db import get_connection, release_connection
 from api.errors.exceptions import DatabaseError, raise_db_error, NotFoundError
+from api.supplier_orders.validators import SupplierOrderValidator
 
 logger = logging.getLogger(__name__)
 
@@ -108,8 +109,8 @@ class SupplierOrderRepository:
         offset: int = 0,
         status: Optional[str] = None,
         supplier_id: Optional[str] = None
-    ) -> List[Dict[str, Any]]:
-        """Récupère toutes les commandes avec filtres optionnels"""
+    ) -> Dict[str, Any]:
+        """Récupère toutes les commandes avec filtres, pagination et facets par statut"""
         limit = min(limit, 1000)
 
         conn = self._get_connection()
@@ -127,16 +128,34 @@ class SupplierOrderRepository:
                 where_clauses.append("so.supplier_id = %s")
                 params.append(supplier_id)
 
-            where_sql = ("WHERE " + " AND ".join(where_clauses)
-                         ) if where_clauses else ""
+            where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
 
+            # Total filtré
+            cur.execute(f"SELECT COUNT(*) FROM supplier_order so {where_sql}", params)
+            total = cur.fetchone()[0]
+
+            # Facets par statut (toujours sur l'ensemble non filtré par status)
+            facet_params = [supplier_id] if supplier_id else []
+            facet_where = "WHERE so.supplier_id = %s" if supplier_id else ""
+            cur.execute(
+                f"""
+                SELECT so.status, COUNT(*) as count
+                FROM supplier_order so
+                {facet_where}
+                GROUP BY so.status
+                ORDER BY so.status
+                """,
+                facet_params
+            )
+            facets = [{"status": row[0], "count": row[1]} for row in cur.fetchall()]
+
+            # Items paginés
             query = f"""
                 SELECT
                     so.id, so.order_number, so.supplier_id, so.status,
                     so.total_amount, so.ordered_at, so.expected_delivery_date,
                     so.created_at, so.updated_at,
                     (SELECT COUNT(*) FROM supplier_order_line WHERE supplier_order_id = so.id) as line_count,
-                    -- Supplier info
                     s.id as s_id, s.name as s_name, s.code as s_code,
                     s.contact_name as s_contact_name, s.email as s_email, s.phone as s_phone
                 FROM supplier_order so
@@ -150,13 +169,14 @@ class SupplierOrderRepository:
             rows = cur.fetchall()
             cols = [desc[0] for desc in cur.description]
 
-            results = []
+            items = []
             for row in rows:
                 order = self._convert_decimals(dict(zip(cols, row)))
                 order = self._map_supplier(order)
                 order = self._compute_age_fields(order)
-                results.append(order)
-            return results
+                items.append(order)
+
+            return {"items": items, "total": total, "limit": limit, "offset": offset, "facets": facets}
         except HTTPException:
             raise
         except Exception as e:
@@ -278,7 +298,11 @@ class SupplierOrderRepository:
     def update(self, order_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
         """Met à jour une commande existante"""
         # Vérifie que la commande existe
-        self.get_by_id(order_id)
+        current = self.get_by_id(order_id)
+
+        # Valide la transition de statut si le statut change
+        if 'status' in data and data['status'] != current['status']:
+            SupplierOrderValidator.validate_status_transition(current['status'], data['status'])
 
         conn = self._get_connection()
         try:

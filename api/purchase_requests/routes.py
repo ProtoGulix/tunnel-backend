@@ -10,6 +10,10 @@ from api.purchase_requests.schemas import (
     PurchaseRequestStats,  # v1.2.0 nouveau
     DispatchResult  # v1.2.12 nouveau
 )
+from api.errors.exceptions import ValidationError
+from api.constants import DERIVED_STATUS_CONFIG
+
+VALID_STATUSES = tuple(DERIVED_STATUS_CONFIG.keys())
 
 from api.auth.permissions import require_authenticated
 
@@ -17,6 +21,15 @@ router = APIRouter(prefix="/purchase-requests", tags=["purchase-requests"], depe
 
 
 # ========== Endpoints optimisés v1.2.0 ==========
+
+@router.get("/statuses")
+async def list_purchase_request_statuses():
+    """Retourne tous les statuts dérivés possibles avec leur label et couleur."""
+    return [
+        {"code": code, "label": cfg["label"], "color": cfg["color"]}
+        for code, cfg in DERIVED_STATUS_CONFIG.items()
+    ]
+
 
 @router.get("/stats", response_model=PurchaseRequestStats)
 async def get_purchase_requests_stats(
@@ -77,11 +90,25 @@ async def get_purchase_request_detail(request_id: str):
     - Statut dérivé avec règles appliquées
     """
     repo = PurchaseRequestRepository()
-    try:
-        return repo.get_detail(request_id)
-    except Exception as e:
-        raise HTTPException(status_code=404 if "non trouvée" in str(
-            e) else 400, detail=str(e)) from e
+    return repo.get_detail(request_id)
+
+
+@router.get("/status/{status}", response_model=List[PurchaseRequestListItem])
+async def list_purchase_requests_by_status(
+    status: str,
+    skip: int = Query(0, ge=0, description="Nombre d'éléments à sauter"),
+    limit: int = Query(100, ge=1, le=1000, description="Nombre max d'éléments"),
+    urgency: Optional[str] = Query(None, description="Filtrer par urgence : normal, high, critical")
+):
+    """
+    Liste les demandes d'achat filtrées par statut dérivé.
+
+    Statuts valides : TO_QUALIFY, NO_SUPPLIER_REF, PENDING_DISPATCH, OPEN, QUOTED, ORDERED, PARTIAL, RECEIVED, REJECTED
+    """
+    if status not in VALID_STATUSES:
+        raise ValidationError(f"Statut invalide '{status}'. Valeurs acceptées : {', '.join(VALID_STATUSES)}")
+    repo = PurchaseRequestRepository()
+    return repo.get_list(limit=limit, offset=skip, status=status, urgency=urgency)
 
 
 @router.get("/intervention/{intervention_id}/optimized")

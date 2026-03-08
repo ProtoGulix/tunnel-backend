@@ -5,6 +5,7 @@ from uuid import UUID
 
 from api.supplier_order_lines.schemas import SupplierOrderLineListItem
 from api.suppliers.schemas import SupplierListItem
+from api.utils.pagination import PaginationMeta
 
 
 class SupplierOrderIn(BaseModel):
@@ -96,6 +97,21 @@ class SupplierOrderListItem(BaseModel):
         default=False, description="Commande bloquante (en attente trop longtemps)")
     created_at: Optional[datetime] = Field(default=None)
     updated_at: Optional[datetime] = Field(default=None)
+
+    class Config:
+        from_attributes = True
+
+
+class SupplierOrderFacet(BaseModel):
+    status: str
+    count: int
+
+
+class SupplierOrderListResponse(BaseModel):
+    """Réponse paginée avec facets"""
+    items: List[SupplierOrderListItem]
+    pagination: PaginationMeta = Field(..., description="Métadonnées de pagination")
+    facets: List[SupplierOrderFacet] = Field(default_factory=list, description="Compteurs par statut (sans filtre statut)")
 
     class Config:
         from_attributes = True

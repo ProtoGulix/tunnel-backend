@@ -1,11 +1,11 @@
 from fastapi import APIRouter, HTTPException, Query, Depends
 from fastapi.responses import StreamingResponse
-from typing import List, Optional
+from typing import Optional
 from io import StringIO
 import csv
 
 from api.supplier_orders.repo import SupplierOrderRepository
-from api.supplier_orders.schemas import SupplierOrderOut, SupplierOrderIn, SupplierOrderUpdate, SupplierOrderListItem, EmailExportOut
+from api.supplier_orders.schemas import SupplierOrderOut, SupplierOrderIn, SupplierOrderUpdate, SupplierOrderListItem, SupplierOrderListResponse, EmailExportOut
 from config.export_templates import (
     get_csv_headers,
     format_csv_row,
@@ -16,27 +16,67 @@ from config.export_templates import (
 )
 
 from api.auth.permissions import require_authenticated
+from api.constants import SUPPLIER_ORDER_STATUS_CONFIG
+from api.utils.pagination import create_pagination_meta
+from api.supplier_orders.validators import SupplierOrderValidator
 
 router = APIRouter(prefix="/supplier-orders", tags=["supplier-orders"], dependencies=[Depends(require_authenticated)])
 
 
-@router.get("/", response_model=List[SupplierOrderListItem])
+@router.get("/statuses")
+async def list_supplier_order_statuses():
+    """Retourne tous les statuts possibles avec leur label et couleur."""
+    return [
+        {
+            "code": code,
+            "label": cfg["label"],
+            "color": cfg["color"],
+            "description": cfg["description"],
+            "is_locked": cfg["is_locked"],
+        }
+        for code, cfg in SUPPLIER_ORDER_STATUS_CONFIG.items()
+    ]
+
+
+@router.get("/", response_model=SupplierOrderListResponse)
 async def list_supplier_orders(
     skip: int = Query(0, ge=0, description="Nombre d'éléments à sauter"),
-    limit: int = Query(100, ge=1, le=1000,
-                       description="Nombre max d'éléments"),
-    status: Optional[str] = Query(None, description="Filtrer par statut"),
-    supplier_id: Optional[str] = Query(
-        None, description="Filtrer par fournisseur")
+    limit: int = Query(100, ge=1, le=1000, description="Nombre max d'éléments"),
+    status: Optional[str] = Query(None, description="Filtrer par statut : OPEN, SENT, ACK, RECEIVED, CLOSED, CANCELLED"),
+    supplier_id: Optional[str] = Query(None, description="Filtrer par fournisseur")
 ):
-    """Liste toutes les commandes fournisseur avec filtres optionnels"""
+    """Liste les commandes fournisseur avec pagination et facets par statut"""
     repo = SupplierOrderRepository()
-    return repo.get_all(
+    result = repo.get_all(
         limit=limit,
         offset=skip,
         status=status,
         supplier_id=supplier_id
     )
+
+    pagination_meta = create_pagination_meta(
+        total=result["total"],
+        offset=skip,
+        limit=limit,
+        count=len(result["items"])
+    )
+
+    return {
+        "items": result["items"],
+        "pagination": pagination_meta,
+        "facets": result["facets"]
+    }
+
+
+@router.get("/{order_id}/transitions")
+async def get_supplier_order_transitions(order_id: str):
+    """Retourne les transitions de statut autorisées depuis le statut actuel de la commande."""
+    repo = SupplierOrderRepository()
+    order = repo.get_by_id(order_id)
+    return {
+        "current_status": order["status"],
+        "transitions": SupplierOrderValidator.get_allowed_transitions(order["status"])
+    }
 
 
 @router.get("/{order_id}", response_model=SupplierOrderOut)

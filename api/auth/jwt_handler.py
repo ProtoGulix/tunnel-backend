@@ -1,5 +1,6 @@
 import jwt
 import logging
+from datetime import timedelta
 from typing import Dict, Any
 from api.settings import settings
 from api.errors.exceptions import UnauthorizedError
@@ -21,6 +22,7 @@ def decode_directus_token(token: str) -> Dict[str, Any]:
                 settings.DIRECTUS_SECRET,
                 algorithms=["HS256"],
                 options={"verify_exp": True},
+                leeway=timedelta(seconds=30),
             )
         else:
             logger.warning(

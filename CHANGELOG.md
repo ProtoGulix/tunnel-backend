@@ -2,7 +2,58 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
-## [2.7.9] - 7 mars 2026
+## [2.7.11] - 8 mars 2026
+
+### Corrections
+
+- **JWT "token not yet valid (iat)"** : ajout d'un `leeway` de 30 secondes dans `PyJWT` pour tolérer le décalage d'horloge entre le serveur Directus et FastAPI (`api/auth/jwt_handler.py`)
+
+- **`GET /purchase-requests/detail/{id}` — 500 relation inexistante** : la jointure SQL utilisait `LEFT JOIN equipement e` au lieu de `LEFT JOIN machine e ON i.machine_id = e.id` (nom réel de la table PostgreSQL), cohérent avec toutes les autres méthodes du même repository
+
+### Nouveautés
+
+- **`GET /supplier-orders/statuses`** : référentiel enrichi des statuts de commande fournisseur — retourne les 6 statuts avec `code`, `label`, `color`, `description` métier et `is_locked` (indique si le panier est verrouillé aux nouvelles DA)
+  - Labels métier revus : `OPEN` → "En mutualisation", `SENT` → "Devis envoyé", `ACK` → "En négociation", `RECEIVED` → "En cours de livraison", `CLOSED` → "Clôturé", `CANCELLED` → "Annulé"
+  - Source : `api/constants.py` — `SUPPLIER_ORDER_STATUS_CONFIG`
+
+- **`GET /supplier-orders/` — pagination et facets** : la liste des commandes fournisseur retourne désormais un objet structuré aligné sur le pattern `stock-items`
+  - `pagination` : objet `{total, page, page_size, total_pages, offset, count}` via `create_pagination_meta`
+  - `facets` : compteurs par statut calculés **sans** le filtre `status` actif (toujours complet)
+
+- **`GET /supplier-orders/{id}/transitions`** : retourne les transitions de statut autorisées depuis le statut actuel, avec description métier de chaque action — permet à l'UI d'afficher uniquement les boutons pertinents sans logique hardcodée
+
+- **Validation des transitions de statut** (`api/supplier_orders/validators.py`) : tout `PUT /supplier-orders/{id}` modifiant le `status` est validé contre le graphe de transitions autorisées. Retourne `400` avec message détaillé en cas de transition invalide ou de tentative de modification d'un état final
+  - Graphe : `OPEN → SENT, CANCELLED` | `SENT → ACK, RECEIVED, OPEN, CANCELLED` | `ACK → RECEIVED, CANCELLED` | `RECEIVED → CLOSED` | `CLOSED` et `CANCELLED` = états finaux
+  - `SENT → OPEN` : réouverture autorisée, toutes les lignes conservées
+  - `SENT → RECEIVED` : commande directe sans négociation (ex : Würth, Fabory)
+  - `CLOSED` : déclenché manuellement — état final absolu
+  - `CANCELLED` : état final absolu — aucune réouverture
+
+### Documentation
+
+- **`docs/endpoints/supplier-orders.md`** : mise à jour complète — statuts enrichis, pagination, endpoint transitions, section règles métier avec graphe de transitions et exemples d'erreurs
+- **`docs/endpoints/purchase-requests.md`** : documentation complète de `GET /purchase-requests/detail/{id}` avec exemple JSON complet
+
+---
+
+## [2.7.10] - 7 mars 2026
+
+### Nouveautés
+
+- **`GET /purchase-requests/statuses`** : référentiel des statuts dérivés — retourne les 9 statuts avec code, label et couleur hex, directement depuis `DERIVED_STATUS_CONFIG`
+
+- **`GET /purchase-requests/status/{status}`** : endpoint dédié pour filtrer les demandes d'achat par statut dérivé
+  - Statuts valides : `TO_QUALIFY`, `NO_SUPPLIER_REF`, `PENDING_DISPATCH`, `OPEN`, `QUOTED`, `ORDERED`, `PARTIAL`, `RECEIVED`, `REJECTED`
+  - Validation du statut au niveau route → `400` si statut inconnu
+  - Query params optionnels : `skip`, `limit`, `urgency`
+  - Réponse identique à `GET /purchase-requests/list?status={status}`
+
+### Documentation
+
+- **`docs/endpoints/purchase-requests.md`** : ajout d'un tableau récapitulatif des 9 statuts dérivés avec conditions de déclenchement
+- **`docs/endpoints/purchase-requests.md`** : documentation du nouvel endpoint `/status/{status}`
+
+---
 
 ### Améliorations
 

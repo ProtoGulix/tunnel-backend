@@ -17,6 +17,46 @@ DERIVED_STATUS_CONFIG = {
     'REJECTED': {'label': 'Refusé', 'color': '#EF4444'}
 }
 
+# Statuts des commandes fournisseur
+SUPPLIER_ORDER_STATUS_CONFIG = {
+    'OPEN': {
+        'label': 'En mutualisation',
+        'color': '#3B82F6',
+        'description': 'Panier ouvert, nouvelles DA acceptées',
+        'is_locked': False,
+    },
+    'SENT': {
+        'label': 'Devis envoyé',
+        'color': '#F97316',
+        'description': 'Devis envoyé au fournisseur, en attente de réponse — panier verrouillé',
+        'is_locked': True,
+    },
+    'ACK': {
+        'label': 'En négociation',
+        'color': '#6366F1',
+        'description': 'Réponse fournisseur reçue, sélection des lignes retenues',
+        'is_locked': True,
+    },
+    'RECEIVED': {
+        'label': 'En cours de livraison',
+        'color': '#10B981',
+        'description': 'Commande passée, en attente de réception physique',
+        'is_locked': True,
+    },
+    'CLOSED': {
+        'label': 'Clôturé',
+        'color': '#6B7280',
+        'description': 'Tous les produits reçus, fin de vie du panier',
+        'is_locked': True,
+    },
+    'CANCELLED': {
+        'label': 'Annulé',
+        'color': '#EF4444',
+        'description': 'Commande annulée',
+        'is_locked': True,
+    },
+}
+
 # Type de priorité des interventions
 PRIORITY_TYPES = [
     {'id': 'faible', 'title': 'Faible', 'color': 'green'},

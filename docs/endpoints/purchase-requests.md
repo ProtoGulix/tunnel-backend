@@ -64,6 +64,50 @@ Liste toutes les demandes d'achat avec filtres.
 
 ---
 
+## `GET /purchase-requests/statuses`
+
+Retourne tous les statuts dérivés possibles avec leur label et couleur. Utile pour construire des filtres et légendes côté frontend sans hardcoder les valeurs.
+
+### Réponse `200`
+
+```json
+[
+  { "code": "TO_QUALIFY",       "label": "À qualifier",          "color": "#F59E0B" },
+  { "code": "NO_SUPPLIER_REF",  "label": "Sans fournisseur",     "color": "#F97316" },
+  { "code": "PENDING_DISPATCH", "label": "À dispatcher",         "color": "#A855F7" },
+  { "code": "OPEN",             "label": "Mutualisation",        "color": "#6B7280" },
+  { "code": "QUOTED",           "label": "Devis reçu",           "color": "#FFA500" },
+  { "code": "ORDERED",          "label": "Commandé",             "color": "#3B82F6" },
+  { "code": "PARTIAL",          "label": "Partiellement reçu",   "color": "#8B5CF6" },
+  { "code": "RECEIVED",         "label": "Reçu",                 "color": "#10B981" },
+  { "code": "REJECTED",         "label": "Refusé",               "color": "#EF4444" }
+]
+```
+
+> Source : `api/constants.py` — `DERIVED_STATUS_CONFIG`. Toute modification des labels/couleurs se répercute automatiquement.
+
+---
+
+## Statuts dérivés (`derived_status`)
+
+Le statut d'une demande d'achat est **calculé dynamiquement** à chaque lecture, jamais stocké en base. Il dépend de la présence d'un article stock, des références fournisseurs et de l'avancement des lignes de commande.
+
+| Code | Label | Condition |
+|---|---|---|
+| `TO_QUALIFY` | À qualifier | `stock_item_id` est null |
+| `NO_SUPPLIER_REF` | Sans réf. fournisseur | Article ok, aucun fournisseur référencé |
+| `PENDING_DISPATCH` | À dispatcher | Réf. fournisseur ok, aucune ligne de commande |
+| `OPEN` | En attente | Dans une commande, pas de devis |
+| `QUOTED` | Devis reçu | Au moins un devis reçu (`quote_received = true`) |
+| `ORDERED` | Commandé | Au moins une ligne sélectionnée (`is_selected = true`) |
+| `PARTIAL` | Partiellement reçu | Livraison partielle |
+| `RECEIVED` | Reçu | Livraison complète |
+| `REJECTED` | Refusé | Demande annulée |
+
+> Pour filtrer par statut : `GET /purchase-requests/list?status=PENDING_DISPATCH` ou l'endpoint dédié `GET /purchase-requests/status/PENDING_DISPATCH`.
+
+---
+
 ## `GET /purchase-requests/list` [v1.2.0]
 
 Liste optimisée légère pour tableaux. Payload ~95% plus léger.
@@ -98,11 +142,105 @@ Liste optimisée légère pour tableaux. Payload ~95% plus léger.
 
 ## `GET /purchase-requests/detail/{id}` [v1.2.0]
 
-Détail complet avec contexte enrichi.
+Détail complet avec contexte enrichi : intervention + machine, stock item avec compteur fournisseurs, order lines avec fournisseur hydraté.
 
 ### Réponse `200` — PurchaseRequestDetail
 
-Même structure que PurchaseRequestOut avec toutes les relations hydratées.
+```json
+{
+  "id": "37eb5da0-220b-4813-a205-36c1da1d02be",
+  "item_label": "Roulement SKF 6205",
+  "quantity": 2,
+  "unit": "pcs",
+  "derived_status": { "code": "QUOTED", "label": "Devis reçu", "color": "#FFA500" },
+
+  "stock_item": {
+    "id": "uuid",
+    "name": "Roulement SKF 6205",
+    "ref": "OUT-ROUL-SKF-6205",
+    "family_code": "ROUL",
+    "sub_family_code": "BILLE",
+    "quantity": 5,
+    "unit": "pcs",
+    "location": "Étagère A3",
+    "supplier_refs_count": 2
+  },
+
+  "intervention": {
+    "id": "uuid",
+    "code": "CN001-REA-20260113-QC",
+    "title": "Remplacement roulement convoyeur",
+    "priority": "urgent",
+    "status_actual": "en_cours",
+    "equipement": {
+      "id": "uuid",
+      "code": "CONV-01",
+      "name": "Convoyeur principal"
+    }
+  },
+
+  "order_lines": [
+    {
+      "id": "uuid",
+      "supplier_order_line_id": "uuid",
+      "quantity_allocated": 2,
+      "created_at": "2026-01-14T08:00:00",
+      "supplier_order_id": "uuid",
+      "supplier_order_status": "OPEN",
+      "supplier_order_number": "CMD-2026-0042",
+      "unit_price": 12.50,
+      "total_price": 25.00,
+      "quantity_received": 0,
+      "is_selected": false,
+      "quote_received": true,
+      "quote_price": 12.50,
+      "quote_received_at": "2026-01-15T10:30:00",
+      "manufacturer": "SKF",
+      "manufacturer_ref": "6205-2RS",
+      "lead_time_days": 5,
+      "notes": null,
+      "supplier": {
+        "id": "uuid",
+        "name": "PONS & SABOT",
+        "code": "PS",
+        "contact_name": "Marc Pons",
+        "email": "marc@pons-sabot.fr",
+        "phone": "04 91 00 00 00"
+      }
+    }
+  ],
+
+  "requested_by": "uuid-user",
+  "requester_name": "Jean Dupont",
+  "approver_name": null,
+  "approved_at": null,
+  "urgency": "high",
+  "urgent": true,
+  "reason": "Remplacement urgent suite panne",
+  "notes": null,
+  "workshop": "Atelier 1",
+  "quantity_requested": 2,
+  "quantity_approved": null,
+  "created_at": "2026-01-13T10:00:00",
+  "updated_at": "2026-01-15T10:30:00"
+}
+```
+
+| Champ | Description |
+|---|---|
+| `stock_item.supplier_refs_count` | Nombre de fournisseurs référencés pour cet article |
+| `intervention.equipement` | Machine liée à l'intervention (`null` si aucune) |
+| `order_lines[].supplier` | Fournisseur complet hydraté depuis `supplier_order` |
+| `order_lines[].quote_received` | `true` si devis reçu pour cette ligne |
+| `order_lines[].is_selected` | `true` si ligne retenue pour commande ferme |
+| `order_lines[].quantity_received` | Quantité livrée (0 = pas encore reçu) |
+
+### Erreurs
+
+| Code | Cas |
+|---|---|
+| 404 | Demande introuvable |
+| 500 | Erreur base de données |
 
 ---
 
@@ -142,6 +280,36 @@ Statistiques agrégées pour dashboards.
 ## `GET /purchase-requests/{id}` [LEGACY]
 
 Détail d'une demande par ID.
+
+---
+
+## `GET /purchase-requests/status/{status}`
+
+Liste les demandes filtrées par statut dérivé. Raccourci sémantique vers `GET /purchase-requests/list?status={status}`.
+
+### Path param
+
+| Param | Valeurs acceptées |
+|---|---|
+| `status` | `TO_QUALIFY` · `NO_SUPPLIER_REF` · `PENDING_DISPATCH` · `OPEN` · `QUOTED` · `ORDERED` · `PARTIAL` · `RECEIVED` · `REJECTED` |
+
+### Query params
+
+| Param | Type | Défaut | Description |
+|---|---|---|---|
+| `skip` | int | 0 | Offset |
+| `limit` | int | 100 | Max: 1000 |
+| `urgency` | string | — | `normal`, `high`, `critical` |
+
+### Réponse `200` — `List[PurchaseRequestListItem]`
+
+Même structure que `GET /purchase-requests/list`.
+
+### Erreurs
+
+| Code | Cas |
+|---|---|
+| 400 | Statut inconnu |
 
 ---
 
