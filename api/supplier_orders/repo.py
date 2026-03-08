@@ -75,6 +75,11 @@ class SupplierOrderRepository:
         blocking_statuses = ['OPEN', 'SENT', 'ACK']
         data['is_blocking'] = status in blocking_statuses and age_days >= 7
 
+        # Bools d'action pour l'UI (aucun calcul côté frontend)
+        data['add_lines']     = status == 'OPEN'
+        data['edit_lines']    = status in ('SENT', 'ACK')
+        data['receive_lines'] = status == 'RECEIVED'
+
         return data
 
     def _get_order_lines(self, order_id: str, conn) -> List[Dict[str, Any]]:
@@ -303,6 +308,47 @@ class SupplierOrderRepository:
         # Valide la transition de statut si le statut change
         if 'status' in data and data['status'] != current['status']:
             SupplierOrderValidator.validate_status_transition(current['status'], data['status'])
+
+            # Règle : passage en livraison interdit si des consultations sont non résolues
+            if data['status'] == 'RECEIVED':
+                conn_check = self._get_connection()
+                try:
+                    cur_check = conn_check.cursor()
+                    cur_check.execute(
+                        """
+                        SELECT COUNT(*) FROM supplier_order_line sol
+                        WHERE sol.supplier_order_id = %s
+                        AND EXISTS (
+                            SELECT 1 FROM supplier_order_line_purchase_request solpr2
+                            JOIN supplier_order_line sol2 ON sol2.id = solpr2.supplier_order_line_id
+                            WHERE solpr2.purchase_request_id IN (
+                                SELECT purchase_request_id FROM supplier_order_line_purchase_request
+                                WHERE supplier_order_line_id = sol.id
+                            )
+                            AND sol2.supplier_order_id != sol.supplier_order_id
+                        )
+                        AND NOT EXISTS (
+                            SELECT 1 FROM supplier_order_line_purchase_request solpr3
+                            JOIN supplier_order_line sol3 ON sol3.id = solpr3.supplier_order_line_id
+                            WHERE solpr3.purchase_request_id IN (
+                                SELECT purchase_request_id FROM supplier_order_line_purchase_request
+                                WHERE supplier_order_line_id = sol.id
+                            )
+                            AND sol3.is_selected = true
+                        )
+                        """,
+                        (order_id,)
+                    )
+                    unresolved_count = cur_check.fetchone()[0]
+                finally:
+                    release_connection(conn_check)
+
+                if unresolved_count > 0:
+                    from api.errors.exceptions import ValidationError
+                    raise ValidationError(
+                        f"{unresolved_count} ligne(s) de consultation sans fournisseur sélectionné. "
+                        "Sélectionnez une ligne par article avant de passer en cours de livraison."
+                    )
 
         conn = self._get_connection()
         try:

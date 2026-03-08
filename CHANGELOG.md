@@ -2,6 +2,21 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [2.7.12] - 8 mars 2026
+
+### Nouveautés
+
+- **Consultations multi-fournisseurs — détection et validation** : quand un article est dispatché sans fournisseur préféré, les lignes créées dans plusieurs paniers sont maintenant identifiables et bloquantes
+  - `is_consultation` (bool) sur `SupplierOrderLineListItem` et `SupplierOrderLineOut` : `true` si la ligne partage ses DA avec des lignes dans d'autres paniers fournisseurs (dispatch mode consultation) — calculé dynamiquement, aucune colonne ajoutée en base
+  - `consultation_resolved` (bool) : `true` quand une ligne sœur (même DA, autre panier) a `is_selected = true` — `is_selected = null` par défaut, oblige la sélection manuelle
+  - **Règle bloquante** : le passage en `RECEIVED` est refusé (`400`) si au moins une ligne de la commande est en consultation non résolue — évite les doubles commandes chez plusieurs fournisseurs
+
+- **Booleans calculés sur les lignes** (`SupplierOrderLineListItem` et `SupplierOrderLineOut`)
+  - `is_fully_received` : `true` si `quantity_received >= quantity` — dynamique, tient compte des modifications de quantité en négociation
+  - `is_consultation` et `consultation_resolved` : voir ci-dessus
+
+- **`PATCH /supplier-order-lines/{id}`** : mise à jour partielle d'une ligne — seuls les champs fournis sont modifiés (`is_selected`, `quantity`, `unit_price`, `quantity_received`, etc.). Le `PUT` reste disponible pour un remplacement complet.
+
 ## [2.7.11] - 8 mars 2026
 
 ### Corrections

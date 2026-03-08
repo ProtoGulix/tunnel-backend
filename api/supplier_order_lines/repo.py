@@ -47,6 +47,41 @@ class SupplierOrderLineRepository:
             line_dict['stock_item'] = None
         return line_dict
 
+    def _compute_consultation_fields(self, line_id: str, conn) -> tuple[bool, bool]:
+        """Calcule is_consultation et consultation_resolved pour une ligne."""
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT
+                EXISTS (
+                    SELECT 1 FROM supplier_order_line_purchase_request solpr2
+                    JOIN supplier_order_line sol2 ON sol2.id = solpr2.supplier_order_line_id
+                    WHERE solpr2.purchase_request_id IN (
+                        SELECT purchase_request_id FROM supplier_order_line_purchase_request
+                        WHERE supplier_order_line_id = %s
+                    )
+                    AND sol2.supplier_order_id != (
+                        SELECT supplier_order_id FROM supplier_order_line WHERE id = %s
+                    )
+                ) AS is_consultation,
+                EXISTS (
+                    SELECT 1 FROM supplier_order_line_purchase_request solpr3
+                    JOIN supplier_order_line sol3 ON sol3.id = solpr3.supplier_order_line_id
+                    WHERE solpr3.purchase_request_id IN (
+                        SELECT purchase_request_id FROM supplier_order_line_purchase_request
+                        WHERE supplier_order_line_id = %s
+                    )
+                    AND sol3.is_selected = true
+                ) AS has_selected_sister
+            """,
+            (line_id, line_id, line_id)
+        )
+        row = cur.fetchone()
+        is_consultation = bool(row[0])
+        has_selected_sister = bool(row[1])
+        consultation_resolved = has_selected_sister if is_consultation else True
+        return is_consultation, consultation_resolved
+
     def _get_linked_purchase_requests(self, line_id: str, conn) -> List[Dict[str, Any]]:
         """Récupère les demandes d'achat liées à une ligne"""
         try:
@@ -109,7 +144,25 @@ class SupplierOrderLineRepository:
                     sol.quantity_received, sol.is_selected,
                     si.name as stock_item_name, si.ref as stock_item_ref,
                     (SELECT COUNT(*) FROM supplier_order_line_purchase_request
-                     WHERE supplier_order_line_id = sol.id) as purchase_request_count
+                     WHERE supplier_order_line_id = sol.id) as purchase_request_count,
+                    EXISTS (
+                        SELECT 1 FROM supplier_order_line_purchase_request solpr2
+                        JOIN supplier_order_line sol2 ON sol2.id = solpr2.supplier_order_line_id
+                        WHERE solpr2.purchase_request_id IN (
+                            SELECT purchase_request_id FROM supplier_order_line_purchase_request
+                            WHERE supplier_order_line_id = sol.id
+                        )
+                        AND sol2.supplier_order_id != sol.supplier_order_id
+                    ) AS is_consultation,
+                    EXISTS (
+                        SELECT 1 FROM supplier_order_line_purchase_request solpr3
+                        JOIN supplier_order_line sol3 ON sol3.id = solpr3.supplier_order_line_id
+                        WHERE solpr3.purchase_request_id IN (
+                            SELECT purchase_request_id FROM supplier_order_line_purchase_request
+                            WHERE supplier_order_line_id = sol.id
+                        )
+                        AND sol3.is_selected = true
+                    ) AS has_selected_sister
                 FROM supplier_order_line sol
                 LEFT JOIN stock_item si ON sol.stock_item_id = si.id
                 {where_sql}
@@ -121,7 +174,14 @@ class SupplierOrderLineRepository:
             rows = cur.fetchall()
             cols = [desc[0] for desc in cur.description]
 
-            return [self._convert_decimals(dict(zip(cols, row))) for row in rows]
+            lines = [self._convert_decimals(dict(zip(cols, row))) for row in rows]
+            for line in lines:
+                line['is_fully_received'] = (line.get('quantity_received') or 0) >= (line.get('quantity') or 1)
+                is_consultation = bool(line.pop('is_consultation', False))
+                has_selected_sister = bool(line.pop('has_selected_sister', False))
+                line['is_consultation'] = is_consultation
+                line['consultation_resolved'] = has_selected_sister if is_consultation else True
+            return lines
         except HTTPException:
             raise
         except Exception as e:
@@ -153,6 +213,11 @@ class SupplierOrderLineRepository:
             result['purchase_requests'] = self._get_linked_purchase_requests(
                 line_id, conn)
 
+            result['is_fully_received'] = (result.get('quantity_received') or 0) >= (result.get('quantity') or 1)
+            is_consultation, consultation_resolved = self._compute_consultation_fields(line_id, conn)
+            result['is_consultation'] = is_consultation
+            result['consultation_resolved'] = consultation_resolved
+
             return result
         except NotFoundError:
             raise
@@ -181,6 +246,10 @@ class SupplierOrderLineRepository:
                 line = self._enrich_with_stock_item(line, conn)
                 line['purchase_requests'] = self._get_linked_purchase_requests(
                     str(line['id']), conn)
+                line['is_fully_received'] = (line.get('quantity_received') or 0) >= (line.get('quantity') or 1)
+                is_consultation, consultation_resolved = self._compute_consultation_fields(str(line['id']), conn)
+                line['is_consultation'] = is_consultation
+                line['consultation_resolved'] = consultation_resolved
                 results.append(line)
 
             return results

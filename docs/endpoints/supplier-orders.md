@@ -82,6 +82,9 @@ Liste les commandes avec filtres, pagination et facets.
       "age_days": 5,
       "age_color": "gray",
       "is_blocking": false,
+      "add_lines": true,
+      "edit_lines": false,
+      "receive_lines": false,
       "created_at": "2026-02-10T09:00:00",
       "updated_at": "2026-02-10T09:00:00"
     }
@@ -107,11 +110,23 @@ Liste les commandes avec filtres, pagination et facets.
 | `orange` | 7-14 jours | true |
 | `red` | > 14 jours | true |
 
+### Booleans d'action (calculés côté serveur)
+
+| Champ | Statuts concernés | Description |
+|---|---|---|
+| `add_lines` | `OPEN` | Ajout de nouvelles lignes autorisé |
+| `edit_lines` | `SENT`, `ACK` | Édition des lignes (devis, prix, sélection) autorisée |
+| `receive_lines` | `RECEIVED` | Saisie des réceptions autorisée |
+
+> Ces bools sont calculés par le serveur — aucun calcul côté frontend nécessaire.
+
 ---
 
 ## `GET /supplier-orders/{id}`
 
-Détail avec `lines` (tableau de SupplierOrderLineListItem).
+Détail complet avec `lines` (tableau de `SupplierOrderLineListItem`), `add_lines`/`edit_lines`/`receive_lines` et les champs d'âge.
+
+Chaque ligne du tableau `lines` contient également `is_fully_received` (`true` si `quantity_received >= quantity`).
 
 ---
 
@@ -195,6 +210,18 @@ CANCELLED → (état final)
 | `CLOSED` | Déclenché manuellement — état final absolu |
 | `CANCELLED` | État final absolu — aucune réouverture possible |
 | Panier verrouillé | Dès `SENT` — le dispatch crée un **nouveau** panier `OPEN` pour ce fournisseur |
+| Consultation non résolue | Passage en `RECEIVED` bloqué si au moins une ligne de consultation n'a pas de sœur sélectionnée |
+
+### Consultations multi-fournisseurs
+
+Quand un article n'a pas de fournisseur préféré, le dispatch crée une ligne dans **chaque** panier fournisseur (mode consultation). L'acheteur doit sélectionner une ligne par article avant de passer la commande ferme.
+
+| Champ sur la ligne | Description |
+|---|---|
+| `is_consultation` | `true` si la ligne partage ses DA avec d'autres paniers fournisseurs |
+| `consultation_resolved` | `true` quand une ligne sœur est sélectionnée (`is_selected = true`) |
+
+> Le passage en `RECEIVED` est bloqué (`400`) tant qu'au moins une ligne a `is_consultation = true` et `consultation_resolved = false`.
 
 ### Erreurs de transition
 
@@ -202,7 +229,15 @@ Un `PUT /supplier-orders/{id}` avec un `status` invalide retourne :
 
 ```json
 {
-  "detail": "Transition invalide : 'SENT' (Devis envoyé) → 'CLOSED' (Clôturé). Transitions autorisées depuis 'SENT' : 'ACK', 'RECEIVED', 'OPEN', 'CANCELLED'."
+  "detail": "Transition invalide : \"Devis envoyé\" → \"Clôturé\". Actions possibles depuis \"Devis envoyé\" : \"En négociation\", \"En cours de livraison\", \"En mutualisation\", \"Annulé\"."
+}
+```
+
+Consultations non résolues :
+
+```json
+{
+  "detail": "2 ligne(s) de consultation sans fournisseur sélectionné. Sélectionnez une ligne par article avant de passer en cours de livraison."
 }
 ```
 
@@ -210,6 +245,7 @@ Un `PUT /supplier-orders/{id}` avec un `status` invalide retourne :
 |---|---|
 | `400` | Transition non autorisée |
 | `400` | Tentative de modification d'un état final (`CLOSED`, `CANCELLED`) |
+| `400` | Passage en `RECEIVED` avec des consultations non résolues |
 
 ---
 

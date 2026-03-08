@@ -70,6 +70,9 @@ class SupplierOrderOut(BaseModel):
         default="gray", description="Couleur indicateur âge (gray, orange, red)")
     is_blocking: bool = Field(
         default=False, description="Commande bloquante (en attente trop longtemps)")
+    add_lines: bool = Field(default=False, description="Ajout de lignes autorisé (OPEN)")
+    edit_lines: bool = Field(default=False, description="Édition des lignes autorisée (SENT, ACK)")
+    receive_lines: bool = Field(default=False, description="Saisie des réceptions autorisée (RECEIVED)")
     created_at: Optional[datetime] = Field(default=None)
     updated_at: Optional[datetime] = Field(default=None)
 
@@ -95,6 +98,9 @@ class SupplierOrderListItem(BaseModel):
         default="gray", description="Couleur indicateur âge (gray, orange, red)")
     is_blocking: bool = Field(
         default=False, description="Commande bloquante (en attente trop longtemps)")
+    add_lines: bool = Field(default=False, description="Ajout de lignes autorisé (OPEN)")
+    edit_lines: bool = Field(default=False, description="Édition des lignes autorisée (SENT, ACK)")
+    receive_lines: bool = Field(default=False, description="Saisie des réceptions autorisée (RECEIVED)")
     created_at: Optional[datetime] = Field(default=None)
     updated_at: Optional[datetime] = Field(default=None)
 

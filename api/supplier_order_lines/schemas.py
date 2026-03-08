@@ -54,6 +54,27 @@ class SupplierOrderLineIn(BaseModel):
         from_attributes = True
 
 
+class SupplierOrderLinePatch(BaseModel):
+    """Schéma d'entrée pour la mise à jour partielle d'une ligne (PATCH)"""
+    supplier_ref_snapshot: Optional[str] = Field(default=None)
+    quantity: Optional[int] = Field(default=None, gt=0)
+    unit_price: Optional[float] = Field(default=None)
+    quantity_received: Optional[int] = Field(default=None, ge=0)
+    notes: Optional[str] = Field(default=None)
+    quote_received: Optional[bool] = Field(default=None)
+    is_selected: Optional[bool] = Field(default=None)
+    quote_price: Optional[float] = Field(default=None)
+    manufacturer: Optional[str] = Field(default=None)
+    manufacturer_ref: Optional[str] = Field(default=None)
+    quote_received_at: Optional[datetime] = Field(default=None)
+    rejected_reason: Optional[str] = Field(default=None)
+    lead_time_days: Optional[int] = Field(default=None)
+    purchase_requests: Optional[List[PurchaseRequestLink]] = Field(default=None)
+
+    class Config:
+        from_attributes = True
+
+
 class SupplierOrderLineOut(BaseModel):
     """Schéma de sortie pour une ligne de commande fournisseur"""
     id: UUID
@@ -65,6 +86,9 @@ class SupplierOrderLineOut(BaseModel):
     unit_price: Optional[float] = Field(default=None)
     total_price: Optional[float] = Field(default=None, description="Calculé automatiquement")
     quantity_received: Optional[int] = Field(default=0)
+    is_fully_received: bool = Field(default=False, description="Toute la quantité a été reçue")
+    is_consultation: bool = Field(default=False, description="Ligne issue d'un dispatch multi-fournisseurs")
+    consultation_resolved: bool = Field(default=True, description="Une ligne sœur a été sélectionnée (ou pas de consultation)")
     notes: Optional[str] = Field(default=None)
     quote_received: Optional[bool] = Field(default=None)
     is_selected: Optional[bool] = Field(default=None)
@@ -96,6 +120,9 @@ class SupplierOrderLineListItem(BaseModel):
     unit_price: Optional[float] = Field(default=None)
     total_price: Optional[float] = Field(default=None)
     quantity_received: Optional[int] = Field(default=0)
+    is_fully_received: bool = Field(default=False, description="Toute la quantité a été reçue")
+    is_consultation: bool = Field(default=False, description="Ligne issue d'un dispatch multi-fournisseurs")
+    consultation_resolved: bool = Field(default=True, description="Une ligne sœur a été sélectionnée (ou pas de consultation)")
     is_selected: Optional[bool] = Field(default=None)
     purchase_request_count: Optional[int] = Field(default=0)
 

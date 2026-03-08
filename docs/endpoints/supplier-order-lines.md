@@ -35,12 +35,24 @@ Liste avec filtres.
     "quantity": 10,
     "unit_price": 12.50,
     "total_price": 125.00,
-    "quantity_received": null,
-    "is_selected": true,
+    "quantity_received": 10,
+    "is_fully_received": true,
+    "is_consultation": true,
+    "consultation_resolved": false,
+    "is_selected": null,
     "purchase_request_count": 2
   }
 ]
 ```
+
+| Champ | Description |
+|---|---|
+| `quantity_received` | Quantité physiquement réceptionnée |
+| `is_fully_received` | `true` si `quantity_received >= quantity` — calculé dynamiquement |
+| `is_consultation` | `true` si la ligne est issue d'un dispatch multi-fournisseurs (aucun préféré) |
+| `consultation_resolved` | `true` si une ligne sœur (même DA, autre panier) est sélectionnée — ou si pas de consultation |
+| `is_selected` | Ligne retenue pour la commande ferme |
+| `purchase_request_count` | Nombre de DA liées |
 
 ---
 
@@ -61,9 +73,12 @@ Détail avec `stock_item` et `purchase_requests` enrichis.
   "unit_price": 12.50,
   "total_price": 125.00,
   "quantity_received": null,
+  "is_fully_received": false,
+  "is_consultation": true,
+  "consultation_resolved": false,
   "notes": null,
   "quote_received": true,
-  "is_selected": true,
+  "is_selected": null,
   "quote_price": 11.80,
   "manufacturer": "SKF",
   "manufacturer_ref": "6205-2RS",
@@ -128,9 +143,40 @@ Crée une ligne.
 
 ---
 
+## `PATCH /supplier-order-lines/{id}`
+
+Met à jour partiellement une ligne — seuls les champs fournis sont modifiés.
+
+### Entrée
+
+```json
+{ "is_selected": true, "quantity": 2, "unit_price": 10 }
+```
+
+| Champ | Type | Description |
+|---|---|---|
+| `quantity` | int > 0 | Quantité commandée |
+| `unit_price` | float | Prix unitaire |
+| `quantity_received` | int ≥ 0 | Quantité réceptionnée |
+| `is_selected` | bool | Sélectionner cette ligne (désélectionne automatiquement les sœurs) |
+| `quote_received` | bool | Devis reçu |
+| `quote_price` | float | Prix du devis |
+| `manufacturer` | string | Fabricant |
+| `manufacturer_ref` | string | Référence fabricant |
+| `quote_received_at` | datetime | Date réception devis |
+| `rejected_reason` | string | Raison du rejet |
+| `lead_time_days` | int | Délai de livraison en jours |
+| `supplier_ref_snapshot` | string | Référence fournisseur snapshot |
+| `notes` | string | Notes libres |
+| `purchase_requests` | array | Remplace les liens DA existants si fourni |
+
+> Règle d'exclusivité : `is_selected = true` désélectionne automatiquement toutes les lignes sœurs liées aux mêmes DA.
+
+---
+
 ## `PUT /supplier-order-lines/{id}`
 
-Met à jour. Si `purchase_requests` est fourni, les liens existants sont **remplacés**. Même règle d'exclusivité sur `is_selected`.
+Remplacement complet — `supplier_order_id` et `stock_item_id` requis. Préférer `PATCH` pour les mises à jour partielles.
 
 ---
 

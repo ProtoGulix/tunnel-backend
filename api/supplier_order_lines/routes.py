@@ -5,6 +5,7 @@ from api.supplier_order_lines.repo import SupplierOrderLineRepository
 from api.supplier_order_lines.schemas import (
     SupplierOrderLineOut,
     SupplierOrderLineIn,
+    SupplierOrderLinePatch,
     SupplierOrderLineListItem,
     PurchaseRequestLink
 )
@@ -73,6 +74,19 @@ async def update_supplier_order_line(line_id: str, line: SupplierOrderLineIn):
     repo = SupplierOrderLineRepository()
     data = line.model_dump(exclude_unset=True)
     # Convertit les purchase_requests en dict si présents
+    if data.get('purchase_requests'):
+        data['purchase_requests'] = [
+            {'purchase_request_id': str(pr['purchase_request_id']), 'quantity': pr['quantity']}
+            for pr in data['purchase_requests']
+        ]
+    return repo.update(line_id, data)
+
+
+@router.patch("/{line_id}", response_model=SupplierOrderLineOut)
+async def patch_supplier_order_line(line_id: str, line: SupplierOrderLinePatch):
+    """Met à jour partiellement une ligne (seuls les champs fournis sont modifiés)"""
+    repo = SupplierOrderLineRepository()
+    data = line.model_dump(exclude_unset=True)
     if data.get('purchase_requests'):
         data['purchase_requests'] = [
             {'purchase_request_id': str(pr['purchase_request_id']), 'quantity': pr['quantity']}

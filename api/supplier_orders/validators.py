@@ -66,17 +66,17 @@ class SupplierOrderValidator:
             # État final
             msg = TRANSITION_MESSAGES.get(
                 current_status,
-                f"Le statut '{current_status}' est un état final — aucune transition possible."
+                f"Le statut '{_status_label(current_status)}' est un état final — aucune modification n'est possible."
             )
             raise ValidationError(msg)
 
         if new_status not in allowed:
             current_label = _status_label(current_status)
             new_label = _status_label(new_status)
-            allowed_labels = [f"'{s}'" for s in allowed]
+            allowed_labels = [f'"{_status_label(s)}"' for s in allowed]
             raise ValidationError(
-                f"Transition invalide : '{current_status}' ({current_label}) → '{new_status}' ({new_label}). "
-                f"Transitions autorisées depuis '{current_status}' : {', '.join(allowed_labels)}."
+                f"Transition invalide : \"{current_label}\" → \"{new_label}\". "
+                f"Actions possibles depuis \"{current_label}\" : {', '.join(allowed_labels)}."
             )
 
     @staticmethod
