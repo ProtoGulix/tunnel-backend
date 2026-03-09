@@ -56,6 +56,16 @@ docker-compose up -d
 
 **Note** : En local, PostgreSQL et Directus doivent être démarrés séparément ou via Docker.
 
+### Configuration CORS
+
+En production, définissez `CORS_ORIGINS` pour autoriser les origines frontend qui doivent appeler l'API:
+
+```env
+CORS_ORIGINS=http://192.168.1.54:5173,http://localhost:5173,http://127.0.0.1:5173
+```
+
+Chaque origine doit être complète (`scheme://host:port`) et séparée par une virgule.
+
 ## �📄 Licence
 
 **AGPL-3.0** - Conformément au projet Tunnel GMAO

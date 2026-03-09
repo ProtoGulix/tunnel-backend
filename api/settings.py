@@ -27,10 +27,11 @@ class Settings(BaseSettings):
 
     # API
     API_TITLE: str = "GMAO API"
-    API_VERSION: str = "2.7.13"
+    API_VERSION: str = "2.7.14"
     API_ENV: str = os.getenv("API_ENV", "development")
     AUTH_DISABLED: bool = os.getenv("AUTH_DISABLED", "false").lower() == "true"
     FRONTEND_URL: str = os.getenv("FRONTEND_URL", "http://localhost:5173")
+    CORS_ORIGINS_RAW: str = os.getenv("CORS_ORIGINS", "")
 
     # Export Configuration
     EXPORT_TEMPLATE_DIR: str = os.getenv(
@@ -61,6 +62,17 @@ class Settings(BaseSettings):
     @property
     def CORS_ORIGINS(self) -> list[str]:
         """Liste des origines autorisées pour CORS"""
+        parsed_origins = [
+            origin.strip().rstrip("/")
+            for origin in self.CORS_ORIGINS_RAW.split(",")
+            if origin.strip()
+        ]
+
+        if parsed_origins:
+            return parsed_origins
+
+        frontend_origin = self.FRONTEND_URL.rstrip("/")
+
         if self.API_ENV == "development":
             # En dev: autorise localhost sur plusieurs ports communs
             return [
@@ -68,10 +80,10 @@ class Settings(BaseSettings):
                 "http://localhost:3000",
                 "http://127.0.0.1:5173",
                 "http://127.0.0.1:3000",
-                self.FRONTEND_URL
+                frontend_origin
             ]
         # En prod: uniquement l'origine configurée
-        return [self.FRONTEND_URL]
+        return [frontend_origin]
 
     class Config:
         env_file = ".env"

@@ -2,6 +2,15 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [2.7.14] - 9 mars 2026
+
+### Corrections
+
+- **CORS en production** : correction du blocage navigateur sur les appels API cross-origin (ex: `/health` retournait `200` sans en-tête `Access-Control-Allow-Origin`)
+  - Nouvelle variable `CORS_ORIGINS` (liste CSV) pour autoriser plusieurs origines frontend en production
+  - Normalisation des origines (`sans / final`) pour éviter les faux mismatches entre frontend et backend
+  - Suppression d'un doublon `API_ENV` dans la configuration d'environnement
+
 ## [2.7.13] - 9 mars 2026
 
 ### Améliorations
