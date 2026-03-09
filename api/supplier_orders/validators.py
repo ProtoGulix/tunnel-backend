@@ -1,6 +1,7 @@
 from typing import Dict, Any
 
 from api.errors.exceptions import ValidationError
+from api.db import get_connection, release_connection
 
 # Transitions de statut autorisées
 # CLOSED et CANCELLED sont des états finaux — aucune transition possible
@@ -78,6 +79,64 @@ class SupplierOrderValidator:
                 f"Transition invalide : \"{current_label}\" → \"{new_label}\". "
                 f"Actions possibles depuis \"{current_label}\" : {', '.join(allowed_labels)}."
             )
+
+    @staticmethod
+    def validate_received_preconditions(order_id: str) -> None:
+        """
+        Valide les prérequis avant passage en RECEIVED :
+          1. Au moins une ligne doit être sélectionnée
+          2. Toutes les consultations multi-fournisseurs doivent être résolues
+        """
+        conn = get_connection()
+        try:
+            cur = conn.cursor()
+
+            # Règle 1 : au moins une ligne sélectionnée
+            cur.execute(
+                "SELECT COUNT(*) FROM supplier_order_line WHERE supplier_order_id = %s AND is_selected = true",
+                (order_id,)
+            )
+            if cur.fetchone()[0] == 0:
+                raise ValidationError(
+                    "Aucune ligne n'est sélectionnée. "
+                    "Sélectionnez au moins une ligne avant de passer en cours de livraison, "
+                    "ou annulez la commande."
+                )
+
+            # Règle 2 : toutes les consultations doivent être résolues
+            cur.execute(
+                """
+                SELECT COUNT(*) FROM supplier_order_line sol
+                WHERE sol.supplier_order_id = %s
+                AND EXISTS (
+                    SELECT 1 FROM supplier_order_line_purchase_request solpr2
+                    JOIN supplier_order_line sol2 ON sol2.id = solpr2.supplier_order_line_id
+                    WHERE solpr2.purchase_request_id IN (
+                        SELECT purchase_request_id FROM supplier_order_line_purchase_request
+                        WHERE supplier_order_line_id = sol.id
+                    )
+                    AND sol2.supplier_order_id != sol.supplier_order_id
+                )
+                AND NOT EXISTS (
+                    SELECT 1 FROM supplier_order_line_purchase_request solpr3
+                    JOIN supplier_order_line sol3 ON sol3.id = solpr3.supplier_order_line_id
+                    WHERE solpr3.purchase_request_id IN (
+                        SELECT purchase_request_id FROM supplier_order_line_purchase_request
+                        WHERE supplier_order_line_id = sol.id
+                    )
+                    AND sol3.is_selected = true
+                )
+                """,
+                (order_id,)
+            )
+            unresolved_count = cur.fetchone()[0]
+            if unresolved_count > 0:
+                raise ValidationError(
+                    f"{unresolved_count} ligne(s) de consultation sans fournisseur sélectionné. "
+                    "Sélectionnez une ligne par article avant de passer en cours de livraison."
+                )
+        finally:
+            release_connection(conn)
 
     @staticmethod
     def get_allowed_transitions(current_status: str) -> list:

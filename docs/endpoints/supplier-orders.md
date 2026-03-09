@@ -221,7 +221,9 @@ Quand un article n'a pas de fournisseur préféré, le dispatch crée une ligne 
 | `is_consultation` | `true` si la ligne partage ses DA avec d'autres paniers fournisseurs |
 | `consultation_resolved` | `true` quand une ligne sœur est sélectionnée (`is_selected = true`) |
 
-> Le passage en `RECEIVED` est bloqué (`400`) tant qu'au moins une ligne a `is_consultation = true` et `consultation_resolved = false`.
+Le passage en `RECEIVED` est bloqué si :
+1. **Aucune ligne n'est sélectionnée** — l'acheteur doit sélectionner au moins une ligne ou annuler la commande
+2. **Des consultations sont non résolues** — au moins une ligne a `is_consultation = true` et `consultation_resolved = false`
 
 ### Erreurs de transition
 
@@ -230,6 +232,14 @@ Un `PUT /supplier-orders/{id}` avec un `status` invalide retourne :
 ```json
 {
   "detail": "Transition invalide : \"Devis envoyé\" → \"Clôturé\". Actions possibles depuis \"Devis envoyé\" : \"En négociation\", \"En cours de livraison\", \"En mutualisation\", \"Annulé\"."
+}
+```
+
+Aucune ligne sélectionnée :
+
+```json
+{
+  "detail": "Aucune ligne n'est sélectionnée. Sélectionnez au moins une ligne avant de passer en cours de livraison, ou annulez la commande."
 }
 ```
 
@@ -245,6 +255,7 @@ Consultations non résolues :
 |---|---|
 | `400` | Transition non autorisée |
 | `400` | Tentative de modification d'un état final (`CLOSED`, `CANCELLED`) |
+| `400` | Passage en `RECEIVED` sans aucune ligne sélectionnée |
 | `400` | Passage en `RECEIVED` avec des consultations non résolues |
 
 ---

@@ -2,6 +2,16 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [2.7.13] - 9 mars 2026
+
+### Améliorations
+
+- **Refactoring — règles métier centralisées dans `SupplierOrderValidator`** (`api/supplier_orders/validators.py`)
+  - `validate_received_preconditions()` : les deux règles bloquantes pour le passage en `RECEIVED` sont désormais dans le validator, plus dans le repo
+    1. Aucune ligne `is_selected = true` → `400` avec message guidant vers la sélection ou l'annulation
+    2. Au moins une consultation non résolue → `400` avec le nombre de lignes concernées
+  - Le repo `update()` se réduit à deux appels clairs au validator — toute la logique métier est au même endroit
+
 ## [2.7.12] - 8 mars 2026
 
 ### Nouveautés
@@ -9,7 +19,9 @@ Toutes les modifications importantes de l'API sont documentées ici.
 - **Consultations multi-fournisseurs — détection et validation** : quand un article est dispatché sans fournisseur préféré, les lignes créées dans plusieurs paniers sont maintenant identifiables et bloquantes
   - `is_consultation` (bool) sur `SupplierOrderLineListItem` et `SupplierOrderLineOut` : `true` si la ligne partage ses DA avec des lignes dans d'autres paniers fournisseurs (dispatch mode consultation) — calculé dynamiquement, aucune colonne ajoutée en base
   - `consultation_resolved` (bool) : `true` quand une ligne sœur (même DA, autre panier) a `is_selected = true` — `is_selected = null` par défaut, oblige la sélection manuelle
-  - **Règle bloquante** : le passage en `RECEIVED` est refusé (`400`) si au moins une ligne de la commande est en consultation non résolue — évite les doubles commandes chez plusieurs fournisseurs
+  - **Règles bloquantes** pour le passage en `RECEIVED` (`400`) :
+    1. Aucune ligne `is_selected = true` → erreur explicite invitant à sélectionner ou annuler la commande
+    2. Au moins une consultation non résolue → erreur avec le nombre de lignes concernées
 
 - **Booleans calculés sur les lignes** (`SupplierOrderLineListItem` et `SupplierOrderLineOut`)
   - `is_fully_received` : `true` si `quantity_received >= quantity` — dynamique, tient compte des modifications de quantité en négociation
