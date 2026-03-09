@@ -109,7 +109,7 @@ def get_email_subject(order_number):
         - Ajouter date : f"Commande {order_number} - {datetime.now().strftime('%d/%m/%Y')}"
         - Ajouter entreprise : f"[ACME Corp] Commande {order_number}"
     """
-    return f"Commande {order_number} - Demande de prix"
+    return f"Demande de devis (Réf. {order_number})"
 
 
 def get_email_body_text(order_number, supplier_name, lines):
@@ -132,41 +132,40 @@ def get_email_body_text(order_number, supplier_name, lines):
         - Utiliser des séparateurs clairs (-, =, *)
         - Tester l'affichage sur mobile (largeur 40 caractères max)
     """
+    total_articles = len(lines)
+    total_units = sum(line.get('quantity', 0) for line in lines)
+
     body_lines = [
         "Bonjour,",
         "",
-        f"Veuillez trouver ci-dessous notre demande de commande n°{order_number}.",
+        f"Nous souhaitons obtenir un devis pour les articles suivants (Réf. {order_number}) :",
         "",
-        "Articles commandés :",
-        "-" * 40,
     ]
 
-    for line in lines:
+    for i, line in enumerate(lines, 1):
         stock_item = line.get('stock_item') or {}
-        manufacturer_item = stock_item.get('manufacturer_item') or {}
 
-        article_name = stock_item.get('name', 'Article')
-        article_ref = stock_item.get('ref', '')
-        spec = stock_item.get('spec', '')
-        manufacturer = manufacturer_item.get(
-            'manufacturer', '') or line.get('manufacturer', '')
-        manufacturer_ref = manufacturer_item.get(
-            'ref', '') or line.get('manufacturer_ref', '')
+        # Préfère le libellé de la demande d'achat liée
+        prs = line.get('purchase_requests', [])
+        name = prs[0].get('item_label') if prs else None
+        if not name:
+            name = stock_item.get('name', 'Article')
+
+        manufacturer = line.get('manufacturer') or 'N/A'
+        manufacturer_ref = line.get('manufacturer_ref') or 'N/A'
+        unit_price = line.get('unit_price')
+        price_str = f"{unit_price:.2f} €" if unit_price is not None else 'N/A'
         quantity = line.get('quantity', 0)
-        unit = stock_item.get('unit', 'pcs')
+        unit = stock_item.get('unit') or 'pcs'
 
-        body_lines.append(f"• {article_name}")
-        if article_ref:
-            body_lines.append(f"  Réf: {article_ref}")
-        if spec:
-            body_lines.append(f"  Spec: {spec}")
-        if manufacturer:
-            body_lines.append(f"  Fabricant: {manufacturer}")
-        if manufacturer_ref:
-            body_lines.append(f"  Réf. fabricant: {manufacturer_ref}")
-        body_lines.extend((f"  Quantité: {quantity} {unit}", ""))
+        body_lines.append(
+            f"{i}. {name} - {manufacturer} - {manufacturer_ref} - {price_str} - {quantity} {unit}"
+        )
+
     body_lines.extend([
-        "-" * 40,
+        "",
+        "------------------",
+        f"TOTAL : {total_articles} article{'s' if total_articles > 1 else ''} - {total_units} unité{'s' if total_units > 1 else ''}",
         "",
         "Merci de nous faire parvenir votre meilleur prix et délai de livraison.",
         "",

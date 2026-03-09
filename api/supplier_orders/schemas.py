@@ -130,6 +130,8 @@ class EmailExportOut(BaseModel):
     body_html: str = Field(..., description="Corps de l'email en HTML")
     supplier_email: Optional[str] = Field(
         default=None, description="Email du fournisseur")
+    mailto_url: Optional[str] = Field(
+        default=None, description="Lien mailto: prêt à l'emploi (subject + body encodés)")
 
     class Config:
         from_attributes = True

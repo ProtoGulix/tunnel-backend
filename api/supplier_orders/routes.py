@@ -3,6 +3,7 @@ from fastapi.responses import StreamingResponse
 from typing import Optional
 from io import StringIO
 import csv
+import urllib.parse
 
 from api.supplier_orders.repo import SupplierOrderRepository
 from api.supplier_orders.schemas import SupplierOrderOut, SupplierOrderIn, SupplierOrderUpdate, SupplierOrderListItem, SupplierOrderListResponse, EmailExportOut
@@ -172,9 +173,19 @@ async def export_supplier_order_email(order_id: str):
     body_text = get_email_body_text(order_number, supplier_name, lines)
     body_html = get_email_body_html(order_number, supplier_name, lines)
 
+    # Lien mailto: encodé pour ouverture directe dans le client mail
+    mailto_url = None
+    if supplier_email:
+        mailto_url = (
+            f"mailto:{supplier_email}"
+            f"?subject={urllib.parse.quote(subject)}"
+            f"&body={urllib.parse.quote(body_text)}"
+        )
+
     return EmailExportOut(
         subject=subject,
         body_text=body_text,
         body_html=body_html,
-        supplier_email=supplier_email
+        supplier_email=supplier_email,
+        mailto_url=mailto_url
     )

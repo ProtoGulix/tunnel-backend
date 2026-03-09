@@ -2,6 +2,15 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [2.7.16] - 9 mars 2026
+
+### Nouveautés
+
+- **`POST /supplier-orders/{id}/export/email` — lien `mailto:` généré** : la réponse inclut désormais `mailto_url`, un lien cliquable prêt à intégrer dans un `<a href>` côté frontend — ouvre directement le client mail de l’utilisateur avec le destinataire, le sujet et le corps pré-remplis
+  - `subject` : `Demande de devis (Réf. {order_number})`
+  - `body` : liste numérotée `N. Article - Fabricant - Réf. Fabricant - Prix - Quantité Unité`, avec `N/A` pour les champs absents, suivi du total articles/unités
+  - `mailto_url` : `null` si le fournisseur n’a pas d’email renseigné
+
 ## [2.7.15] - 9 mars 2026
 
 ### Corrections

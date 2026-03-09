@@ -287,17 +287,33 @@ Exporte la commande en CSV.
 
 ## `POST /supplier-orders/{id}/export/email`
 
-Génère le contenu d'un email de commande.
+Génère le contenu d'une demande de devis par email, avec un lien `mailto:` prêt à l'emploi.
 
 ### Réponse `200`
 
 ```json
 {
-  "subject": "Commande CMD-2026-0042 - PONS & SABOT",
-  "body_text": "Bonjour,\n\nVeuillez trouver ci-joint notre commande...",
+  "subject": "Demande de devis (Réf. CMD-2026-0042)",
+  "body_text": "Bonjour,\n\nNous souhaitons obtenir un devis pour les articles suivants (Réf. CMD-2026-0042) :\n\n1. Fraise à lamé D18 - POLLEDRI - 11.09.180 - N/A - 4 pcs\n2. Foret HSS 17,5mm - N/A - N/A - N/A - 2 pcs\n\n------------------\nTOTAL : 2 articles - 6 unités\n\nMerci de nous faire parvenir votre meilleur prix et délai de livraison.\n\nCordialement,",
   "body_html": "<html>...</html>",
-  "supplier_email": "commandes@pons.fr"
+  "supplier_email": "commandes@pons.fr",
+  "mailto_url": "mailto:commandes@pons.fr?subject=Demande%20de%20devis%20...&body=Bonjour%2C..."
 }
 ```
 
-> Templates modifiables dans `config/export_templates.py`
+| Champ | Description |
+|---|---|
+| `subject` | Sujet pré-rempli |
+| `body_text` | Corps texte brut (liste numérotée `Article - Fabricant - Réf - Prix - Qté Unité`) |
+| `body_html` | Corps HTML avec tableau (fallback riche) |
+| `supplier_email` | Email du fournisseur (`null` si non renseigné en base) |
+| `mailto_url` | Lien `mailto:` encodé, `null` si `supplier_email` absent |
+
+**Usage côté front :**
+```js
+const { mailto_url } = await fetch(`/supplier-orders/${id}/export/email`, { method: 'POST' }).then(r => r.json())
+window.location.href = mailto_url   // ouvre le client mail
+// ou : <a :href="mailto_url">Envoyer demande de prix</a>
+```
+
+> Sujet, corps texte et corps HTML modifiables dans `config/export_templates.py`
