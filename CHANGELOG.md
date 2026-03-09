@@ -2,6 +2,12 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [2.7.15] - 9 mars 2026
+
+### Corrections
+
+- **500 sur `POST /auth/login` — corps de requête mal formaté** : quand le frontend envoyait `Content-Type: application/x-www-form-urlencoded` au lieu de `application/json`, Pydantic déclenchait une erreur de validation avec le corps brut (`bytes`) dans le champ `input`. Le handler tentait de sérialiser ces bytes en JSON → crash serveur. Le champ `input` est désormais exclu de la réponse d'erreur (résout aussi une fuite potentielle des données brutes du client vers la réponse)
+
 ## [2.7.14] - 9 mars 2026
 
 ### Corrections

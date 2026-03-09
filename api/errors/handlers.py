@@ -74,9 +74,14 @@ def register_error_handlers(app: FastAPI):
     # Handler pour les erreurs de validation Pydantic
     @app.exception_handler(RequestValidationError)
     async def pydantic_validation_error_handler(request: Request, exc: RequestValidationError):
-        errors = exc.errors()
+        # Exclure le champ "input" qui peut contenir des bytes non sérialisables
+        # (ex: corps brut quand Content-Type != application/json)
+        errors = [
+            {k: v for k, v in e.items() if k != "input"}
+            for e in exc.errors()
+        ]
         logger.warning(
-            f"Validation error on {request.url.path}: {len(errors)} errors")
+            "Validation error on %s: %d errors", request.url.path, len(errors))
         return JSONResponse(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             content={
@@ -98,7 +103,7 @@ def register_error_handlers(app: FastAPI):
     @app.exception_handler(Exception)
     async def general_exception_handler(request: Request, exc: Exception):
         logger.error(
-            f"Unhandled exception on {request.method} {request.url.path}", exc_info=exc)
+            "Unhandled exception on %s %s", request.method, request.url.path, exc_info=exc)
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={
