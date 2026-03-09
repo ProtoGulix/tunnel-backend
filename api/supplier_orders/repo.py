@@ -381,14 +381,25 @@ class SupplierOrderRepository:
                     sol.id, sol.supplier_order_id, sol.stock_item_id,
                     sol.quantity, sol.unit_price, sol.total_price,
                     sol.quantity_received, sol.is_selected,
+                    -- Références depuis la ligne (remplies quand devis reçu)
                     sol.manufacturer, sol.manufacturer_ref,
                     -- Stock item details
                     si.id as si_id, si.name as si_name, si.ref as si_ref,
                     si.family_code, si.sub_family_code, si.spec as si_spec,
                     si.dimension, si.unit as si_unit,
-                    si.standars_spec as si_standard_spec_id
+                    si.standars_spec as si_standard_spec_id,
+                    -- Référence fournisseur depuis catalogue (stock_item_supplier)
+                    sis.supplier_ref as sis_supplier_ref,
+                    -- Fabricant depuis catalogue
+                    mi.manufacturer_name as mi_manufacturer_name,
+                    mi.manufacturer_ref as mi_manufacturer_ref
                 FROM supplier_order_line sol
                 LEFT JOIN stock_item si ON sol.stock_item_id = si.id
+                JOIN supplier_order so ON sol.supplier_order_id = so.id
+                LEFT JOIN stock_item_supplier sis
+                    ON sis.stock_item_id = sol.stock_item_id
+                    AND sis.supplier_id = so.supplier_id
+                LEFT JOIN manufacturer_item mi ON sis.manufacturer_item_id = mi.id
                 WHERE sol.supplier_order_id = %s
                 ORDER BY sol.created_at ASC
                 """,
@@ -416,6 +427,17 @@ class SupplierOrderRepository:
                 else:
                     line['stock_item'] = None
 
+                # Références: priorité aux champs manuels de la ligne, sinon catalogue
+                line['supplier_ref'] = line.get('sis_supplier_ref')
+                line['manufacturer'] = (
+                    line.get('manufacturer')
+                    or line.get('mi_manufacturer_name')
+                )
+                line['manufacturer_ref'] = (
+                    line.get('manufacturer_ref')
+                    or line.get('mi_manufacturer_ref')
+                )
+
                 # Get linked purchase_requests
                 line['purchase_requests'] = self._get_line_purchase_requests(
                     str(line['id']), conn
@@ -423,7 +445,8 @@ class SupplierOrderRepository:
 
                 # Clean up intermediate columns
                 for key in ['si_id', 'si_name', 'si_ref', 'family_code', 'sub_family_code',
-                            'si_spec', 'dimension', 'si_unit', 'si_standard_spec_id']:
+                            'si_spec', 'dimension', 'si_unit', 'si_standard_spec_id',
+                            'sis_supplier_ref', 'mi_manufacturer_name', 'mi_manufacturer_ref']:
                     line.pop(key, None)
 
                 results.append(line)

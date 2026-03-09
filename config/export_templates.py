@@ -153,13 +153,14 @@ def get_email_body_text(order_number, supplier_name, lines):
 
         manufacturer = line.get('manufacturer') or 'N/A'
         manufacturer_ref = line.get('manufacturer_ref') or 'N/A'
+        supplier_ref = line.get('supplier_ref') or 'N/A'
         unit_price = line.get('unit_price')
         price_str = f"{unit_price:.2f} €" if unit_price is not None else 'N/A'
         quantity = line.get('quantity', 0)
         unit = stock_item.get('unit') or 'pcs'
 
         body_lines.append(
-            f"{i}. {name} - {manufacturer} - {manufacturer_ref} - {price_str} - {quantity} {unit}"
+            f"{i}. {name} - {manufacturer} - {manufacturer_ref} - {supplier_ref} - {price_str} - {quantity} {unit}"
         )
 
     body_lines.extend([

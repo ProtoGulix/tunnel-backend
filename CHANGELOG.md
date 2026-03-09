@@ -2,6 +2,14 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [2.7.17] - 9 mars 2026
+
+### Corrections
+
+- **Export email — références fabricant et fournisseur toujours à N/A** : la requête d'export ne lisait que les champs `manufacturer` et `manufacturer_ref` directement sur la ligne de commande, qui sont remplis manuellement lors d'un devis et donc vides tant qu'aucun devis n'a été saisi. La requête joint maintenant `stock_item_supplier` (via `stock_item_id + supplier_id` de la commande) et `manufacturer_item` pour récupérer les références du catalogue
+  - Priorité : valeur manuelle sur la ligne si présente, sinon référence catalogue
+  - Format du corps email : `Article - Fabricant - Réf fabricant - Réf fournisseur - Prix - Qté unité`
+
 ## [2.7.16] - 9 mars 2026
 
 ### Nouveautés
