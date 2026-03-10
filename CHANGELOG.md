@@ -6,6 +6,10 @@ Toutes les modifications importantes de l'API sont documentées ici.
 
 ### Corrections
 
+- **CORS manquant sur les réponses d'erreur du middleware JWT** (`api/app.py`)
+  - `JWTMiddleware` était le middleware le plus externe (ajouté en dernier). Quand il retournait une `JSONResponse` directement (token manquant, invalide ou erreur interne), la réponse court-circuitait `CORSMiddleware` — aucun header `Access-Control-Allow-Origin` n'était ajouté, provoquant une erreur CORS côté navigateur
+  - Fix : `CORSMiddleware` est maintenant ajouté en dernier, donc en position la plus externe. Il enveloppe tous les autres middlewares, garantissant que ses headers sont toujours présents quelle que soit l'origine de la réponse
+
 - **Interventions en liste : `health` toujours `unknown` et `equipement_class` absent** (`api/interventions/repo.py`)
   - `GET /interventions` construisait l'objet `equipements` inline depuis le JOIN SQL sans calculer la santé ni inclure la classe d'équipement — `health` était toujours `{ level: "unknown" }` et `equipement_class` était `null`
   - Fix : ajout d'un `LEFT JOIN equipement_class` et d'un LATERAL qui compte les interventions ouvertes/urgentes **toutes interventions confondues** (pas seulement le résultat filtré) pour calculer le vrai niveau de santé

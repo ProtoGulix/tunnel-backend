@@ -92,16 +92,6 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 # Enregistre les handlers d'erreur (404, 401, 403, 500, etc.)
 register_error_handlers(app)
 
-# Middleware CORS (permet frontend d'appeler l'API)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """Ajoute les headers de sécurité HTTP sur toutes les réponses."""
 
@@ -159,6 +149,16 @@ async def ping_endpoint():
 # Middleware JWT (appliqué à toutes les routes sauf exceptions publiques)
 # Vérifie que le JWT Directus est valide et extrait user_id + role
 app.add_middleware(JWTMiddleware)
+
+# Middleware CORS — ajouté en dernier = plus externe = enveloppe tout,
+# y compris les réponses d'erreur de JWTMiddleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.CORS_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 if __name__ == "__main__":
