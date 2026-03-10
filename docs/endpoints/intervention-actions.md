@@ -53,7 +53,31 @@ Détail d'une action avec sous-catégorie et demandes d'achat.
   },
   "complexity_score": 7,
   "complexity_factor": "PCE",
-  "purchase_requests": [],
+  "purchase_requests": [
+    {
+      "id": "uuid",
+      "item_label": "Roulement SKF 6205",
+      "quantity": 2,
+      "unit": "pcs",
+      "derived_status": {
+        "code": "PENDING_DISPATCH",
+        "label": "À dispatcher",
+        "color": "#A855F7"
+      },
+      "stock_item_id": "uuid",
+      "stock_item_ref": "OUT-ROUL-SKF-6205",
+      "stock_item_name": "Roulement SKF 6205",
+      "intervention_code": "CN001-REA-20260113-QC",
+      "requester_name": "Jean Dupont",
+      "urgency": "high",
+      "urgent": true,
+      "quotes_count": 0,
+      "selected_count": 0,
+      "suppliers_count": 2,
+      "created_at": "2026-01-13T10:00:00",
+      "updated_at": "2026-01-13T10:00:00"
+    }
+  ],
   "created_at": "2026-01-13T14:30:00",
   "updated_at": "2026-01-13T15:00:00"
 }
@@ -62,7 +86,7 @@ Détail d'une action avec sous-catégorie et demandes d'achat.
 > **Schemas imbriqués :**
 >
 > - `tech` : [UserListItem](users.md#userlistitem) (informations du technicien)
-> - `purchase_requests` : tableau de [PurchaseRequestOut](purchase-requests.md#purchaserequestout)
+> - `purchase_requests` : tableau de [PurchaseRequestListItem](purchase-requests.md#get-purchase-requestslist-v120) — demandes d'achat liées à cette action (statut dérivé, compteurs, etc.)
 
 ---
 

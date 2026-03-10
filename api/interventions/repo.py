@@ -5,7 +5,7 @@ from uuid import uuid4
 from api.settings import settings
 from api.db import get_connection, release_connection
 from api.errors.exceptions import DatabaseError, raise_db_error, NotFoundError
-from api.constants import PRIORITY_TYPES
+from api.constants import PRIORITY_TYPES, CLOSED_STATUS_CODE
 
 from api.intervention_actions.repo import InterventionActionRepository
 from api.intervention_status_log.repo import InterventionStatusLogRepository
@@ -95,26 +95,34 @@ class InterventionRepository:
             query = f"""
                 SELECT
                     i.*,
-                    m.code as m_code, m.name as m_name, m.no_machine as m_no_machine,
-                    m.affectation as m_affectation, m.equipement_mere as m_equipement_mere,
-                    m.is_mere as m_is_mere, m.fabricant as m_fabricant,
-                    m.numero_serie as m_numero_serie, m.date_mise_service as m_date_mise_service,
-                    m.notes as m_notes,
+                    m.code as m_code, m.name as m_name,
+                    m.equipement_mere as m_parent_id,
+                    ec.id as ec_id, ec.code as ec_code, ec.label as ec_label,
+                    mh.m_open_count, mh.m_urgent_count,
                     COALESCE(SUM(ia.time_spent), 0) as total_time,
                     COUNT(DISTINCT ia.id) as action_count,
                     ROUND(AVG(ia.complexity_score)::numeric, 2)::float as avg_complexity,
                     COUNT(DISTINCT iapr.purchase_request_id) as purchase_count
                 FROM intervention i
                 LEFT JOIN machine m ON i.machine_id = m.id
+                LEFT JOIN equipement_class ec ON ec.id = m.equipement_class_id
+                LEFT JOIN LATERAL (
+                    SELECT
+                        COUNT(CASE WHEN i2.status_actual != (SELECT id FROM intervention_status_ref WHERE code = %s LIMIT 1) THEN i2.id END) as m_open_count,
+                        COUNT(CASE WHEN i2.status_actual != (SELECT id FROM intervention_status_ref WHERE code = %s LIMIT 1) AND i2.priority = 'urgent' THEN i2.id END) as m_urgent_count
+                    FROM intervention i2
+                    WHERE i2.machine_id = m.id
+                ) mh ON TRUE
                 LEFT JOIN intervention_action ia ON i.id = ia.intervention_id
                 LEFT JOIN intervention_action_purchase_request iapr ON ia.id = iapr.intervention_action_id
                 {" ".join(joins)}
                 {where_sql}
-                GROUP BY i.id, m.id
+                GROUP BY i.id, m.id, ec.id, mh.m_open_count, mh.m_urgent_count
                 {order_sql}
                 LIMIT %s OFFSET %s
             """
-            cur.execute(query, (*params, limit, offset))
+            cur.execute(query, (CLOSED_STATUS_CODE,
+                        CLOSED_STATUS_CODE, *params, limit, offset))
             rows = cur.fetchall()
             cols = [desc[0] for desc in cur.description]
 
@@ -122,33 +130,36 @@ class InterventionRepository:
             for row in rows:
                 row_dict = dict(zip(cols, row))
 
-                # Construire l'objet equipement depuis les colonnes m_*
+                # Construire l'objet equipement depuis les colonnes préfixées
                 if row_dict.get('machine_id') is not None:
+                    open_count = row_dict.pop('m_open_count', 0) or 0
+                    urgent_count = row_dict.pop('m_urgent_count', 0) or 0
+                    if urgent_count > 0:
+                        health = {
+                            'level': 'critical', 'reason': f'{urgent_count} intervention(s) urgente(s)', 'rules_triggered': None}
+                    elif open_count > 0:
+                        health = {
+                            'level': 'maintenance', 'reason': f'{open_count} intervention(s) ouverte(s)', 'rules_triggered': None}
+                    else:
+                        health = {
+                            'level': 'ok', 'reason': 'Aucune intervention ouverte', 'rules_triggered': None}
+
+                    ec_id = row_dict.pop('ec_id', None)
+                    ec_code = row_dict.pop('ec_code', None)
+                    ec_label = row_dict.pop('ec_label', None)
+
                     row_dict['equipements'] = {
                         'id': row_dict.pop('machine_id'),
                         'code': row_dict.pop('m_code', None),
                         'name': row_dict.pop('m_name', None),
-                        'no_machine': row_dict.pop('m_no_machine', None),
-                        'affectation': row_dict.pop('m_affectation', None),
-                        'equipement_mere': row_dict.pop('m_equipement_mere', None),
-                        'is_mere': row_dict.pop('m_is_mere', None),
-                        'fabricant': row_dict.pop('m_fabricant', None),
-                        'numero_serie': row_dict.pop('m_numero_serie', None),
-                        'date_mise_service': row_dict.pop('m_date_mise_service', None),
-                        'notes': row_dict.pop('m_notes', None),
-                        'health': {
-                            'level': 'unknown',
-                            'reason': 'not_provided',
-                            'rules_triggered': None
-                        },
-                        'parent_id': row_dict.get('m_equipement_mere'),
-                        'children_ids': []
+                        'health': health,
+                        'parent_id': row_dict.pop('m_parent_id', None),
+                        'equipement_class': {'id': ec_id, 'code': ec_code, 'label': ec_label} if ec_id else None
                     }
                 else:
                     row_dict['equipements'] = None
-                    # Nettoyer les colonnes m_* si machine_id est None
                     for key in list(row_dict.keys()):
-                        if key.startswith('m_'):
+                        if key.startswith('m_') or key.startswith('ec_') or key in ('m_open_count', 'm_urgent_count'):
                             row_dict.pop(key)
 
                 # Créer l'objet stats si demandé

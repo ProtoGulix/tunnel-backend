@@ -2,14 +2,23 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [2.8.3] - 10 mars 2026
+
+### Corrections
+
+- **Interventions en liste : `health` toujours `unknown` et `equipement_class` absent** (`api/interventions/repo.py`)
+  - `GET /interventions` construisait l'objet `equipements` inline depuis le JOIN SQL sans calculer la santé ni inclure la classe d'équipement — `health` était toujours `{ level: "unknown" }` et `equipement_class` était `null`
+  - Fix : ajout d'un `LEFT JOIN equipement_class` et d'un LATERAL qui compte les interventions ouvertes/urgentes **toutes interventions confondues** (pas seulement le résultat filtré) pour calculer le vrai niveau de santé
+  - `equipements` en liste est désormais cohérent avec les autres endpoints : `id`, `code`, `name`, `health` (réel), `parent_id`, `equipement_class`
+
 ## [2.8.2] - 10 mars 2026
 
-### Nouveautés
+### Corrections
 
-- **Filtre `exclude_statuses` sur les listes de demandes d'achat** (`GET /purchase-requests/list`, `GET /purchase-requests/`)
-  - Nouveau paramètre query `exclude_statuses` (CSV) pour exclure un ou plusieurs statuts dérivés en une seule requête
-  - Exemple : `?exclude_statuses=RECEIVED,REJECTED` renvoie uniquement les demandes actives
-  - Compatible avec les filtres existants (`status`, `urgency`, `intervention_id`)
+- **Demandes d'achat liées aux actions d'intervention renvoyaient une erreur silencieuse** (`api/intervention_actions/repo.py`)
+  - `_get_linked_purchase_requests()` appelait `get_by_id()` qui avait été supprimé en v2.7.19 — les `purchase_requests` dans les actions retournaient toujours `[]`
+  - Fixé : appel remplacé par `get_list(ids=[...])` — un seul aller SQL pour tous les IDs, retourne le schéma `PurchaseRequestListItem` (statut dérivé, compteurs, références)
+  - `get_list()` dans `PurchaseRequestRepository` accepte désormais un filtre optionnel `ids: List[str]`
 
 ## [2.8.1] - 9 mars 2026
 
