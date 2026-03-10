@@ -58,6 +58,8 @@ async def list_purchase_requests_optimized(
                        description="Nombre max d'éléments"),
     status: Optional[str] = Query(
         None, description="Filtrer par statut dérivé (TO_QUALIFY, NO_SUPPLIER_REF, PENDING_DISPATCH, OPEN, QUOTED, ORDERED, PARTIAL, RECEIVED, REJECTED)"),
+    exclude_statuses: Optional[str] = Query(
+        None, description="Statuts à exclure, séparés par virgule. Ex: RECEIVED,REJECTED"),
     intervention_id: Optional[str] = Query(
         None, description="Filtrer par intervention"),
     urgency: Optional[str] = Query(None, description="Filtrer par urgence")
@@ -69,13 +71,15 @@ async def list_purchase_requests_optimized(
     - Pas d'objets imbriqués (références directes)
     - Payload ~95% plus léger que version legacy
     """
+    exclude_list = [s.strip() for s in exclude_statuses.split(",") if s.strip()] if exclude_statuses else None
     repo = PurchaseRequestRepository()
     return repo.get_list(
         limit=limit,
         offset=skip,
         status=status,
         intervention_id=intervention_id,
-        urgency=urgency
+        urgency=urgency,
+        exclude_statuses=exclude_list
     )
 
 
@@ -148,17 +152,21 @@ async def list_purchase_requests(
     skip: int = Query(0, ge=0, description="Nombre d'éléments à sauter"),
     limit: int = Query(100, ge=1, le=1000, description="Nombre max d'éléments"),
     status: Optional[str] = Query(None, description="Filtrer par statut dérivé"),
+    exclude_statuses: Optional[str] = Query(
+        None, description="Statuts à exclure, séparés par virgule. Ex: RECEIVED,REJECTED"),
     intervention_id: Optional[str] = Query(None, description="Filtrer par intervention"),
     urgency: Optional[str] = Query(None, description="Filtrer par urgence")
 ):
     """Liste toutes les demandes d'achat. Alias de /list."""
+    exclude_list = [s.strip() for s in exclude_statuses.split(",") if s.strip()] if exclude_statuses else None
     repo = PurchaseRequestRepository()
     return repo.get_list(
         limit=limit,
         offset=skip,
         status=status,
         intervention_id=intervention_id,
-        urgency=urgency
+        urgency=urgency,
+        exclude_statuses=exclude_list
     )
 
 

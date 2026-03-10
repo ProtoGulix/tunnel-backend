@@ -12,13 +12,14 @@ Liste toutes les demandes d'achat avec filtres. Alias de `/list`.
 
 ### Query params
 
-| Param             | Type   | Défaut | Description                  |
-| ----------------- | ------ | ------ | ---------------------------- |
-| `skip`            | int    | 0      | Offset                       |
-| `limit`           | int    | 100    | Max: 1000                    |
-| `status`          | string | —      | Filtrer par statut dérivé    |
-| `intervention_id` | uuid   | —      | Filtrer par intervention     |
-| `urgency`         | string | —      | `normal`, `high`, `critical` |
+| Param              | Type   | Défaut | Description                                                |
+| ------------------ | ------ | ------ | ---------------------------------------------------------- |
+| `skip`             | int    | 0      | Offset                                                     |
+| `limit`            | int    | 100    | Max: 1000                                                  |
+| `status`           | string | —      | Filtrer par statut dérivé                                  |
+| `exclude_statuses` | string | —      | Statuts à exclure, séparés par virgule. Ex : `RECEIVED,REJECTED` |
+| `intervention_id`  | uuid   | —      | Filtrer par intervention                                   |
+| `urgency`          | string | —      | `normal`, `high`, `critical`                               |
 
 ### Réponse `200` — `List[PurchaseRequestListItem]`
 
@@ -84,6 +85,19 @@ Le statut d'une demande d'achat est **calculé dynamiquement** à chaque lecture
 ## `GET /purchase-requests/list` [v1.2.0]
 
 Liste optimisée légère pour tableaux. Payload ~95% plus léger.
+
+### Query params
+
+| Param              | Type   | Défaut | Description                                                |
+| ------------------ | ------ | ------ | ---------------------------------------------------------- |
+| `skip`             | int    | 0      | Offset                                                     |
+| `limit`            | int    | 100    | Max: 1000                                                  |
+| `status`           | string | —      | Filtrer par statut dérivé exact                            |
+| `exclude_statuses` | string | —      | Statuts à exclure, séparés par virgule. Ex : `RECEIVED,REJECTED,PARTIAL` |
+| `intervention_id`  | uuid   | —      | Filtrer par intervention                                   |
+| `urgency`          | string | —      | `normal`, `high`, `critical`                               |
+
+> `status` et `exclude_statuses` sont compatibles mais mutuellement redondants — préférer l'un ou l'autre.
 
 ### Réponse `200` — PurchaseRequestListItem
 

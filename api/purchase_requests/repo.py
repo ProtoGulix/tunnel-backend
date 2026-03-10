@@ -267,7 +267,8 @@ class PurchaseRequestRepository:
         offset: int = 0,
         status: Optional[str] = None,
         intervention_id: Optional[str] = None,
-        urgency: Optional[str] = None
+        urgency: Optional[str] = None,
+        exclude_statuses: Optional[List[str]] = None
     ) -> List[Dict[str, Any]]:
         """
         Liste optimisée avec statut dérivé et compteurs agrégés.
@@ -397,6 +398,10 @@ class PurchaseRequestRepository:
 
                 # Filtre par statut si demandé
                 if status and status_code != status:
+                    continue
+
+                # Exclut les statuts explicitement exclus
+                if exclude_statuses and status_code in exclude_statuses:
                     continue
 
                 item['derived_status'] = self._map_derived_status(status_code)

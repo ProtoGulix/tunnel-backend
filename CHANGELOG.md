@@ -2,6 +2,15 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [2.8.2] - 10 mars 2026
+
+### Nouveautés
+
+- **Filtre `exclude_statuses` sur les listes de demandes d'achat** (`GET /purchase-requests/list`, `GET /purchase-requests/`)
+  - Nouveau paramètre query `exclude_statuses` (CSV) pour exclure un ou plusieurs statuts dérivés en une seule requête
+  - Exemple : `?exclude_statuses=RECEIVED,REJECTED` renvoie uniquement les demandes actives
+  - Compatible avec les filtres existants (`status`, `urgency`, `intervention_id`)
+
 ## [2.8.1] - 9 mars 2026
 
 ### Corrections
