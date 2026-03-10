@@ -44,9 +44,8 @@ class PurchaseRequestRepository:
                 INSERT INTO purchase_request
                 (id, status, stock_item_id, item_label, quantity, unit,
                  requested_by, urgency, reason, notes, workshop,
-                 intervention_id, quantity_requested, urgent, requester_name,
-                 created_at, updated_at)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                 intervention_id, created_at, updated_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     request_id,
@@ -61,9 +60,6 @@ class PurchaseRequestRepository:
                     data.get('notes'),
                     data.get('workshop'),
                     data.get('intervention_id'),
-                    data.get('quantity_requested'),
-                    data.get('urgent', False),
-                    data.get('requester_name'),
                     now,
                     now
                 )
@@ -91,8 +87,8 @@ class PurchaseRequestRepository:
             updatable_fields = [
                 'stock_item_id', 'item_label', 'quantity', 'unit',
                 'requested_by', 'urgency', 'reason', 'notes', 'workshop',
-                'intervention_id', 'quantity_requested', 'quantity_approved',
-                'urgent', 'requester_name', 'approver_name', 'approved_at'
+                'intervention_id', 'quantity_approved',
+                'approver_name', 'approved_at'
             ]
 
             set_clauses = []
@@ -314,9 +310,8 @@ class PurchaseRequestRepository:
                     si.ref AS stock_item_ref,
                     si.name AS stock_item_name,
                     i.code AS intervention_code,
-                    pr.requester_name,
+                    pr.requested_by AS requester_name,
                     pr.urgency,
-                    pr.urgent,
 
                     -- Compteurs agrégés
                     COALESCE(agg.quotes_count, 0) AS quotes_count,
@@ -668,7 +663,7 @@ class PurchaseRequestRepository:
                 """
                 SELECT
                     COUNT(*) as total_requests,
-                    COUNT(CASE WHEN urgency = 'critical' OR urgent = true THEN 1 END) as urgent_count
+                    COUNT(CASE WHEN urgency IN ('critical', 'high') THEN 1 END) as urgent_count
                 FROM purchase_request
                 WHERE created_at >= %s AND created_at <= %s
                 """,

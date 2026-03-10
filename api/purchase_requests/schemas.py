@@ -39,7 +39,6 @@ class PurchaseRequestListItem(BaseModel):
         default=None, description="Code intervention")
     requester_name: Optional[str] = Field(default=None)
     urgency: Optional[str] = Field(default=None)
-    urgent: Optional[bool] = Field(default=False)
 
     # Compteurs agrégés (évite de charger order_lines)
     quotes_count: int = Field(default=0, description="Nombre de devis reçus")
@@ -148,15 +147,12 @@ class PurchaseRequestDetail(BaseModel):
 
     # Métadonnées demande
     requested_by: Optional[str] = Field(default=None)
-    requester_name: Optional[str] = Field(default=None)
     approver_name: Optional[str] = Field(default=None)
     approved_at: Optional[datetime] = Field(default=None)
     urgency: Optional[str] = Field(default=None)
-    urgent: Optional[bool] = Field(default=False)
     reason: Optional[str] = Field(default=None)
     notes: Optional[str] = Field(default=None)
     workshop: Optional[str] = Field(default=None)
-    quantity_requested: Optional[int] = Field(default=None)
     quantity_approved: Optional[int] = Field(default=None)
     created_at: Optional[datetime] = Field(default=None)
     updated_at: Optional[datetime] = Field(default=None)

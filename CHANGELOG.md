@@ -2,13 +2,14 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
-## [2.8.4] - 10 mars 2026
+## [2.8.5] - 10 mars 2026
 
 ### Corrections
 
-- **`JWTMiddleware` masquait les vraies erreurs des routes** (`api/auth/middleware.py`)
-  - Avant : `call_next(request)` était à l'intérieur du `try/except Exception` global du middleware. Toute exception levée par un route handler (erreur DB, SQL, etc.) remontait dans ce catch-all et ressortait comme `500 "Erreur lors du traitement de l'authentification"` — message totalement trompeur
-  - Après : `call_next(request)` est sorti du try/except global. Le try/except ne protège plus que le traitement JWT lui-même. Les erreurs des routes remontent normalement aux handlers d'erreur FastAPI et produisent des messages corrects
+- **Alignement avec la migration DB v1.6.0** (`api/purchase_requests/repo.py`, `schemas.py`)
+  - Suppression de `requester_name` : le champ a été supprimé de la table DB (doublon de `requested_by`). L'API lit désormais `requested_by AS requester_name` en liste pour garder la compatibilité frontend
+  - Suppression de `quantity_requested` : doublon de `quantity`, retiré de l'INSERT, UPDATE et du schema
+  - Suppression de `urgent` (bool) : doublon de `urgency`, retiré de l'INSERT, UPDATE, SELECT et des schemas. Le compteur `urgent_count` dans les stats utilise maintenant `urgency IN ('critical', 'high')`
 
 ## [2.8.3] - 10 mars 2026
 
