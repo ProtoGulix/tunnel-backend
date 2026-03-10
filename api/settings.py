@@ -27,7 +27,7 @@ class Settings(BaseSettings):
 
     # API
     API_TITLE: str = "GMAO API"
-    API_VERSION: str = "2.8.5"
+    API_VERSION: str = "2.8.6"
     API_ENV: str = os.getenv("API_ENV", "development")
     AUTH_DISABLED: bool = os.getenv("AUTH_DISABLED", "false").lower() == "true"
     FRONTEND_URL: str = os.getenv("FRONTEND_URL", "http://localhost:5173")

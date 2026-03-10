@@ -2,6 +2,15 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [2.8.6] - 10 mars 2026
+
+### Corrections
+
+- **Transaction DB abortée sur `PATCH /supplier-order-lines/{id}`** (`api/supplier_order_lines/repo.py`, `api/supplier_orders/repo.py`, `api/exports/repo.py`)
+  - Trois requêtes SQL référençaient encore les colonnes supprimées en DB v1.6.0 (`pr.requester_name`, `pr.urgent`, `pr.urgency_level`)
+  - L'erreur SQL était silencieusement ignorée (`except Exception: return []`) mais laissait la connexion en état "transaction abortée" dans le pool — la requête suivante sur cette connexion recevait alors `current transaction is aborted`
+  - Fix : remplacement par `pr.requested_by AS requester_name` et `pr.urgency AS urgency_level` dans les trois fichiers
+
 ## [2.8.5] - 10 mars 2026
 
 ### Corrections
