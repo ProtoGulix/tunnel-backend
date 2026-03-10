@@ -20,20 +20,20 @@ class JWTMiddleware(BaseHTTPMiddleware):
                      "/redoc", "/favicon.ico", "/auth/login"}
 
     async def dispatch(self, request: Request, call_next):
+        # Requêtes OPTIONS (CORS preflight) : laisser passer sans auth
+        if request.method == "OPTIONS":
+            return await call_next(request)
+
+        # QR codes publics (conçus pour impression sur rapports physiques)
+        if request.url.path.endswith("/qrcode"):
+            return await call_next(request)
+
+        # Routes publiques : laisser passer sans auth
+        if request.url.path in self.PUBLIC_ROUTES or request.url.path.startswith("/static"):
+            return await call_next(request)
+
+        # Extraction du token — try/except limité au traitement JWT uniquement
         try:
-            # Requêtes OPTIONS (CORS preflight) : laisser passer sans auth
-            if request.method == "OPTIONS":
-                return await call_next(request)
-
-            # QR codes publics (conçus pour impression sur rapports physiques)
-            if request.url.path.endswith("/qrcode"):
-                return await call_next(request)
-
-            # Routes publiques : laisser passer sans auth
-            if request.url.path in self.PUBLIC_ROUTES or request.url.path.startswith("/static"):
-                return await call_next(request)
-
-            # Extraction du token
             auth_header = request.headers.get("Authorization")
 
             # Mode test : valider le JWT mais ne pas bloquer si invalide
@@ -102,12 +102,10 @@ class JWTMiddleware(BaseHTTPMiddleware):
                     headers={"WWW-Authenticate": "Bearer"}
                 )
 
-            # Extraction des données utilisateur
             try:
                 user_info = extract_user_from_token(token)
                 request.state.user_id = user_info["user_id"]
                 request.state.role = user_info["role"]
-
                 logger.info(
                     "\u2713 JWT VALIDE - User: %s, Role: %s, Route: %s %s",
                     user_info['user_id'], user_info['role'],
@@ -125,13 +123,12 @@ class JWTMiddleware(BaseHTTPMiddleware):
                     headers={"WWW-Authenticate": "Bearer"}
                 )
 
-            response = await call_next(request)
-            return response
-
         except Exception as e:
-            logger.error("Middleware error: %s", str(e), exc_info=e)
+            logger.error("Middleware JWT error: %s", str(e), exc_info=e)
             return JSONResponse(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                content={
-                    "detail": "Erreur lors du traitement de l'authentification"}
+                content={"detail": "Erreur lors du traitement de l'authentification"}
             )
+
+        # call_next hors du try/except global : les erreurs des routes remontent normalement
+        return await call_next(request)
