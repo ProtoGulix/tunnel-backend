@@ -90,7 +90,7 @@ class SupplierOrderLineRepository:
                 """
                 SELECT
                     solpr.id, solpr.purchase_request_id, solpr.quantity as quantity, solpr.created_at,
-                    pr.item_label, pr.requester_name, pr.intervention_id
+                    pr.item_label, pr.requested_by AS requester_name, pr.intervention_id
                 FROM supplier_order_line_purchase_request solpr
                 JOIN purchase_request pr ON solpr.purchase_request_id = pr.id
                 WHERE solpr.supplier_order_line_id = %s

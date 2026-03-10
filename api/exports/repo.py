@@ -144,7 +144,7 @@ class ExportRepository:
             cur.execute("""
                 SELECT
                     pr.id, pr.item_label, pr.quantity, pr.unit,
-                    pr.urgent, pr.requester_name, pr.created_at,
+                    pr.urgency, pr.requested_by AS requester_name, pr.created_at,
                     si.ref as stock_item_ref, si.name as stock_item_name,
                     sis.supplier_ref, s.name as supplier_name, s.code as supplier_code,
                     mi.manufacturer_ref, mi.manufacturer_name
