@@ -2,6 +2,66 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [2.8.1] - 9 mars 2026
+
+### Corrections
+
+- **Statut `RECEIVED` absent pour les DA livrées via panier clôturé** (`api/purchase_requests/repo.py`)
+  - Avant : une DA dont toutes les lignes étaient dans des paniers `CLOSED` avec au moins une ligne sélectionnée restait bloquée en `ORDERED` indéfiniment, même après clôture de la commande
+  - Après : si toutes les lignes sont dans des paniers terminaux (`CLOSED`/`CANCELLED`) et qu'au moins une est `is_selected`, la DA passe automatiquement en `RECEIVED` — la fermeture d'un panier avec sélection signifie que la commande a été livrée et clôturée
+  - Fix appliqué dans `_derive_status_from_order_lines()` (chemin `get_detail`) et dans `get_list()` (logique inline LATERAL)
+
+## [2.8.0] - 9 mars 2026
+
+### Nouveautés
+
+- **Garde métier sur la modification d'une DA** (`PUT /purchase-requests/{id}`)
+  - Avant : n'importe quelle DA pouvait être modifiée, même après dispatch ou reception
+  - Après : une DA ne peut être modifiée que si son statut dérivé est `TO_QUALIFY`, `NO_SUPPLIER_REF` ou `PENDING_DISPATCH` — toute tentative sur une DA dans un autre état retourne `422` avec un message explicite
+- **Champ `is_editable` dans le détail d'une DA** (`GET /purchase-requests/detail/{id}`)
+  - Nouveau champ booléen dans `PurchaseRequestDetail` : `true` si la DA peut encore être modifiée (statut `TO_QUALIFY`, `NO_SUPPLIER_REF` ou `PENDING_DISPATCH`), `false` sinon
+  - Permet au frontend de désactiver le bouton d'édition sans recalculer le statut lui-même
+
+## [2.7.21] - 9 mars 2026
+
+### Corrections
+
+- **Statut `REJECTED` auto-calculé pour les DA sans sélection dans paniers terminaux** (`api/purchase_requests/repo.py`)
+  - Avant : une DA dont toutes les lignes se trouvaient dans des paniers `CANCELLED`/`CLOSED` sans sélection restait bloquée en `QUOTED` ou `CONSULTATION` indéfiniment
+  - Après : si toutes les lignes liées à une DA sont dans un panier terminal (`CANCELLED` ou `CLOSED`) et qu'aucune n'est `is_selected`, la DA passe automatiquement à `REJECTED`
+  - Couvre le cas des **lignes jumelles** (mode consultation, plusieurs fournisseurs) : si aucune offre n'a été retenue avant fermeture du panier, la DA est automatiquement rejetée
+  - Fix appliqué dans `_derive_status_from_order_lines()` et dans `get_list()` via `BOOL_AND(so.status IN ('CANCELLED', 'CLOSED'))` dans le LATERAL
+
+## [2.7.20] - 9 mars 2026
+
+### Corrections
+
+- **Statut `CONSULTATION` trop restrictif sur les DA** (`api/purchase_requests/repo.py`)
+  - Avant : `CONSULTATION` ne se déclenchait que si la DA était dans **plusieurs** paniers simultanément
+  - Après : `CONSULTATION` se déclenche aussi si le panier est verrouillé (`SENT` ou `ACK`) sans qu'aucun devis n'ait encore été renseigné sur la ligne — cas typique : panier envoyé au fournisseur, en attente de retour
+  - Fix appliqué dans `_derive_status_from_order_lines()` (chemin `get_detail`) et dans `get_list()` via `BOOL_OR(so.status IN ('SENT', 'ACK'))` dans le LATERAL
+
+## [2.7.19] - 9 mars 2026
+
+### Améliorations
+
+- **Nettoyage des endpoints `purchase-requests`** (`api/purchase_requests/routes.py`, `repo.py`, `schemas.py`)
+  - Suppression des 3 endpoints legacy (`GET /`, `GET /{id}`, `GET /intervention/{id}`) qui retournaient le vieux schéma `PurchaseRequestOut`
+  - Remplacement par les endpoints modernes : `GET /` → `get_list()`, `GET /{id}` → `get_detail()`, `GET /intervention/{id}` → `get_list(intervention_id=...)`
+  - `POST /` et `PUT /{id}` retournent désormais `PurchaseRequestDetail` (contexte enrichi) au lieu de `PurchaseRequestOut`
+  - Suppression des schémas legacy `PurchaseRequestOut` et `LinkedOrderLine`
+  - Suppression des méthodes repo legacy `get_all()`, `get_by_id()`, `get_by_intervention()` et leurs helpers (`_enrich_with_stock_item`, `_map_with_stock_item`, `_map_with_intervention`, `_get_linked_order_lines`)
+
+## [2.7.18] - 9 mars 2026
+
+### Nouveautés
+
+- **Nouveau statut dérivé `CONSULTATION` pour les DA** (`api/constants.py`, `api/purchase_requests/repo.py`)
+  - Label : "En chiffrage" — couleur : `#0EA5E9`
+  - Déclenché quand la DA est présente dans **plusieurs paniers fournisseurs distincts** (dispatch mode consultation), sans devis reçu ni ligne sélectionnée
+  - Remplace `OPEN` ("Mutualisation") qui était inexact dans ce cas — une DA en consultation n'est pas simplement en attente de mutualisation
+  - Ordre dans le cycle de vie : `OPEN` → `CONSULTATION` → `QUOTED` → `ORDERED` → `PARTIAL` → `RECEIVED`
+
 ## [2.7.17] - 9 mars 2026
 
 ### Corrections

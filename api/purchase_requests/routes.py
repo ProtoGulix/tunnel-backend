@@ -4,11 +4,10 @@ from datetime import date
 from api.purchase_requests.repo import PurchaseRequestRepository
 from api.purchase_requests.schemas import (
     PurchaseRequestIn,
-    PurchaseRequestOut,  # Legacy
-    PurchaseRequestListItem,  # v1.2.0 optimisé
-    PurchaseRequestDetail,  # v1.2.0 optimisé
-    PurchaseRequestStats,  # v1.2.0 nouveau
-    DispatchResult  # v1.2.12 nouveau
+    PurchaseRequestListItem,
+    PurchaseRequestDetail,
+    PurchaseRequestStats,
+    DispatchResult
 )
 from api.errors.exceptions import ValidationError
 from api.constants import DERIVED_STATUS_CONFIG
@@ -142,24 +141,19 @@ async def dispatch_pending_requests():
     return repo.dispatch_all()
 
 
-# ========== Endpoints legacy (maintien compatibilité) ==========
+# ========== Endpoints CRUD ==========
 
-@router.get("/", response_model=List[PurchaseRequestOut])
+@router.get("/", response_model=List[PurchaseRequestListItem])
 async def list_purchase_requests(
     skip: int = Query(0, ge=0, description="Nombre d'éléments à sauter"),
-    limit: int = Query(100, ge=1, le=1000,
-                       description="Nombre max d'éléments"),
-    status: Optional[str] = Query(None, description="Filtrer par statut"),
-    intervention_id: Optional[str] = Query(
-        None, description="Filtrer par intervention"),
+    limit: int = Query(100, ge=1, le=1000, description="Nombre max d'éléments"),
+    status: Optional[str] = Query(None, description="Filtrer par statut dérivé"),
+    intervention_id: Optional[str] = Query(None, description="Filtrer par intervention"),
     urgency: Optional[str] = Query(None, description="Filtrer par urgence")
 ):
-    """
-    [LEGACY] Liste toutes les demandes d'achat avec filtres optionnels.
-    Utiliser /purchase-requests/list pour payload optimisé
-    """
+    """Liste toutes les demandes d'achat. Alias de /list."""
     repo = PurchaseRequestRepository()
-    return repo.get_all(
+    return repo.get_list(
         limit=limit,
         offset=skip,
         status=status,
@@ -168,39 +162,40 @@ async def list_purchase_requests(
     )
 
 
-@router.get("/intervention/{intervention_id}", response_model=List[PurchaseRequestOut])
+@router.get("/intervention/{intervention_id}", response_model=List[PurchaseRequestListItem])
 async def get_purchase_requests_by_intervention(intervention_id: str):
-    """
-    [LEGACY] Récupère toutes les demandes d'achat liées à une intervention.
-    Utiliser /purchase-requests/intervention/{id}/optimized?view=list
-    """
+    """Demandes liées à une intervention. Alias de /intervention/{id}/optimized?view=list."""
     repo = PurchaseRequestRepository()
-    return repo.get_by_intervention(intervention_id)
+    return repo.get_list(limit=1000, offset=0, intervention_id=intervention_id)
 
 
-@router.get("/{request_id}", response_model=PurchaseRequestOut)
+@router.get("/{request_id}", response_model=PurchaseRequestDetail)
 async def get_purchase_request(request_id: str):
-    """
-    [LEGACY] Récupère une demande d'achat par ID.
-    Utiliser /purchase-requests/detail/{id} pour contexte enrichi
-    """
+    """Détail d'une demande d'achat. Alias de /detail/{id}."""
     repo = PurchaseRequestRepository()
-    return repo.get_by_id(request_id)
+    return repo.get_detail(request_id)
 
 
-# ========== Endpoints CRUD (maintien) ==========
-
-@router.post("/", response_model=PurchaseRequestOut)
+@router.post("/", response_model=PurchaseRequestDetail)
 async def create_purchase_request(purchase_request: PurchaseRequestIn):
     """Crée une nouvelle demande d'achat"""
     repo = PurchaseRequestRepository()
     return repo.add(purchase_request.model_dump())
 
 
-@router.put("/{request_id}", response_model=PurchaseRequestOut)
+EDITABLE_STATUSES = {'TO_QUALIFY', 'NO_SUPPLIER_REF', 'PENDING_DISPATCH'}
+
+@router.put("/{request_id}", response_model=PurchaseRequestDetail)
 async def update_purchase_request(request_id: str, purchase_request: PurchaseRequestIn):
     """Met à jour une demande d'achat existante"""
     repo = PurchaseRequestRepository()
+    current = repo.get_detail(request_id)
+    derived = current['derived_status']
+    if derived['code'] not in EDITABLE_STATUSES:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Cette demande ne peut plus être modifiée (statut : {derived['label']})"
+        )
     return repo.update(request_id, purchase_request.model_dump(exclude_unset=True))
 
 

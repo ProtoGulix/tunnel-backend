@@ -5,7 +5,6 @@ from datetime import datetime, date, timedelta
 from decimal import Decimal
 import logging
 
-from api.settings import settings
 from api.db import get_connection, release_connection
 from api.errors.exceptions import DatabaseError, raise_db_error, NotFoundError
 from api.constants import DERIVED_STATUS_CONFIG
@@ -19,324 +18,16 @@ class PurchaseRequestRepository:
     def _get_connection(self):
         return get_connection()
 
-    def _enrich_with_stock_item(self, request_dict: Dict[str, Any], conn) -> Dict[str, Any]:
-        """Enrichit une demande avec les détails du stock_item si présent"""
-        stock_item_id = request_dict.get('stock_item_id')
-        if stock_item_id:
-            try:
-                cur = conn.cursor()
-                cur.execute(
-                    """
-                    SELECT id, name, ref, family_code, sub_family_code,
-                           quantity, unit, location
-                    FROM stock_item WHERE id = %s
-                    """,
-                    (str(stock_item_id),)
-                )
-                row = cur.fetchone()
-                if row:
-                    cols = [desc[0] for desc in cur.description]
-                    request_dict['stock_item'] = dict(zip(cols, row))
-                else:
-                    request_dict['stock_item'] = None
-            except Exception:
-                request_dict['stock_item'] = None
-        else:
-            request_dict['stock_item'] = None
-        return request_dict
-
-    def _map_with_stock_item(self, row_dict: Dict[str, Any]) -> Dict[str, Any]:
-        """Mappe une row avec stock_item imbriqué depuis les colonnes JOIN"""
-        if row_dict.get('si_id') is not None:
-            row_dict['stock_item'] = {
-                'id': row_dict['si_id'],
-                'name': row_dict['si_name'],
-                'ref': row_dict['si_ref'],
-                'family_code': row_dict['si_family_code'],
-                'sub_family_code': row_dict['si_sub_family_code'],
-                'quantity': row_dict['si_quantity'],
-                'unit': row_dict['si_unit'],
-                'location': row_dict['si_location'],
-                'supplier_refs_count': row_dict.get('si_supplier_refs_count')
-            }
-        else:
-            row_dict['stock_item'] = None
-
-        # Nettoie les colonnes intermédiaires
-        for key in ['si_id', 'si_name', 'si_ref', 'si_family_code',
-                    'si_sub_family_code', 'si_quantity', 'si_unit', 'si_location',
-                    'si_supplier_refs_count']:
-            row_dict.pop(key, None)
-
-        return row_dict
-
-    def _map_with_intervention(self, row_dict: Dict[str, Any]) -> Dict[str, Any]:
-        """Mappe une row avec intervention imbriqué depuis les colonnes JOIN"""
-        if row_dict.get('i_id') is not None:
-            equipement = None
-            if row_dict.get('e_id') is not None:
-                equipement = {
-                    'id': row_dict['e_id'],
-                    'code': row_dict['e_code'],
-                    'name': row_dict['e_name']
-                }
-            row_dict['intervention'] = {
-                'id': row_dict['i_id'],
-                'code': row_dict['i_code'],
-                'title': row_dict['i_title'],
-                'priority': row_dict['i_priority'],
-                'status_actual': row_dict['i_status_actual'],
-                'equipement': equipement
-            }
-        else:
-            row_dict['intervention'] = None
-
-        # Nettoie les colonnes intermédiaires
-        for key in ['i_id', 'i_code', 'i_title', 'i_priority', 'i_status_actual',
-                    'e_id', 'e_code', 'e_name']:
-            row_dict.pop(key, None)
-
-        return row_dict
-
-    def _get_linked_order_lines(self, purchase_request_id: str, conn) -> List[Dict[str, Any]]:
-        """Récupère les lignes de commande liées à une demande d'achat"""
-        try:
-            cur = conn.cursor()
-            cur.execute(
-                """
-                SELECT
-                    solpr.id, solpr.supplier_order_line_id, solpr.quantity as quantity_allocated,
-                    solpr.created_at,
-                    sol.supplier_order_id, sol.stock_item_id, sol.quantity,
-                    sol.unit_price, sol.total_price, sol.quantity_received, sol.is_selected,
-                    sol.quote_received, sol.quote_price,
-                    si.name as stock_item_name, si.ref as stock_item_ref,
-                    so.status as supplier_order_status, so.order_number as supplier_order_number
-                FROM supplier_order_line_purchase_request solpr
-                JOIN supplier_order_line sol ON solpr.supplier_order_line_id = sol.id
-                LEFT JOIN stock_item si ON sol.stock_item_id = si.id
-                LEFT JOIN supplier_order so ON sol.supplier_order_id = so.id
-                WHERE solpr.purchase_request_id = %s
-                ORDER BY solpr.created_at ASC
-                """,
-                (purchase_request_id,)
-            )
-            rows = cur.fetchall()
-            cols = [desc[0] for desc in cur.description]
-            results = []
-            for row in rows:
-                line = dict(zip(cols, row))
-                # Convertit Decimal en float
-                for key in ['unit_price', 'total_price', 'quote_price']:
-                    if line.get(key) is not None and isinstance(line[key], Decimal):
-                        line[key] = float(line[key])
-                results.append(line)
-            return results
-        except Exception:
-            return []
-
-    def get_all(
-        self,
-        limit: int = 100,
-        offset: int = 0,
-        status: Optional[str] = None,
-        intervention_id: Optional[str] = None,
-        urgency: Optional[str] = None
-    ) -> List[Dict[str, Any]]:
-        """Récupère toutes les demandes d'achat avec filtres optionnels"""
-        limit = min(limit, 1000)
-
-        conn = self._get_connection()
-        try:
-            cur = conn.cursor()
-
-            where_clauses = []
-            params: List[Any] = []
-
-            if status:
-                where_clauses.append("pr.status = %s")
-                params.append(status)
-
-            if intervention_id:
-                where_clauses.append("pr.intervention_id = %s")
-                params.append(intervention_id)
-
-            if urgency:
-                where_clauses.append("pr.urgency = %s")
-                params.append(urgency)
-
-            where_sql = ("WHERE " + " AND ".join(where_clauses)
-                         ) if where_clauses else ""
-
-            query = f"""
-                SELECT pr.*,
-                       si.id as si_id, si.name as si_name, si.ref as si_ref,
-                       si.family_code as si_family_code, si.sub_family_code as si_sub_family_code,
-                      si.quantity as si_quantity, si.unit as si_unit, si.location as si_location,
-                      (SELECT COUNT(*) FROM stock_item_supplier WHERE stock_item_id = si.id) as si_supplier_refs_count,
-                       i.id as i_id, i.code as i_code, i.title as i_title,
-                       i.priority as i_priority, i.status_actual as i_status_actual,
-                       m.id as e_id, m.code as e_code, m.name as e_name
-                FROM purchase_request pr
-                LEFT JOIN stock_item si ON pr.stock_item_id = si.id
-                LEFT JOIN intervention i ON pr.intervention_id = i.id
-                LEFT JOIN machine m ON i.machine_id = m.id
-                {where_sql}
-                ORDER BY pr.created_at DESC
-                LIMIT %s OFFSET %s
-            """
-
-            cur.execute(query, (*params, limit, offset))
-            rows = cur.fetchall()
-            cols = [desc[0] for desc in cur.description]
-
-            results = []
-            for row in rows:
-                pr = dict(zip(cols, row))
-                pr = self._map_with_stock_item(pr)
-                pr = self._map_with_intervention(pr)
-                pr['order_lines'] = self._get_linked_order_lines(
-                    str(pr['id']), conn)
-
-                # Calcule le statut dérivé
-                stock_item_id = pr.get('stock_item_id')
-                stock_item = pr.get('stock_item')
-                supplier_refs_count = (
-                    stock_item.get(
-                        'supplier_refs_count') if stock_item else None
-                )
-                status_code = self._derive_status_from_order_lines(
-                    pr['order_lines'],
-                    stock_item_id=str(
-                        stock_item_id) if stock_item_id else None,
-                    supplier_refs_count=supplier_refs_count
-                )
-                pr['derived_status'] = self._map_derived_status(status_code)
-
-                results.append(pr)
-            return results
-        except HTTPException:
-            raise
-        except Exception as e:
-            raise_db_error(e, "opération")
-        finally:
-            release_connection(conn)
-
-    def get_by_id(self, request_id: str) -> Dict[str, Any]:
-        """Récupère une demande d'achat par ID avec stock_item et intervention"""
+    def _exists(self, request_id: str) -> None:
+        """Vérifie qu'une demande existe, lève NotFoundError sinon."""
         conn = self._get_connection()
         try:
             cur = conn.cursor()
             cur.execute(
-                """
-                SELECT pr.*,
-                       si.id as si_id, si.name as si_name, si.ref as si_ref,
-                       si.family_code as si_family_code, si.sub_family_code as si_sub_family_code,
-                      si.quantity as si_quantity, si.unit as si_unit, si.location as si_location,
-                      (SELECT COUNT(*) FROM stock_item_supplier WHERE stock_item_id = si.id) as si_supplier_refs_count,
-                       i.id as i_id, i.code as i_code, i.title as i_title,
-                       i.priority as i_priority, i.status_actual as i_status_actual,
-                       m.id as e_id, m.code as e_code, m.name as e_name
-                FROM purchase_request pr
-                LEFT JOIN stock_item si ON pr.stock_item_id = si.id
-                LEFT JOIN intervention i ON pr.intervention_id = i.id
-                LEFT JOIN machine m ON i.machine_id = m.id
-                WHERE pr.id = %s
-                """,
-                (request_id,)
-            )
-            row = cur.fetchone()
-
-            if not row:
+                "SELECT 1 FROM purchase_request WHERE id = %s", (request_id,))
+            if not cur.fetchone():
                 raise NotFoundError(
                     f"Demande d'achat {request_id} non trouvée")
-
-            cols = [desc[0] for desc in cur.description]
-            result = dict(zip(cols, row))
-            result = self._map_with_stock_item(result)
-            result = self._map_with_intervention(result)
-            result['order_lines'] = self._get_linked_order_lines(
-                request_id, conn)
-
-            # Calcule le statut dérivé
-            stock_item_id = result.get('stock_item_id')
-            stock_item = result.get('stock_item')
-            supplier_refs_count = (
-                stock_item.get('supplier_refs_count') if stock_item else None
-            )
-            status_code = self._derive_status_from_order_lines(
-                result['order_lines'],
-                stock_item_id=str(stock_item_id) if stock_item_id else None,
-                supplier_refs_count=supplier_refs_count
-            )
-            result['derived_status'] = self._map_derived_status(status_code)
-
-            return result
-        except NotFoundError:
-            raise
-        except HTTPException:
-            raise
-        except Exception as e:
-            raise_db_error(e, "opération")
-        finally:
-            release_connection(conn)
-
-    def get_by_intervention(self, intervention_id: str) -> List[Dict[str, Any]]:
-        """Récupère toutes les demandes d'achat liées à une intervention avec stock_item et intervention"""
-        conn = self._get_connection()
-        try:
-            cur = conn.cursor()
-            cur.execute(
-                """
-                SELECT pr.*,
-                       si.id as si_id, si.name as si_name, si.ref as si_ref,
-                       si.family_code as si_family_code, si.sub_family_code as si_sub_family_code,
-                      si.quantity as si_quantity, si.unit as si_unit, si.location as si_location,
-                      (SELECT COUNT(*) FROM stock_item_supplier WHERE stock_item_id = si.id) as si_supplier_refs_count,
-                       i.id as i_id, i.code as i_code, i.title as i_title,
-                       i.priority as i_priority, i.status_actual as i_status_actual,
-                       m.id as e_id, m.code as e_code, m.name as e_name
-                FROM purchase_request pr
-                LEFT JOIN stock_item si ON pr.stock_item_id = si.id
-                LEFT JOIN intervention i ON pr.intervention_id = i.id
-                LEFT JOIN machine m ON i.machine_id = m.id
-                WHERE pr.intervention_id = %s
-                ORDER BY pr.created_at DESC
-                """,
-                (intervention_id,)
-            )
-            rows = cur.fetchall()
-            cols = [desc[0] for desc in cur.description]
-
-            results = []
-            for row in rows:
-                pr = dict(zip(cols, row))
-                pr = self._map_with_stock_item(pr)
-                pr = self._map_with_intervention(pr)
-                pr['order_lines'] = self._get_linked_order_lines(
-                    str(pr['id']), conn)
-
-                # Calcule le statut dérivé
-                stock_item_id = pr.get('stock_item_id')
-                stock_item = pr.get('stock_item')
-                supplier_refs_count = (
-                    stock_item.get(
-                        'supplier_refs_count') if stock_item else None
-                )
-                status_code = self._derive_status_from_order_lines(
-                    pr['order_lines'],
-                    stock_item_id=str(
-                        stock_item_id) if stock_item_id else None,
-                    supplier_refs_count=supplier_refs_count
-                )
-                pr['derived_status'] = self._map_derived_status(status_code)
-
-                results.append(pr)
-            return results
-        except HTTPException:
-            raise
-        except Exception as e:
-            raise_db_error(e, "opération")
         finally:
             release_connection(conn)
 
@@ -385,13 +76,11 @@ class PurchaseRequestRepository:
         finally:
             release_connection(conn)
 
-        # Retourne avec stock_item enrichi
-        return self.get_by_id(request_id)
+        return self.get_detail(request_id)
 
     def update(self, request_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
         """Met à jour une demande d'achat existante"""
-        # Vérifie que la demande existe
-        self.get_by_id(request_id)
+        self._exists(request_id)
 
         conn = self._get_connection()
         try:
@@ -415,7 +104,7 @@ class PurchaseRequestRepository:
                     params.append(data[field])
 
             if not set_clauses:
-                return self.get_by_id(request_id)
+                return self.get_detail(request_id)
 
             set_clauses.append("updated_at = %s")
             params.append(now)
@@ -436,13 +125,11 @@ class PurchaseRequestRepository:
         finally:
             release_connection(conn)
 
-        # Retourne avec stock_item enrichi
-        return self.get_by_id(request_id)
+        return self.get_detail(request_id)
 
     def delete(self, request_id: str) -> bool:
         """Supprime une demande d'achat"""
-        # Vérifie que la demande existe
-        self.get_by_id(request_id)
+        self._exists(request_id)
 
         conn = self._get_connection()
         try:
@@ -542,6 +229,28 @@ class PurchaseRequestRepository:
         total_received = sum(line.get('quantity_received', 0)
                              or 0 for line in order_lines)
 
+        # Rejeté : toutes les lignes sont dans un panier terminal (CANCELLED/CLOSED) sans sélection
+        terminal_statuses = ('CANCELLED', 'CLOSED')
+        all_terminal = all(
+            line.get('supplier_order_status') in terminal_statuses
+            for line in order_lines
+        )
+        if all_terminal and selected_count == 0:
+            return 'REJECTED'
+
+        # Reçu : toutes les lignes en panier terminal avec au moins une sélectionnée
+        # (panier CLOSED + sélection = commande livrée et clôturée)
+        if all_terminal and selected_count > 0:
+            return 'RECEIVED'
+
+        # En chiffrage : le panier a quitté OPEN (SENT/ACK = devis demandé), pas encore de réponse
+        has_locked_order = any(
+            line.get('supplier_order_status') in ('SENT', 'ACK')
+            for line in order_lines
+        )
+        if has_locked_order and selected_count == 0 and quotes_count == 0:
+            return 'CONSULTATION'
+
         return self._derive_status(
             stock_item_id=stock_item_id,
             supplier_refs_count=supplier_refs_count,
@@ -608,6 +317,8 @@ class PurchaseRequestRepository:
                     COALESCE(agg.suppliers_count, 0) AS suppliers_count,
                     COALESCE(agg.total_allocated, 0) AS total_allocated,
                     COALESCE(agg.total_received, 0) AS total_received,
+                    COALESCE(agg.has_locked_order, false) AS has_locked_order,
+                    COALESCE(agg.all_terminal, false) AS all_terminal,
 
                     pr.created_at,
                     pr.updated_at
@@ -621,7 +332,9 @@ class PurchaseRequestRepository:
                         COUNT(DISTINCT CASE WHEN sol.is_selected THEN sol.id END) AS selected_count,
                         COUNT(DISTINCT so.supplier_id) AS suppliers_count,
                         SUM(solpr.quantity) AS total_allocated,
-                        SUM(COALESCE(sol.quantity_received, 0)) AS total_received
+                        SUM(COALESCE(sol.quantity_received, 0)) AS total_received,
+                        BOOL_OR(so.status IN ('SENT', 'ACK')) AS has_locked_order,
+                        BOOL_AND(so.status IN ('CANCELLED', 'CLOSED')) AS all_terminal
                     FROM supplier_order_line_purchase_request solpr
                     JOIN supplier_order_line sol ON solpr.supplier_order_line_id = sol.id
                     JOIN supplier_order so ON sol.supplier_order_id = so.id
@@ -651,6 +364,8 @@ class PurchaseRequestRepository:
                 total_allocated = item.pop('total_allocated', 0) or 0
                 total_received = item.pop('total_received', 0) or 0
                 suppliers_count = item.get('suppliers_count', 0) or 0
+                has_locked_order = item.pop('has_locked_order', False) or False
+                all_terminal = item.pop('all_terminal', False) or False
                 has_order_lines = (
                     quotes_count > 0
                     or selected_count > 0
@@ -658,17 +373,27 @@ class PurchaseRequestRepository:
                     or total_allocated > 0
                 )
 
-                # Calcule le statut dérivé via la fonction centralisée
-                status_code = self._derive_status(
-                    stock_item_id=str(
-                        stock_item_id) if stock_item_id else None,
-                    supplier_refs_count=supplier_refs_count,
-                    has_order_lines=has_order_lines,
-                    quotes_count=quotes_count,
-                    selected_count=selected_count,
-                    total_allocated=total_allocated,
-                    total_received=total_received
-                )
+                # Rejeté : toutes les lignes dans un panier terminal (CANCELLED/CLOSED), aucune sélectionnée
+                if all_terminal and selected_count == 0 and has_order_lines:
+                    status_code = 'REJECTED'
+                # Reçu : toutes les lignes en panier terminal avec au moins une sélectionnée
+                elif all_terminal and selected_count > 0 and has_order_lines:
+                    status_code = 'RECEIVED'
+                # Mode consultation : panier verrouillé (SENT/ACK), sans devis ni sélection
+                elif has_locked_order and selected_count == 0 and quotes_count == 0 and has_order_lines:
+                    status_code = 'CONSULTATION'
+                else:
+                    # Calcule le statut dérivé via la fonction centralisée
+                    status_code = self._derive_status(
+                        stock_item_id=str(
+                            stock_item_id) if stock_item_id else None,
+                        supplier_refs_count=supplier_refs_count,
+                        has_order_lines=has_order_lines,
+                        quotes_count=quotes_count,
+                        selected_count=selected_count,
+                        total_allocated=total_allocated,
+                        total_received=total_received
+                    )
 
                 # Filtre par statut si demandé
                 if status and status_code != status:
@@ -788,6 +513,8 @@ class PurchaseRequestRepository:
                 supplier_refs_count=supplier_refs_count
             )
             data['derived_status'] = self._map_derived_status(status_code)
+            data['is_editable'] = status_code in {
+                'TO_QUALIFY', 'NO_SUPPLIER_REF', 'PENDING_DISPATCH'}
 
             logger.info("Fetched purchase request detail: %s", request_id)
             return data
@@ -1060,8 +787,8 @@ class PurchaseRequestRepository:
         return new_order_id, True
 
     def _dispatch_to_supplier(self, cur, order_id: str, stock_item_id: str,
-                               supplier_ref: str, unit_price, req_id_str: str,
-                               req_quantity: int):
+                              supplier_ref: str, unit_price, req_id_str: str,
+                              req_quantity: int):
         """Crée ou fusionne la ligne de commande et lie la purchase_request."""
         cur.execute(
             """
@@ -1166,11 +893,13 @@ class PurchaseRequestRepository:
                         continue
 
                     # Détermine le mode : préféré trouvé → direct, sinon consultation
-                    has_preferred = supplier_rows[0][3]  # is_preferred du premier
+                    # is_preferred du premier
+                    has_preferred = supplier_rows[0][3]
 
                     if has_preferred:
                         # Mode DIRECT : un seul fournisseur (le préféré)
-                        supplier_id_str, supplier_ref, unit_price, _, supplier_name = supplier_rows[0]
+                        supplier_id_str, supplier_ref, unit_price, _, supplier_name = supplier_rows[
+                            0]
                         supplier_id_str = str(supplier_id_str)
 
                         order_id, was_created = self._find_or_create_order(

@@ -10,6 +10,7 @@ DERIVED_STATUS_CONFIG = {
     'NO_SUPPLIER_REF': {'label': 'Sans fournisseur', 'color': '#F97316'},
     'PENDING_DISPATCH': {'label': 'À dispatcher', 'color': '#A855F7'},
     'OPEN': {'label': 'Mutualisation', 'color': '#6B7280'},
+    'CONSULTATION': {'label': 'En chiffrage', 'color': '#0EA5E9'},
     'QUOTED': {'label': 'Devis reçu', 'color': '#FFA500'},
     'ORDERED': {'label': 'Commandé', 'color': '#3B82F6'},
     'PARTIAL': {'label': 'Partiellement reçu', 'color': '#8B5CF6'},

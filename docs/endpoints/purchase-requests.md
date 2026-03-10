@@ -6,61 +6,23 @@ Demandes d'achat de matériel, liées aux interventions et aux commandes fournis
 
 ---
 
-## `GET /purchase-requests` [LEGACY]
+## `GET /purchase-requests`
 
-Liste toutes les demandes d'achat avec filtres.
+Liste toutes les demandes d'achat avec filtres. Alias de `/list`.
 
 ### Query params
 
-| Param | Type | Défaut | Description |
-|---|---|---|---|
-| `skip` | int | 0 | Offset |
-| `limit` | int | 100 | Max: 1000 |
-| `status` | string | — | Filtrer par [DerivedStatus](../shared-schemas.md#derivedstatus) |
-| `intervention_id` | uuid | — | Filtrer par intervention |
-| `urgency` | string | — | `normal`, `high`, `critical` |
+| Param             | Type   | Défaut | Description                  |
+| ----------------- | ------ | ------ | ---------------------------- |
+| `skip`            | int    | 0      | Offset                       |
+| `limit`           | int    | 100    | Max: 1000                    |
+| `status`          | string | —      | Filtrer par statut dérivé    |
+| `intervention_id` | uuid   | —      | Filtrer par intervention     |
+| `urgency`         | string | —      | `normal`, `high`, `critical` |
 
-### Réponse `200` — PurchaseRequestOut
+### Réponse `200` — `List[PurchaseRequestListItem]`
 
-```json
-[
-  {
-    "id": "uuid",
-    "derived_status": { "code": "PENDING_DISPATCH", "label": "À dispatcher", "color": "#f59e0b" },
-    "stock_item_id": "uuid",
-    "stock_item": { "id": "uuid", "name": "Roulement SKF 6205", "ref": "OUT-ROUL-SKF-6205", "..." : "..." },
-    "item_label": "Roulement SKF 6205",
-    "quantity": 2,
-    "unit": "pcs",
-    "requested_by": "Jean Dupont",
-    "urgency": "high",
-    "reason": "Remplacement urgent",
-    "notes": null,
-    "workshop": "Atelier 1",
-    "intervention_id": "uuid",
-    "intervention": {
-      "id": "uuid", "code": "CN001-REA-20260113-QC", "title": "Remplacement roulement",
-      "priority": "urgent", "status_actual": "en_cours",
-      "equipement": { "id": "uuid", "code": "EQ-001", "name": "Scie principale" }
-    },
-    "quantity_requested": 2,
-    "quantity_approved": null,
-    "urgent": true,
-    "requester_name": "Jean Dupont",
-    "approver_name": null,
-    "approved_at": null,
-    "order_lines": [],
-    "created_at": "2026-01-13T10:00:00",
-    "updated_at": "2026-01-13T10:00:00"
-  }
-]
-```
-
-> `stock_item` : [StockItemListItem](../shared-schemas.md#stockitemlistitem) — hydraté si `stock_item_id` non null
->
-> `intervention` : [InterventionInfo](../shared-schemas.md#interventioninfo) — hydraté si `intervention_id` non null
->
-> `order_lines` : tableau de [LinkedOrderLine](../shared-schemas.md#linkedorderline)
+Même structure que `GET /purchase-requests/list`.
 
 ---
 
@@ -72,15 +34,20 @@ Retourne tous les statuts dérivés possibles avec leur label et couleur. Utile 
 
 ```json
 [
-  { "code": "TO_QUALIFY",       "label": "À qualifier",          "color": "#F59E0B" },
-  { "code": "NO_SUPPLIER_REF",  "label": "Sans fournisseur",     "color": "#F97316" },
-  { "code": "PENDING_DISPATCH", "label": "À dispatcher",         "color": "#A855F7" },
-  { "code": "OPEN",             "label": "Mutualisation",        "color": "#6B7280" },
-  { "code": "QUOTED",           "label": "Devis reçu",           "color": "#FFA500" },
-  { "code": "ORDERED",          "label": "Commandé",             "color": "#3B82F6" },
-  { "code": "PARTIAL",          "label": "Partiellement reçu",   "color": "#8B5CF6" },
-  { "code": "RECEIVED",         "label": "Reçu",                 "color": "#10B981" },
-  { "code": "REJECTED",         "label": "Refusé",               "color": "#EF4444" }
+  { "code": "TO_QUALIFY", "label": "À qualifier", "color": "#F59E0B" },
+  {
+    "code": "NO_SUPPLIER_REF",
+    "label": "Sans fournisseur",
+    "color": "#F97316"
+  },
+  { "code": "PENDING_DISPATCH", "label": "À dispatcher", "color": "#A855F7" },
+  { "code": "OPEN", "label": "Mutualisation", "color": "#6B7280" },
+  { "code": "CONSULTATION", "label": "En chiffrage", "color": "#0EA5E9" },
+  { "code": "QUOTED", "label": "Devis reçu", "color": "#FFA500" },
+  { "code": "ORDERED", "label": "Commandé", "color": "#3B82F6" },
+  { "code": "PARTIAL", "label": "Partiellement reçu", "color": "#8B5CF6" },
+  { "code": "RECEIVED", "label": "Reçu", "color": "#10B981" },
+  { "code": "REJECTED", "label": "Refusé", "color": "#EF4444" }
 ]
 ```
 
@@ -92,17 +59,23 @@ Retourne tous les statuts dérivés possibles avec leur label et couleur. Utile 
 
 Le statut d'une demande d'achat est **calculé dynamiquement** à chaque lecture, jamais stocké en base. Il dépend de la présence d'un article stock, des références fournisseurs et de l'avancement des lignes de commande.
 
-| Code | Label | Condition |
-|---|---|---|
-| `TO_QUALIFY` | À qualifier | `stock_item_id` est null |
-| `NO_SUPPLIER_REF` | Sans réf. fournisseur | Article ok, aucun fournisseur référencé |
-| `PENDING_DISPATCH` | À dispatcher | Réf. fournisseur ok, aucune ligne de commande |
-| `OPEN` | En attente | Dans une commande, pas de devis |
-| `QUOTED` | Devis reçu | Au moins un devis reçu (`quote_received = true`) |
-| `ORDERED` | Commandé | Au moins une ligne sélectionnée (`is_selected = true`) |
-| `PARTIAL` | Partiellement reçu | Livraison partielle |
-| `RECEIVED` | Reçu | Livraison complète |
-| `REJECTED` | Refusé | Demande annulée |
+| Code               | Label                 | Condition                                                                                       |
+| ------------------ | --------------------- | ----------------------------------------------------------------------------------------------- |
+| `TO_QUALIFY`       | À qualifier           | `stock_item_id` est null                                                                        |
+| `NO_SUPPLIER_REF`  | Sans réf. fournisseur | Article ok, aucun fournisseur référencé                                                         |
+| `PENDING_DISPATCH` | À dispatcher          | Réf. fournisseur ok, aucune ligne de commande                                                   |
+| `OPEN`             | Mutualisation         | Dans un panier ouvert (`OPEN`), pas de devis                                                    |
+| `CONSULTATION`     | En chiffrage          | Panier verrouillé (`SENT`/`ACK`), sans devis ni sélection                                       |
+| `QUOTED`           | Devis reçu            | Au moins un devis reçu (`quote_received = true`)                                                |
+| `ORDERED`          | Commandé              | Au moins une ligne sélectionnée (`is_selected = true`)                                          |
+| `PARTIAL`          | Partiellement reçu    | Livraison partielle                                                                             |
+| `RECEIVED`         | Reçu                  | Livraison complète                                                                              |
+| `REJECTED`         | Refusé                | Toutes les lignes dans un panier `CANCELLED`/`CLOSED` sans aucune sélection                     |
+| `RECEIVED`         | Reçu                  | Toutes les lignes dans un panier terminal (`CLOSED`/`CANCELLED`) avec au moins une sélectionnée |
+
+> **`CONSULTATION`** : Le panier est verrouillé (`SENT` ou `ACK`, devis envoyé au fournisseur) mais aucun devis n'a encore été renseigné. En attente de retour fournisseur. Progresse vers `QUOTED` dès qu'un devis est saisi (`quote_received = true`).
+
+> **`REJECTED`** : Statut calculé automatiquement. Se déclenche quand toutes les lignes de commande liées à la DA appartiennent à des paniers terminaux (`CANCELLED` ou `CLOSED`) et qu'aucune n'a été sélectionnée (`is_selected = false`). Cela couvre aussi le cas des **lignes jumelles** (mode consultation, plusieurs fournisseurs) où aucune offre n'a été retenue.
 
 > Pour filtrer par statut : `GET /purchase-requests/list?status=PENDING_DISPATCH` ou l'endpoint dédié `GET /purchase-requests/status/PENDING_DISPATCH`.
 
@@ -121,7 +94,11 @@ Liste optimisée légère pour tableaux. Payload ~95% plus léger.
     "item_label": "Roulement SKF 6205",
     "quantity": 2,
     "unit": "pcs",
-    "derived_status": { "code": "PENDING_DISPATCH", "label": "À dispatcher", "color": "#f59e0b" },
+    "derived_status": {
+      "code": "PENDING_DISPATCH",
+      "label": "À dispatcher",
+      "color": "#f59e0b"
+    },
     "stock_item_id": "uuid",
     "stock_item_ref": "OUT-ROUL-SKF-6205",
     "stock_item_name": "Roulement SKF 6205",
@@ -152,7 +129,12 @@ Détail complet avec contexte enrichi : intervention + machine, stock item avec 
   "item_label": "Roulement SKF 6205",
   "quantity": 2,
   "unit": "pcs",
-  "derived_status": { "code": "QUOTED", "label": "Devis reçu", "color": "#FFA500" },
+  "derived_status": {
+    "code": "QUOTED",
+    "label": "Devis reçu",
+    "color": "#FFA500"
+  },
+  "is_editable": false,
 
   "stock_item": {
     "id": "uuid",
@@ -188,12 +170,12 @@ Détail complet avec contexte enrichi : intervention + machine, stock item avec 
       "supplier_order_id": "uuid",
       "supplier_order_status": "OPEN",
       "supplier_order_number": "CMD-2026-0042",
-      "unit_price": 12.50,
-      "total_price": 25.00,
+      "unit_price": 12.5,
+      "total_price": 25.0,
       "quantity_received": 0,
       "is_selected": false,
       "quote_received": true,
-      "quote_price": 12.50,
+      "quote_price": 12.5,
       "quote_received_at": "2026-01-15T10:30:00",
       "manufacturer": "SKF",
       "manufacturer_ref": "6205-2RS",
@@ -226,21 +208,22 @@ Détail complet avec contexte enrichi : intervention + machine, stock item avec 
 }
 ```
 
-| Champ | Description |
-|---|---|
-| `stock_item.supplier_refs_count` | Nombre de fournisseurs référencés pour cet article |
-| `intervention.equipement` | Machine liée à l'intervention (`null` si aucune) |
-| `order_lines[].supplier` | Fournisseur complet hydraté depuis `supplier_order` |
-| `order_lines[].quote_received` | `true` si devis reçu pour cette ligne |
-| `order_lines[].is_selected` | `true` si ligne retenue pour commande ferme |
-| `order_lines[].quantity_received` | Quantité livrée (0 = pas encore reçu) |
+| Champ                             | Description                                                                                              |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `is_editable`                     | `true` si la DA peut encore être modifiée (statut `TO_QUALIFY`, `NO_SUPPLIER_REF` ou `PENDING_DISPATCH`) |
+| `stock_item.supplier_refs_count`  | Nombre de fournisseurs référencés pour cet article                                                       |
+| `intervention.equipement`         | Machine liée à l'intervention (`null` si aucune)                                                         |
+| `order_lines[].supplier`          | Fournisseur complet hydraté depuis `supplier_order`                                                      |
+| `order_lines[].quote_received`    | `true` si devis reçu pour cette ligne                                                                    |
+| `order_lines[].is_selected`       | `true` si ligne retenue pour commande ferme                                                              |
+| `order_lines[].quantity_received` | Quantité livrée (0 = pas encore reçu)                                                                    |
 
 ### Erreurs
 
-| Code | Cas |
-|---|---|
-| 404 | Demande introuvable |
-| 500 | Erreur base de données |
+| Code | Cas                    |
+| ---- | ---------------------- |
+| 404  | Demande introuvable    |
+| 500  | Erreur base de données |
 
 ---
 
@@ -250,11 +233,11 @@ Statistiques agrégées pour dashboards.
 
 ### Query params
 
-| Param | Type | Description |
-|---|---|---|
-| `start_date` | date | Début (défaut: 3 mois) |
-| `end_date` | date | Fin (défaut: aujourd'hui) |
-| `group_by` | string | Regroupement |
+| Param        | Type   | Description               |
+| ------------ | ------ | ------------------------- |
+| `start_date` | date   | Début (défaut: 3 mois)    |
+| `end_date`   | date   | Fin (défaut: aujourd'hui) |
+| `group_by`   | string | Regroupement              |
 
 ### Réponse `200`
 
@@ -263,23 +246,37 @@ Statistiques agrégées pour dashboards.
   "period": { "start_date": "2025-11-15", "end_date": "2026-02-15" },
   "totals": { "total_requests": 45, "urgent_count": 8 },
   "by_status": [
-    { "status": "PENDING_DISPATCH", "count": 12, "label": "À dispatcher", "color": "#f59e0b" }
+    {
+      "status": "PENDING_DISPATCH",
+      "count": 12,
+      "label": "À dispatcher",
+      "color": "#f59e0b"
+    }
   ],
   "by_urgency": [
     { "urgency": "normal", "count": 30 },
     { "urgency": "high", "count": 8 }
   ],
   "top_items": [
-    { "item_label": "Roulement SKF 6205", "stock_item_ref": "OUT-ROUL-SKF-6205", "request_count": 5, "total_quantity": 12 }
+    {
+      "item_label": "Roulement SKF 6205",
+      "stock_item_ref": "OUT-ROUL-SKF-6205",
+      "request_count": 5,
+      "total_quantity": 12
+    }
   ]
 }
 ```
 
 ---
 
-## `GET /purchase-requests/{id}` [LEGACY]
+## `GET /purchase-requests/{id}`
 
-Détail d'une demande par ID.
+Détail d'une demande par ID. Alias de `/detail/{id}`.
+
+### Réponse `200` — `PurchaseRequestDetail`
+
+Même structure que `GET /purchase-requests/detail/{id}`.
 
 ---
 
@@ -289,17 +286,17 @@ Liste les demandes filtrées par statut dérivé. Raccourci sémantique vers `GE
 
 ### Path param
 
-| Param | Valeurs acceptées |
-|---|---|
-| `status` | `TO_QUALIFY` · `NO_SUPPLIER_REF` · `PENDING_DISPATCH` · `OPEN` · `QUOTED` · `ORDERED` · `PARTIAL` · `RECEIVED` · `REJECTED` |
+| Param    | Valeurs acceptées                                                                                                                            |
+| -------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `status` | `TO_QUALIFY` · `NO_SUPPLIER_REF` · `PENDING_DISPATCH` · `OPEN` · `CONSULTATION` · `QUOTED` · `ORDERED` · `PARTIAL` · `RECEIVED` · `REJECTED` |
 
 ### Query params
 
-| Param | Type | Défaut | Description |
-|---|---|---|---|
-| `skip` | int | 0 | Offset |
-| `limit` | int | 100 | Max: 1000 |
-| `urgency` | string | — | `normal`, `high`, `critical` |
+| Param     | Type   | Défaut | Description                  |
+| --------- | ------ | ------ | ---------------------------- |
+| `skip`    | int    | 0      | Offset                       |
+| `limit`   | int    | 100    | Max: 1000                    |
+| `urgency` | string | —      | `normal`, `high`, `critical` |
 
 ### Réponse `200` — `List[PurchaseRequestListItem]`
 
@@ -307,27 +304,31 @@ Même structure que `GET /purchase-requests/list`.
 
 ### Erreurs
 
-| Code | Cas |
-|---|---|
-| 400 | Statut inconnu |
+| Code | Cas            |
+| ---- | -------------- |
+| 400  | Statut inconnu |
 
 ---
 
-## `GET /purchase-requests/intervention/{intervention_id}` [LEGACY]
+## `GET /purchase-requests/intervention/{intervention_id}`
 
-Demandes liées à une intervention.
+Demandes liées à une intervention. Alias de `/intervention/{id}/optimized?view=list`.
+
+### Réponse `200` — `List[PurchaseRequestListItem]`
+
+Même structure que `GET /purchase-requests/list`.
 
 ---
 
-## `GET /purchase-requests/intervention/{intervention_id}/optimized` [v1.2.0]
+## `GET /purchase-requests/intervention/{intervention_id}/optimized`
 
 Filtre par intervention avec choix de granularité.
 
 ### Query params
 
-| Param | Type | Description |
-|---|---|---|
-| `view` | string | `list` (léger) ou `full` (complet) |
+| Param  | Type   | Description                                                      |
+| ------ | ------ | ---------------------------------------------------------------- |
+| `view` | string | `list` (léger, défaut) ou `full` (complet avec contexte enrichi) |
 
 ---
 
@@ -355,15 +356,15 @@ Crée une demande d'achat.
 }
 ```
 
-| Champ | Type | Requis | Description |
-|---|---|---|---|
-| `item_label` | string | oui | Libellé de l'article |
-| `quantity` | int | oui | Quantité (> 0) |
-| `stock_item_id` | uuid | non | Article stock normalisé |
-| `unit` | string | non | Unité (pcs, m, kg, etc.) |
-| `intervention_id` | uuid | non | Intervention liée |
-| `urgent` | bool | non | Défaut: false |
-| `requester_name` | string | non | Nom du demandeur |
+| Champ             | Type   | Requis | Description              |
+| ----------------- | ------ | ------ | ------------------------ |
+| `item_label`      | string | oui    | Libellé de l'article     |
+| `quantity`        | int    | oui    | Quantité (> 0)           |
+| `stock_item_id`   | uuid   | non    | Article stock normalisé  |
+| `unit`            | string | non    | Unité (pcs, m, kg, etc.) |
+| `intervention_id` | uuid   | non    | Intervention liée        |
+| `urgent`          | bool   | non    | Défaut: false            |
+| `requester_name`  | string | non    | Nom du demandeur         |
 
 ### Règles métier
 
@@ -372,6 +373,10 @@ Crée une demande d'achat.
 - `derived_status` est calculé automatiquement (voir [DerivedStatus](../shared-schemas.md#derivedstatus))
 - Si `stock_item_id` est `null`, le statut initial est `TO_QUALIFY` — la demande ne peut pas être dispatchée tant qu'un article du catalogue n'est pas associé
 
+### Réponse `201` — `PurchaseRequestDetail`
+
+Retourne le détail complet de la demande créée (même structure que `GET /detail/{id}`).
+
 ---
 
 ## `PUT /purchase-requests/{id}`
@@ -379,6 +384,27 @@ Crée une demande d'achat.
 Met à jour une demande. Champs supplémentaires modifiables : `quantity_approved`, `approver_name`, `approved_at`.
 
 > `status` n'est plus modifiable manuellement.
+
+### Garde métier
+
+La modification est refusée si la DA n'est plus dans un état éditable. Seuls les statuts suivants permettent la mise à jour :
+
+| Statut autorisé    | Label                 |
+| ------------------ | --------------------- |
+| `TO_QUALIFY`       | À qualifier           |
+| `NO_SUPPLIER_REF`  | Sans réf. fournisseur |
+| `PENDING_DISPATCH` | À dispatcher          |
+
+### Réponse `200` — `PurchaseRequestDetail`
+
+Retourne le détail complet de la demande mise à jour.
+
+### Erreurs
+
+| Code | Cas                                                                         |
+| ---- | --------------------------------------------------------------------------- |
+| 404  | Demande introuvable                                                         |
+| 422  | DA non modifiable — statut hors plage éditable (ex : `ORDERED`, `RECEIVED`) |
 
 ---
 
@@ -444,9 +470,9 @@ Pour chaque demande `PENDING_DISPATCH` avec un `stock_item_id` :
 }
 ```
 
-| Champ | Description |
-|---|---|
-| `dispatched_count` | Nombre de demandes dispatchées avec succès |
-| `created_orders` | Nombre de nouvelles `supplier_order` créées |
-| `errors` | Demandes non dispatchées avec raison |
-| `details[].mode` | `direct` (fournisseur préféré) ou `consultation` (tous les fournisseurs) |
+| Champ              | Description                                                              |
+| ------------------ | ------------------------------------------------------------------------ |
+| `dispatched_count` | Nombre de demandes dispatchées avec succès                               |
+| `created_orders`   | Nombre de nouvelles `supplier_order` créées                              |
+| `errors`           | Demandes non dispatchées avec raison                                     |
+| `details[].mode`   | `direct` (fournisseur préféré) ou `consultation` (tous les fournisseurs) |
