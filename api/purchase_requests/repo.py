@@ -267,7 +267,8 @@ class PurchaseRequestRepository:
         offset: int = 0,
         status: Optional[str] = None,
         intervention_id: Optional[str] = None,
-        urgency: Optional[str] = None
+        urgency: Optional[str] = None,
+        ids: Optional[List[str]] = None
     ) -> List[Dict[str, Any]]:
         """
         Liste optimisée avec statut dérivé et compteurs agrégés.
@@ -291,6 +292,11 @@ class PurchaseRequestRepository:
             if urgency:
                 where_clauses.append("pr.urgency = %s")
                 params.append(urgency)
+
+            if ids:
+                placeholders = ','.join(['%s'] * len(ids))
+                where_clauses.append(f"pr.id IN ({placeholders})")
+                params.extend(ids)
 
             where_sql = " AND ".join(where_clauses)
 

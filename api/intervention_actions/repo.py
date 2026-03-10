@@ -66,7 +66,7 @@ class InterventionActionRepository:
         return row_dict
 
     def _get_linked_purchase_requests(self, action_id: str, conn) -> List[Dict[str, Any]]:
-        """Récupère les demandes d'achat liées à une action via PurchaseRequestRepository"""
+        """Récupère les demandes d'achat liées à une action (PurchaseRequestListItem)"""
         try:
             cur = conn.cursor()
             cur.execute(
@@ -84,18 +84,8 @@ class InterventionActionRepository:
 
             # Import ici pour éviter import circulaire
             from api.purchase_requests.repo import PurchaseRequestRepository
-            pr_repo = PurchaseRequestRepository()
-
-            results = []
-            for pr_id in pr_ids:
-                try:
-                    pr = pr_repo.get_by_id(pr_id)
-                    results.append(pr)
-                except Exception:
-                    continue
-            return results
+            return PurchaseRequestRepository().get_list(ids=pr_ids)
         except Exception:
-            # Table peut ne pas exister, retourne liste vide
             return []
 
     def get_all(self) -> List[Dict[str, Any]]:
