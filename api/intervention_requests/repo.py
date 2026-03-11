@@ -77,7 +77,7 @@ class InterventionRequestRepository:
                 f"""
                 SELECT
                     ir.id, ir.code, ir.machine_id,
-                    m.nom AS machine_name,
+                    m.name AS machine_name,
                     ir.demandeur_nom, ir.demandeur_service, ir.description,
                     ir.statut,
                     rs.label AS statut_label, rs.color AS statut_color,
@@ -143,7 +143,7 @@ class InterventionRequestRepository:
                 """
                 SELECT
                     ir.id, ir.code, ir.machine_id,
-                    m.nom AS machine_name,
+                    m.name AS machine_name,
                     ir.demandeur_nom, ir.demandeur_service, ir.description,
                     ir.statut,
                     rs.label AS statut_label, rs.color AS statut_color,

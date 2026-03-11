@@ -2,6 +2,14 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [2.9.1] - 11 mars 2026
+
+### Corrections
+
+- **`POST /intervention-requests` — erreur colonne `machine.nom` inconnue** (`api/intervention_requests/repo.py`)
+  - La colonne de nom de la table `machine` est `name` et non `nom`
+  - Fix : `m.nom AS machine_name` → `m.name AS machine_name` dans `get_list` et `get_by_id`
+
 ## [2.9.0] - 11 mars 2026
 
 ### Nouveautés
