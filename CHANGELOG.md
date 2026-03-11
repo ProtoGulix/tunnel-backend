@@ -2,6 +2,16 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [2.8.8] - 11 mars 2026
+
+### Corrections
+
+- **500 sur `POST /part-templates/{id}/versions`** (`api/part_templates/repo.py`)
+  - `create_new_version` réutilisait le même `id` UUID pour la nouvelle version → violation de PK (`part_template_pkey`)
+  - Fix : génération d'un nouveau UUID (`new_id = uuid4()`) pour chaque nouvelle version
+  - Fix : numéro de version calculé par `MAX(version) WHERE code = ?` (robuste si l'id passé n'est pas la dernière version)
+  - Fix secondaire : `DISTINCT ON (id)` dans `get_all` → `DISTINCT ON (code)` pour ne retourner que la dernière version par code
+
 ## [2.8.7] - 11 mars 2026
 
 ### Nouveautés

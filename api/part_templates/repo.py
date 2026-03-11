@@ -23,10 +23,10 @@ class PartTemplateRepository:
             # Récupérer tous les templates (dernière version)
             cur.execute(
                 """
-                SELECT DISTINCT ON (id) 
+                SELECT DISTINCT ON (code) 
                     id, code, version, label, pattern, is_active
                 FROM part_template
-                ORDER BY id, version DESC
+                ORDER BY code, version DESC
                 """
             )
             template_rows = cur.fetchall()
@@ -350,11 +350,9 @@ class PartTemplateRepository:
         Crée une nouvelle version d'un template existant
         Incrémente automatiquement le numéro de version
         """
-        # Vérifier que le template existe et récupérer la dernière version
+        # Vérifier que le template existe et récupérer son code
         current = self.get_by_id(template_id)
-        new_version = current['version'] + 1
 
-        # Utiliser les nouvelles données ou garder les anciennes
         new_pattern = data.pattern if data.pattern else current['pattern']
         new_fields = data.fields if data.fields else None
 
@@ -366,14 +364,22 @@ class PartTemplateRepository:
         try:
             cur = conn.cursor()
 
-            # Insertion du nouveau template
+            # Récupérer le numéro de version max réel pour ce code
+            cur.execute(
+                "SELECT COALESCE(MAX(version), 0) FROM part_template WHERE code = %s",
+                (current['code'],)
+            )
+            new_version = cur.fetchone()[0] + 1
+            new_id = str(uuid4())
+
+            # Insertion du nouveau template avec un nouvel UUID
             cur.execute(
                 """
                 INSERT INTO part_template (id, code, version, label, pattern, is_active)
                 VALUES (%s, %s, %s, %s, %s, %s)
                 RETURNING id, code, version, label, pattern, is_active
                 """,
-                (template_id, current['code'], new_version, current.get(
+                (new_id, current['code'], new_version, current.get(
                     'label', current['code']), new_pattern, current.get('is_active', True))
             )
 
@@ -395,7 +401,7 @@ class PartTemplateRepository:
                     """,
                     (
                         field_id,
-                        template_id,
+                        new_id,
                         field.key,
                         field.label,
                         field.field_type,
