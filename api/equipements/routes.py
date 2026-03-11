@@ -18,10 +18,12 @@ router = APIRouter(prefix="/equipements", tags=["equipements"], dependencies=[De
 
 @router.get("", response_model=list[EquipementListItem])
 @router.get("/", response_model=list[EquipementListItem])
-async def list_equipements():
+async def list_equipements(
+    search: str | None = Query(None, description="Recherche insensible à la casse sur code, nom ou affectation")
+):
     """Liste tous les équipements - vue légère avec health"""
     repo = EquipementRepository()
-    return repo.get_all()
+    return repo.get_all(search=search)
 
 
 @router.get("/{equipement_id}", response_model=EquipementDetail)

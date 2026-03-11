@@ -14,6 +14,12 @@ Liste tous les équipements avec leur état de santé (léger, cacheable).
 
 Tri par défaut : urgents DESC, ouverts DESC, nom ASC.
 
+### Query params
+
+| Param    | Type   | Défaut | Description                                                       |
+| -------- | ------ | ------ | ----------------------------------------------------------------- |
+| `search` | string | —      | Recherche insensible à la casse sur `code`, `name`, `affectation` |
+
 ### Réponse `200`
 
 ```json

@@ -224,28 +224,30 @@ Crée une nouvelle intervention.
 
 ```json
 {
-  "title": "Remplacement roulement principal",
   "machine_id": "uuid",
   "type_inter": "curatif",
+  "tech_initials": "QC",
+  "title": "Remplacement roulement principal",
   "priority": "urgent",
   "reported_by": "Jean Dupont",
-  "tech_initials": "QC",
   "status_actual": "ouvert",
   "printed_fiche": false,
   "reported_date": "2026-01-13"
 }
 ```
 
+> **Note** : `machine_id`, `type_inter` et `tech_initials` sont requis par le trigger PostgreSQL `trg_interv_code` qui génère le code d'intervention (`{machine.code}-{type_inter}-{YYYYMMDD}-{tech_initials}`). Une erreur DB est levée si l'un d'eux est absent ou si la machine est inconnue.
+
 | Champ           | Type   | Requis | Défaut   | Description                                |
 | --------------- | ------ | ------ | -------- | ------------------------------------------ |
+| `machine_id`    | uuid   | **oui**| —        | Équipement concerné (trigger exige une machine existante) |
+| `type_inter`    | string | **oui**| —        | Type d'intervention (ex: `curatif`, `preventif`) — intégré dans le code |
+| `tech_initials` | string | **oui**| —        | Initiales du technicien — intégrées dans le code |
 | `title`         | string | non    | null     | Titre de l'intervention                    |
-| `machine_id`    | uuid   | non    | null     | Équipement concerné                        |
-| `type_inter`    | string | non    | null     | Type (curatif, preventif, etc.)            |
 | `priority`      | string | non    | null     | `faible`, `normale`, `important`, `urgent` |
 | `reported_by`   | string | non    | null     | Nom du signaleur                           |
-| `tech_initials` | string | non    | null     | Initiales du technicien                    |
-| `status_actual` | string | non    | `ouvert` | Code statut initial                        |
-| `printed_fiche` | bool   | non    | false    | Fiche imprimée ?                           |
+| `status_actual` | string | non    | `ouvert` | Code statut initial (géré par trigger)     |
+| `printed_fiche` | bool   | non    | `false`  | Fiche imprimée ?                           |
 | `reported_date` | date   | non    | null     | Date de signalement                        |
 
 ### Réponse `201`

@@ -18,12 +18,19 @@ class EquipementRepository:
         """Retourne une sous-requête paramétrée pour l'ID du statut fermé"""
         return "(SELECT id FROM intervention_status_ref WHERE code = %s LIMIT 1)"
 
-    def get_all(self) -> List[Dict[str, Any]]:
+    def get_all(self, search: str | None = None) -> List[Dict[str, Any]]:
         """Récupère tous les équipements - liste légère avec health"""
         conn = self._get_connection()
         try:
             cur = conn.cursor()
             csq = self._closed_status_subquery()
+
+            search_clause = ""
+            search_params: list = []
+            if search:
+                search_clause = " WHERE (m.code ILIKE %s OR m.name ILIKE %s OR m.affectation ILIKE %s)"
+                like = f"%{search}%"
+                search_params = [like, like, like]
 
             query = f"""
                 SELECT
@@ -39,11 +46,12 @@ class EquipementRepository:
                 FROM machine m
                 LEFT JOIN intervention i ON i.machine_id = m.id
                 LEFT JOIN equipement_class ec ON ec.id = m.equipement_class_id
+                {search_clause}
                 GROUP BY m.id, ec.id, ec.code, ec.label
                 ORDER BY urgent_count DESC, open_interventions_count DESC, m.name ASC
             """
 
-            cur.execute(query, (CLOSED_STATUS_CODE, CLOSED_STATUS_CODE))
+            cur.execute(query, (*search_params, CLOSED_STATUS_CODE, CLOSED_STATUS_CODE))
             rows = cur.fetchall()
             cols = [desc[0] for desc in cur.description]
             equipements = [dict(zip(cols, row)) for row in rows]

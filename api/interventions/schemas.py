@@ -8,8 +8,24 @@ from api.intervention_status_log.schemas import InterventionStatusLogOut
 from api.equipements.schemas import EquipementDetail
 
 
+class InterventionCreate(BaseModel):
+    """Schéma d'entrée pour créer une intervention (champs requis par le trigger)"""
+    machine_id: UUID
+    type_inter: str
+    tech_initials: str
+    title: Optional[str] = None
+    priority: Optional[str] = None
+    reported_by: Optional[str] = None
+    status_actual: Optional[str] = None
+    printed_fiche: Optional[bool] = None
+    reported_date: Optional[date] = None
+
+    class Config:
+        from_attributes = True
+
+
 class InterventionIn(BaseModel):
-    """Schéma d'entrée pour créer/modifier une intervention"""
+    """Schéma d'entrée pour modifier une intervention (tous les champs optionnels)"""
     title: Optional[str] = None
     machine_id: Optional[UUID] = None
     type_inter: Optional[str] = None
