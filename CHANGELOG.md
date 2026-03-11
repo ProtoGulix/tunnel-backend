@@ -2,6 +2,20 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [2.9.0] - 11 mars 2026
+
+### Nouveautés
+
+- **Module Demandes d'Intervention** (`api/intervention_requests/`)
+  - Nouveau module complet : `GET /intervention-requests`, `GET /intervention-requests/{id}`, `POST /intervention-requests`, `POST /intervention-requests/{id}/transition`
+  - Référentiel statuts : `GET /intervention-requests/statuses`
+  - Code DI-YYYY-NNNN généré automatiquement par trigger DB
+  - Statut initial `nouvelle` posé automatiquement à la création (trigger)
+  - Transitions contrôlées : `nouvelle` → `en_attente/acceptee/rejetee`, `en_attente` → `acceptee/rejetee`, `acceptée` → `cloturee`
+  - Motif obligatoire pour le statut `rejetee`
+  - Historique des transitions inclus dans le détail
+  - Filtres liste : `statut`, `machine_id`, `search` (code, nom demandeur, description)
+
 ## [2.8.9] - 11 mars 2026
 
 ### Nouveautés

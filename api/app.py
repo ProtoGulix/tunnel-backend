@@ -33,6 +33,7 @@ from api.stock_item_suppliers.routes import router as stock_item_supplier_router
 from api.manufacturer_items.routes import router as manufacturer_item_router
 from api.exports.routes import router as exports_router
 from api.users.routes import router as user_router
+from api.intervention_requests.routes import router as intervention_request_router
 from api.errors.handlers import register_error_handlers
 from api.health import health_check
 
@@ -131,6 +132,7 @@ app.include_router(stock_item_supplier_router)
 app.include_router(manufacturer_item_router)
 app.include_router(exports_router)
 app.include_router(user_router)
+app.include_router(intervention_request_router)
 app.include_router(auth_router)
 
 
