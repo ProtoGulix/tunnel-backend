@@ -20,6 +20,8 @@ class StockItemSupplierIn(BaseModel):
         default=False, description="Fournisseur préféré")
     manufacturer_item_id: Optional[UUID] = Field(
         default=None, description="ID de l'article fabricant")
+    product_url: Optional[str] = Field(
+        default=None, description="URL fiche produit chez le fournisseur")
 
     class Config:
         from_attributes = True
@@ -39,6 +41,8 @@ class StockItemSupplierUpdate(BaseModel):
         default=None, description="Fournisseur préféré")
     manufacturer_item_id: Optional[UUID] = Field(
         default=None, description="ID de l'article fabricant")
+    product_url: Optional[str] = Field(
+        default=None, description="URL fiche produit chez le fournisseur")
 
     class Config:
         from_attributes = True
@@ -57,6 +61,8 @@ class StockItemSupplierOut(BaseModel):
     manufacturer_item_id: Optional[UUID] = Field(default=None)
     manufacturer_item: Optional[ManufacturerItemOut] = Field(
         default=None, description="Détail référence fabricant")
+    product_url: Optional[str] = Field(
+        default=None, description="URL fiche produit chez le fournisseur")
     # Enrichissement
     stock_item_name: Optional[str] = Field(
         default=None, description="Nom de l'article")
@@ -84,6 +90,7 @@ class StockItemSupplierListItem(BaseModel):
     delivery_time_days: Optional[int] = Field(default=None)
     is_preferred: Optional[bool] = Field(default=False)
     manufacturer_item: Optional[ManufacturerItemOut] = Field(default=None)
+    product_url: Optional[str] = Field(default=None)
     stock_item_name: Optional[str] = Field(default=None)
     stock_item_ref: Optional[str] = Field(default=None)
     supplier_name: Optional[str] = Field(default=None)

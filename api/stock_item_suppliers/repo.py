@@ -72,7 +72,7 @@ class StockItemSupplierRepository:
                 SELECT
                     sis.id, sis.stock_item_id, sis.supplier_id, sis.supplier_ref,
                     sis.unit_price, sis.min_order_quantity, sis.delivery_time_days,
-                    sis.is_preferred, sis.manufacturer_item_id,
+                    sis.is_preferred, sis.manufacturer_item_id, sis.product_url,
                     si.name as stock_item_name, si.ref as stock_item_ref,
                     s.name as supplier_name, s.code as supplier_code,
                     mi.id as mi_id, mi.manufacturer_name as mi_manufacturer_name,
@@ -257,8 +257,9 @@ class StockItemSupplierRepository:
                 """
                 INSERT INTO stock_item_supplier
                 (id, stock_item_id, supplier_id, supplier_ref, unit_price,
-                 min_order_quantity, delivery_time_days, is_preferred, manufacturer_item_id)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                 min_order_quantity, delivery_time_days, is_preferred, manufacturer_item_id,
+                 product_url)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     ref_id,
@@ -270,7 +271,8 @@ class StockItemSupplierRepository:
                     data.get('delivery_time_days'),
                     data.get('is_preferred', False),
                     str(data['manufacturer_item_id']) if data.get(
-                        'manufacturer_item_id') else None
+                        'manufacturer_item_id') else None,
+                    data.get('product_url')
                 )
             )
             conn.commit()
@@ -316,7 +318,7 @@ class StockItemSupplierRepository:
             updatable_fields = [
                 'stock_item_id', 'supplier_id', 'supplier_ref', 'unit_price',
                 'min_order_quantity', 'delivery_time_days', 'is_preferred',
-                'manufacturer_item_id'
+                'manufacturer_item_id', 'product_url'
             ]
 
             set_clauses = []

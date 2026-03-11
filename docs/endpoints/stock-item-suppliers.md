@@ -112,7 +112,8 @@ Crée une référence fournisseur.
   "min_order_quantity": 5,
   "delivery_time_days": 3,
   "is_preferred": false,
-  "manufacturer_item_id": "uuid"
+  "manufacturer_item_id": "uuid",
+  "product_url": "https://www.example.com/product/P1115070"
 }
 ```
 
@@ -126,6 +127,7 @@ Crée une référence fournisseur.
 | `delivery_time_days`   | int    | non    | Délai de livraison en jours                                                                 |
 | `is_preferred`         | bool   | non    | Défaut: `false`. Ne peut être `true` que si aucun préféré n'existe déjà pour cet article    |
 | `manufacturer_item_id` | uuid   | non    | Ref fabricant telle que référencée par ce fournisseur (peut différer de celle de l'article) |
+| `product_url`          | string | non    | URL fiche produit chez le fournisseur                                                       |
 
 > Le détail complet de la référence fabricant est retourné en objet embarqué `manufacturer_item` dans toutes les réponses. Voir [Manufacturer Items](manufacturer-items.md).
 
@@ -155,6 +157,7 @@ Met à jour une référence fournisseur existante.
 | `delivery_time_days`   | int    | Délai de livraison en jours   |
 | `is_preferred`         | bool   | Fournisseur préféré           |
 | `manufacturer_item_id` | uuid   | Article fabricant lié         |
+| `product_url`          | string | URL fiche produit             |
 
 > `stock_item_id` et `supplier_id` sont **immutables** après création.
 

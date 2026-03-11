@@ -2,6 +2,15 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [2.8.7] - 11 mars 2026
+
+### Nouveautés
+
+- **Champ `product_url` sur les références fournisseurs** (`api/stock_item_suppliers/`)
+  - Nouveau champ `product_url TEXT` ajouté à la table `stock_item_supplier` (DB v1.6.1)
+  - Disponible en lecture (`GET /stock-item-suppliers`, `GET /stock-item-suppliers/{id}`, routes `/stock-item/...` et `/supplier/...`)
+  - Disponible en écriture (`POST /stock-item-suppliers`, `PUT /stock-item-suppliers/{id}`)
+
 ## [2.8.6] - 10 mars 2026
 
 ### Corrections
