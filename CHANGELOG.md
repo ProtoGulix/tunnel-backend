@@ -2,6 +2,22 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [2.9.2] - 11 mars 2026
+
+### Nouveautés
+
+- **Recherche sur `GET /equipements`** (`api/equipements/routes.py`, `api/equipements/repo.py`)
+  - Nouveau query param `search` : recherche insensible à la casse (`ILIKE`) sur `code`, `name` et `affectation`
+  - Identique au comportement des autres endpoints de liste (intervention-requests, etc.)
+
+### Corrections
+
+- **Validation champs requis sur `POST /interventions`** (`api/interventions/schemas.py`, `api/interventions/routes.py`)
+  - `machine_id`, `type_inter` et `tech_initials` sont désormais **requis** au niveau FastAPI (422 si absent)
+  - Avant : tous les champs étaient `Optional` → payload invalide acceptée, code généré corrompu par le trigger
+  - Le trigger `trg_interv_code` génère `{machine.code}-{type_inter}-{YYYYMMDD}-{tech_initials}` — ces trois champs sont indispensables
+  - Nouveau schema `InterventionCreate` pour le POST ; `InterventionIn` (tout optionnel) conservé pour le PUT
+
 ## [2.9.1] - 11 mars 2026
 
 ### Corrections
