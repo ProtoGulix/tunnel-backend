@@ -26,7 +26,8 @@ Liste toutes les références fabricants.
     {
       "id": "uuid",
       "manufacturer_name": "SKF",
-      "manufacturer_ref": "6205-2RS"
+      "manufacturer_ref": "6205-2RS",
+      "designation": "Roulement à billes rangée simple"
     }
   ],
   "pagination": {
@@ -98,6 +99,7 @@ Crée une nouvelle référence fabricant.
 | ------------------- | ------ | ------ | -------------------------------- |
 | `manufacturer_name` | string | oui    | Nom du fabricant/constructeur    |
 | `manufacturer_ref`  | string | non    | Référence catalogue du fabricant |
+| `designation`       | string | non    | Désignation / libellé du produit |
 
 ### Réponse `201` — ManufacturerItemOut
 
@@ -113,6 +115,7 @@ Met à jour partiellement une référence fabricant.
 | ------------------- | ------ | -------------------------------- |
 | `manufacturer_name` | string | Nom du fabricant                 |
 | `manufacturer_ref`  | string | Référence catalogue du fabricant |
+| `designation`       | string | Désignation / libellé du produit |
 
 ### Réponse `200` — ManufacturerItemOut
 
@@ -144,7 +147,8 @@ Utilisé dans la liste et en objet embarqué dans `StockItemSupplierOut`.
 {
   "id": "uuid",
   "manufacturer_name": "string",
-  "manufacturer_ref": "string | null"
+  "manufacturer_ref": "string | null",
+  "designation": "string | null"
 }
 ```
 

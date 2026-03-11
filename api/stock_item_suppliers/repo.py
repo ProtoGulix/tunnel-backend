@@ -28,10 +28,11 @@ class StockItemSupplierRepository:
                 'id': row['mi_id'],
                 'manufacturer_name': row.get('mi_manufacturer_name'),
                 'manufacturer_ref': row.get('mi_manufacturer_ref'),
+                'designation': row.get('mi_designation'),
             }
         else:
             row['manufacturer_item'] = None
-        for key in ['mi_id', 'mi_manufacturer_name', 'mi_manufacturer_ref']:
+        for key in ['mi_id', 'mi_manufacturer_name', 'mi_manufacturer_ref', 'mi_designation']:
             row.pop(key, None)
         return row
 
@@ -76,7 +77,7 @@ class StockItemSupplierRepository:
                     si.name as stock_item_name, si.ref as stock_item_ref,
                     s.name as supplier_name, s.code as supplier_code,
                     mi.id as mi_id, mi.manufacturer_name as mi_manufacturer_name,
-                    mi.manufacturer_ref as mi_manufacturer_ref
+                    mi.manufacturer_ref as mi_manufacturer_ref, mi.designation as mi_designation
                 FROM stock_item_supplier sis
                 LEFT JOIN stock_item si ON sis.stock_item_id = si.id
                 LEFT JOIN supplier s ON sis.supplier_id = s.id
@@ -110,7 +111,7 @@ class StockItemSupplierRepository:
                     si.name as stock_item_name, si.ref as stock_item_ref,
                     s.name as supplier_name, s.code as supplier_code,
                     mi.id as mi_id, mi.manufacturer_name as mi_manufacturer_name,
-                    mi.manufacturer_ref as mi_manufacturer_ref
+                    mi.manufacturer_ref as mi_manufacturer_ref, mi.designation as mi_designation
                 FROM stock_item_supplier sis
                 LEFT JOIN stock_item si ON sis.stock_item_id = si.id
                 LEFT JOIN supplier s ON sis.supplier_id = s.id
@@ -148,7 +149,7 @@ class StockItemSupplierRepository:
                     si.name as stock_item_name, si.ref as stock_item_ref,
                     s.name as supplier_name, s.code as supplier_code,
                     mi.id as mi_id, mi.manufacturer_name as mi_manufacturer_name,
-                    mi.manufacturer_ref as mi_manufacturer_ref
+                    mi.manufacturer_ref as mi_manufacturer_ref, mi.designation as mi_designation
                 FROM stock_item_supplier sis
                 LEFT JOIN stock_item si ON sis.stock_item_id = si.id
                 LEFT JOIN supplier s ON sis.supplier_id = s.id
@@ -181,7 +182,7 @@ class StockItemSupplierRepository:
                     si.name as stock_item_name, si.ref as stock_item_ref,
                     s.name as supplier_name, s.code as supplier_code,
                     mi.id as mi_id, mi.manufacturer_name as mi_manufacturer_name,
-                    mi.manufacturer_ref as mi_manufacturer_ref
+                    mi.manufacturer_ref as mi_manufacturer_ref, mi.designation as mi_designation
                 FROM stock_item_supplier sis
                 LEFT JOIN stock_item si ON sis.stock_item_id = si.id
                 LEFT JOIN supplier s ON sis.supplier_id = s.id

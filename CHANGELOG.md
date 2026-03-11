@@ -2,6 +2,14 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [2.8.9] - 11 mars 2026
+
+### Nouveautés
+
+- **Champ `designation` sur les références fabricants** (`api/manufacturer_items/`)
+  - Nouveau champ `designation TEXT` disponible en lecture et en écriture
+  - Exposé dans `ManufacturerItemOut`, `ManufacturerItemIn`, et l'objet embarqué `manufacturer_item` retourné par les routes `/stock-item-suppliers`
+
 ## [2.8.8] - 11 mars 2026
 
 ### Corrections

@@ -9,6 +9,8 @@ class ManufacturerItemIn(BaseModel):
                                    description="Nom du fabricant/constructeur")
     manufacturer_ref: Optional[str] = Field(
         default=None, description="Référence catalogue fabricant")
+    designation: Optional[str] = Field(
+        default=None, description="Désignation / libellé du produit")
 
     class Config:
         from_attributes = True
@@ -19,6 +21,7 @@ class ManufacturerItemOut(BaseModel):
     id: UUID
     manufacturer_name: str
     manufacturer_ref: Optional[str] = Field(default=None)
+    designation: Optional[str] = Field(default=None)
 
     class Config:
         from_attributes = True

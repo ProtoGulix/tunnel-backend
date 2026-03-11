@@ -28,7 +28,7 @@ class ManufacturerItemRepository:
             params += [limit, offset]
             cur.execute(
                 f"""
-                SELECT id, manufacturer_name, manufacturer_ref
+                SELECT id, manufacturer_name, manufacturer_ref, designation
                 FROM manufacturer_item
                 {where}
                 ORDER BY manufacturer_name ASC
@@ -72,7 +72,7 @@ class ManufacturerItemRepository:
         try:
             cur = conn.cursor()
             cur.execute(
-                "SELECT id, manufacturer_name, manufacturer_ref FROM manufacturer_item WHERE id = %s",
+                "SELECT id, manufacturer_name, manufacturer_ref, designation FROM manufacturer_item WHERE id = %s",
                 (item_id,)
             )
             row = cur.fetchone()
@@ -135,10 +135,10 @@ class ManufacturerItemRepository:
             item_id = str(uuid4())
             cur.execute(
                 """
-                INSERT INTO manufacturer_item (id, manufacturer_name, manufacturer_ref)
-                VALUES (%s, %s, %s)
+                INSERT INTO manufacturer_item (id, manufacturer_name, manufacturer_ref, designation)
+                VALUES (%s, %s, %s, %s)
                 """,
-                (item_id, manufacturer_name, data.get('manufacturer_ref'))
+                (item_id, manufacturer_name, data.get('manufacturer_ref'), data.get('designation'))
             )
             conn.commit()
             logger.info("Référence fabricant créée: %s", item_id)
@@ -156,7 +156,7 @@ class ManufacturerItemRepository:
         """Met à jour partiellement une référence fabricant"""
         self.get_by_id(item_id)
 
-        updatable = ['manufacturer_name', 'manufacturer_ref']
+        updatable = ['manufacturer_name', 'manufacturer_ref', 'designation']
         updates = {k: v for k, v in data.items() if k in updatable}
 
         if not updates:
