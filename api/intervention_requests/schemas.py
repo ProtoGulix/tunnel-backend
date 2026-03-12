@@ -3,6 +3,8 @@ from typing import Optional, List
 from datetime import datetime
 from uuid import UUID
 
+from api.equipements.schemas import EquipementListItem
+
 
 class RequestStatusRef(BaseModel):
     code: str
@@ -42,14 +44,14 @@ class StatusLogEntry(BaseModel):
 class InterventionRequestListItem(BaseModel):
     id: UUID
     code: str
-    machine_id: UUID
-    machine_name: Optional[str] = None
+    equipement: Optional[EquipementListItem] = None
     demandeur_nom: str
     demandeur_service: Optional[str] = None
     description: str
     statut: str
     statut_label: Optional[str] = None
     statut_color: Optional[str] = None
+    intervention_id: Optional[UUID] = None
     created_at: datetime
     updated_at: datetime
 
@@ -65,3 +67,8 @@ class StatusTransitionIn(BaseModel):
     status_to: str = Field(..., description="Nouveau statut cible")
     notes: Optional[str] = Field(default=None, description="Motif ou commentaire (obligatoire pour rejetee)")
     changed_by: Optional[UUID] = Field(default=None, description="UUID de l'utilisateur Directus")
+    # Champs pour la création d'intervention lors de l'acceptation (status_to = acceptee)
+    type_inter: Optional[str] = Field(default=None, description="Type d'intervention (obligatoire pour acceptee)")
+    tech_initials: Optional[str] = Field(default=None, description="Initiales du technicien (obligatoire pour acceptee)")
+    priority: Optional[str] = Field(default=None, description="Priorité de l'intervention")
+    reported_date: Optional[str] = Field(default=None, description="Date de signalement (YYYY-MM-DD)")

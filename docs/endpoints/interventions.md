@@ -2,7 +2,9 @@
 
 Gestion des interventions de maintenance. Chaque intervention est liée à un équipement et possède des actions, des logs de statut et des statistiques.
 
-> Voir aussi : [Actions](intervention-actions.md) | [Status Logs](intervention-status-log.md) | [Purchase Requests](purchase-requests.md)
+Une intervention peut être créée manuellement via `POST /interventions`, ou **automatiquement depuis une demande d'intervention** lors de la transition vers `acceptee`. Dans ce cas, le champ `request_id` est renseigné.
+
+> Voir aussi : [Actions](intervention-actions.md) | [Status Logs](intervention-status-log.md) | [Purchase Requests](purchase-requests.md) | [Intervention Requests](intervention-requests.md)
 
 ---
 
@@ -51,6 +53,7 @@ Liste les interventions avec filtres, tri et pagination.
     "updated_by": "uuid",
     "printed_fiche": false,
     "reported_date": "2026-01-13",
+    "request_id": "uuid-de-la-demande-origine",
     "stats": {
       "action_count": 3,
       "total_time": 4.5,
@@ -62,6 +65,10 @@ Liste les interventions avec filtres, tri et pagination.
   }
 ]
 ```
+
+| Champ        | Description                                                                                      |
+| ------------ | ------------------------------------------------------------------------------------------------ |
+| `request_id` | UUID de la demande d'intervention (`intervention_request`) à l'origine de cette intervention. `null` si l'intervention a été créée manuellement |
 
 > **Note** : `actions` et `status_logs` sont toujours `[]` en liste. Utilisez `GET /interventions/{id}` pour les obtenir.
 
@@ -131,6 +138,7 @@ Détail complet d'une intervention. **La structure est différente de la liste**
   "updated_by": "uuid",
   "printed_fiche": false,
   "reported_date": "2026-01-13",
+  "request_id": "uuid-de-la-demande-origine",
   "stats": {
     "action_count": 3,
     "total_time": 4.5,
@@ -204,6 +212,7 @@ Détail complet d'une intervention. **La structure est différente de la liste**
 | Champ                  | Liste                                                                   | Détail                                                                                                                                                      |
 | ---------------------- | ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `equipements`          | Léger : `id`, `code`, `name`, `health`, `parent_id`, `equipement_class` | Complet : + `no_machine`, `affectation`, `is_mere`, `fabricant`, `numero_serie`, `date_mise_service`, `notes`, `children_count`, `interventions` (paginées) |
+| `request_id`           | Présent (`null` si création manuelle)                                   | Présent (`null` si création manuelle)                                                                                                                       |
 | `actions`              | Toujours `[]`                                                           | Tableau de [InterventionActionOut](intervention-actions.md) complet avec `subcategory`, `tech`, `purchase_requests`                                         |
 | `status_logs`          | Toujours `[]`                                                           | Tableau de [InterventionStatusLogOut](intervention-status-log.md)                                                                                           |
 | `stats.purchase_count` | Calculé en SQL (agrégat)                                                | Calculé depuis les `purchase_requests` chargées dans les actions                                                                                            |
@@ -259,6 +268,8 @@ Intervention complète avec equipement, stats, actions, status_logs.
 ## `PUT /interventions/{id}`
 
 Met à jour une intervention. Même body que POST, tous les champs sont optionnels.
+
+> **Clôture automatique de la demande liée** : si `status_actual` est mis à jour vers le code `ferme` et qu'une demande d'intervention est liée (`request_id` non null), cette demande passe automatiquement à `cloturee`.
 
 ### Réponse `200`
 

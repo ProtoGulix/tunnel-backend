@@ -65,6 +65,7 @@ class InterventionOut(BaseModel):
     updated_by: Optional[UUID] = None
     printed_fiche: Optional[bool] = None
     reported_date: Optional[date] = None
+    request_id: Optional[UUID] = None
 
     stats: InterventionStats
     actions: List[InterventionActionOut] = []

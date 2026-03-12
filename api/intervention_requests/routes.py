@@ -13,6 +13,7 @@ from api.intervention_requests.schemas import (
 )
 from api.errors.exceptions import NotFoundError, ValidationError, DatabaseError
 from api.auth.permissions import require_authenticated
+from api.utils.pagination import create_pagination_meta
 
 logger = logging.getLogger(__name__)
 
@@ -48,14 +49,14 @@ async def list_requests(
         limit=limit, offset=skip,
         statut=statut, machine_id=machine_id_str, search=search,
     )
-    total = repo.count_list(statut=statut, machine_id=machine_id_str, search=search)
+    total = repo.count_list(
+        statut=statut, machine_id=machine_id_str, search=search)
+    facets = repo.get_facets(machine_id=machine_id_str, search=search)
     return {
         "items": items,
-        "pagination": {
-            "total": total,
-            "offset": skip,
-            "limit": limit,
-            "count": len(items),
+        "pagination": create_pagination_meta(total=total, offset=skip, limit=limit, count=len(items)),
+        "facets": {
+            "statut": facets,
         },
     }
 
@@ -88,10 +89,23 @@ async def transition_request_status(request_id: UUID, body: StatusTransitionIn):
     - cloturee → (aucune)
 
     Le motif (notes) est obligatoire pour le statut `rejetee`.
+
+    Pour le statut `acceptee`, les champs `type_inter` et `tech_initials` sont obligatoires :
+    ils servent à créer automatiquement l'intervention liée.
     """
+    intervention_data = None
+    if body.status_to == "acceptee":
+        intervention_data = {
+            "type_inter": body.type_inter,
+            "tech_initials": body.tech_initials,
+            "priority": body.priority,
+            "reported_date": body.reported_date,
+        }
+
     return repo.transition_status(
         request_id=str(request_id),
         status_to=body.status_to,
         notes=body.notes,
         changed_by=str(body.changed_by) if body.changed_by else None,
+        intervention_data=intervention_data,
     )

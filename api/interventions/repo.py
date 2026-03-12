@@ -95,6 +95,7 @@ class InterventionRepository:
             query = f"""
                 SELECT
                     i.*,
+                    ir.id AS request_id,
                     m.code as m_code, m.name as m_name,
                     m.equipement_mere as m_parent_id,
                     ec.id as ec_id, ec.code as ec_code, ec.label as ec_label,
@@ -104,6 +105,7 @@ class InterventionRepository:
                     ROUND(AVG(ia.complexity_score)::numeric, 2)::float as avg_complexity,
                     COUNT(DISTINCT iapr.purchase_request_id) as purchase_count
                 FROM intervention i
+                LEFT JOIN intervention_request ir ON ir.intervention_id = i.id
                 LEFT JOIN machine m ON i.machine_id = m.id
                 LEFT JOIN equipement_class ec ON ec.id = m.equipement_class_id
                 LEFT JOIN LATERAL (
@@ -117,7 +119,7 @@ class InterventionRepository:
                 LEFT JOIN intervention_action_purchase_request iapr ON ia.id = iapr.intervention_action_id
                 {" ".join(joins)}
                 {where_sql}
-                GROUP BY i.id, m.id, ec.id, mh.m_open_count, mh.m_urgent_count
+                GROUP BY i.id, ir.id, m.id, ec.id, mh.m_open_count, mh.m_urgent_count
                 {order_sql}
                 LIMIT %s OFFSET %s
             """
@@ -195,7 +197,12 @@ class InterventionRepository:
         try:
             cur = conn.cursor()
             cur.execute(
-                "SELECT * FROM intervention WHERE id = %s",
+                """
+                SELECT i.*, ir.id AS request_id
+                FROM intervention i
+                LEFT JOIN intervention_request ir ON ir.intervention_id = i.id
+                WHERE i.id = %s
+                """,
                 (intervention_id,)
             )
             row = cur.fetchone()
@@ -271,6 +278,9 @@ class InterventionRepository:
 
     def add(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Crée une nouvelle intervention"""
+        from api.interventions.validators import InterventionValidator
+        InterventionValidator.validate_create(data)
+
         conn = self._get_connection()
         try:
             cur = conn.cursor()
@@ -309,7 +319,7 @@ class InterventionRepository:
 
     def update(self, intervention_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
         """Met à jour une intervention existante"""
-        self.get_by_id(intervention_id, include_actions=False)
+        existing = self.get_by_id(intervention_id, include_actions=False)
 
         conn = self._get_connection()
         try:
@@ -349,7 +359,37 @@ class InterventionRepository:
         finally:
             release_connection(conn)
 
-        return self.get_by_id(intervention_id)
+        result = self.get_by_id(intervention_id)
+
+        # Si le statut vient de changer vers 'ferme', clôturer la demande liée
+        if 'status_actual' in data:
+            new_status = result.get('status_actual')
+            old_status = existing.get('status_actual')
+            if new_status != old_status:
+                # Résoudre le code du nouveau statut
+                self._notify_if_closed(intervention_id, new_status)
+
+        return result
+
+    def _notify_if_closed(self, intervention_id: str, status_actual_id: Any) -> None:
+        """Notifie le repo des demandes si l'intervention vient d'être fermée."""
+        if not status_actual_id:
+            return
+        conn = self._get_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT code FROM intervention_status_ref WHERE id = %s LIMIT 1",
+                (str(status_actual_id),),
+            )
+            row = cur.fetchone()
+            if row and row[0] == CLOSED_STATUS_CODE:
+                from api.intervention_requests.repo import InterventionRequestRepository
+                InterventionRequestRepository().on_intervention_closed(intervention_id)
+        except Exception:
+            pass  # Ne pas bloquer la mise à jour de l'intervention
+        finally:
+            release_connection(conn)
 
     def delete(self, intervention_id: str) -> bool:
         """Supprime une intervention"""
