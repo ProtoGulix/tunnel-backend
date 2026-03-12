@@ -392,8 +392,10 @@ class InterventionRepository:
             release_connection(conn)
 
     def delete(self, intervention_id: str) -> bool:
-        """Supprime une intervention"""
+        """Supprime une intervention (interdit si actions ou demandes d'achat liées)"""
+        from api.interventions.validators import InterventionValidator
         self.get_by_id(intervention_id, include_actions=False)
+        InterventionValidator.validate_deletable(intervention_id)
 
         conn = self._get_connection()
         try:

@@ -279,8 +279,18 @@ Intervention complète mise à jour.
 
 ## `DELETE /interventions/{id}`
 
-Supprime une intervention.
+Supprime une intervention. La suppression est **interdite** si l'intervention possède des actions ou des demandes d'achat liées.
 
-### Réponse `204`
+### Réponse `200`
 
-Pas de contenu.
+```json
+{ "detail": "Intervention supprimée" }
+```
+
+### Erreurs
+
+| Code | Cas                                                     |
+| ---- | ------------------------------------------------------- |
+| 404  | Intervention introuvable                                |
+| 400  | Intervention possède des actions liées                  |
+| 400  | Intervention possède des demandes d'achat liées         |
