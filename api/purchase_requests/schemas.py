@@ -218,7 +218,6 @@ class PurchaseRequestIn(BaseModel):
         default=None, description="ID de l'intervention associée (si liée à une action)")
     quantity_requested: Optional[int] = Field(
         default=None, description="Quantité demandée (détail)")
-    urgent: Optional[bool] = Field(default=False, description="Flag urgence")
     requester_name: Optional[str] = Field(
         default=None, description="Nom du demandeur")
 
