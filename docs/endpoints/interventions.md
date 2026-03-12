@@ -2,7 +2,7 @@
 
 Gestion des interventions de maintenance. Chaque intervention est liée à un équipement et possède des actions, des logs de statut et des statistiques.
 
-Une intervention peut être créée manuellement via `POST /interventions`, ou **automatiquement depuis une demande d'intervention** lors de la transition vers `acceptee`. Dans ce cas, le champ `request_id` est renseigné.
+Une intervention peut être créée manuellement via `POST /interventions`, ou **automatiquement depuis une demande d'intervention** lors de la transition vers `acceptee`. Dans ce cas, le champ `request` contient les informations de la demande d'origine.
 
 > Voir aussi : [Actions](intervention-actions.md) | [Status Logs](intervention-status-log.md) | [Purchase Requests](purchase-requests.md) | [Intervention Requests](intervention-requests.md)
 
@@ -53,7 +53,20 @@ Liste les interventions avec filtres, tri et pagination.
     "updated_by": "uuid",
     "printed_fiche": false,
     "reported_date": "2026-01-13",
-    "request_id": "uuid-de-la-demande-origine",
+    "request": {
+      "id": "uuid-de-la-demande",
+      "code": "DI-2026-0042",
+      "demandeur_nom": "Jean Dupont",
+      "demandeur_service": "Production",
+      "description": "Bruit anormal sur la scie principale",
+      "statut": "acceptee",
+      "statut_label": "Acceptée",
+      "statut_color": "#48BB78",
+      "intervention_id": "5ecf60d5-8471-4739-8ba8-0fdad7b51781",
+      "created_at": "2026-01-12T09:00:00",
+      "updated_at": "2026-01-13T08:00:00",
+      "equipement": null
+    },
     "stats": {
       "action_count": 3,
       "total_time": 4.5,
@@ -66,9 +79,9 @@ Liste les interventions avec filtres, tri et pagination.
 ]
 ```
 
-| Champ        | Description                                                                                      |
-| ------------ | ------------------------------------------------------------------------------------------------ |
-| `request_id` | UUID de la demande d'intervention (`intervention_request`) à l'origine de cette intervention. `null` si l'intervention a été créée manuellement |
+| Champ     | Description                                                                                                              |
+| --------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `request` | Demande d'intervention à l'origine de cette intervention (`InterventionRequestListItem`). `null` si création manuelle.  |
 
 > **Note** : `actions` et `status_logs` sont toujours `[]` en liste. Utilisez `GET /interventions/{id}` pour les obtenir.
 
@@ -138,7 +151,20 @@ Détail complet d'une intervention. **La structure est différente de la liste**
   "updated_by": "uuid",
   "printed_fiche": false,
   "reported_date": "2026-01-13",
-  "request_id": "uuid-de-la-demande-origine",
+  "request": {
+    "id": "uuid-de-la-demande",
+    "code": "DI-2026-0042",
+    "demandeur_nom": "Jean Dupont",
+    "demandeur_service": "Production",
+    "description": "Bruit anormal sur la scie principale",
+    "statut": "acceptee",
+    "statut_label": "Acceptée",
+    "statut_color": "#48BB78",
+    "intervention_id": "5ecf60d5-8471-4739-8ba8-0fdad7b51781",
+    "created_at": "2026-01-12T09:00:00",
+    "updated_at": "2026-01-13T08:00:00",
+    "equipement": null
+  },
   "stats": {
     "action_count": 3,
     "total_time": 4.5,
@@ -212,7 +238,7 @@ Détail complet d'une intervention. **La structure est différente de la liste**
 | Champ                  | Liste                                                                   | Détail                                                                                                                                                      |
 | ---------------------- | ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `equipements`          | Léger : `id`, `code`, `name`, `health`, `parent_id`, `equipement_class` | Complet : + `no_machine`, `affectation`, `is_mere`, `fabricant`, `numero_serie`, `date_mise_service`, `notes`, `children_count`, `interventions` (paginées) |
-| `request_id`           | Présent (`null` si création manuelle)                                   | Présent (`null` si création manuelle)                                                                                                                       |
+| `request`              | Objet `InterventionRequestListItem` (`null` si création manuelle)       | Idem                                                                                                                                                        |
 | `actions`              | Toujours `[]`                                                           | Tableau de [InterventionActionOut](intervention-actions.md) complet avec `subcategory`, `tech`, `purchase_requests`                                         |
 | `status_logs`          | Toujours `[]`                                                           | Tableau de [InterventionStatusLogOut](intervention-status-log.md)                                                                                           |
 | `stats.purchase_count` | Calculé en SQL (agrégat)                                                | Calculé depuis les `purchase_requests` chargées dans les actions                                                                                            |
@@ -258,10 +284,11 @@ Crée une nouvelle intervention.
 | `status_actual` | string | non    | `ouvert` | Code statut initial (géré par trigger)     |
 | `printed_fiche` | bool   | non    | `false`  | Fiche imprimée ?                           |
 | `reported_date` | date   | non    | null     | Date de signalement                        |
+| `request_id`    | uuid   | non    | null     | UUID d'une demande existante à lier (statuts `nouvelle` ou `en_attente`). La demande passe automatiquement à `acceptee`. La liaison est **verrouillée** : la demande et l'intervention ne peuvent ensuite plus être liées à d'autres entités (`400` sinon). |
 
 ### Réponse `201`
 
-Intervention complète avec equipement, stats, actions, status_logs.
+Intervention complète avec equipement, `request` (objet demande si liée), stats, actions, status_logs.
 
 ---
 
@@ -269,7 +296,7 @@ Intervention complète avec equipement, stats, actions, status_logs.
 
 Met à jour une intervention. Même body que POST, tous les champs sont optionnels.
 
-> **Clôture automatique de la demande liée** : si `status_actual` est mis à jour vers le code `ferme` et qu'une demande d'intervention est liée (`request_id` non null), cette demande passe automatiquement à `cloturee`.
+> **Clôture automatique de la demande liée** : si `status_actual` est mis à jour vers le code `ferme` et qu'une demande d'intervention est liée (`request` non null), cette demande passe automatiquement à `cloturee`.
 
 ### Réponse `200`
 

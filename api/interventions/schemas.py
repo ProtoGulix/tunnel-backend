@@ -6,6 +6,7 @@ from pydantic import BaseModel
 from api.intervention_actions.schemas import InterventionActionOut
 from api.intervention_status_log.schemas import InterventionStatusLogOut
 from api.equipements.schemas import EquipementDetail
+from api.intervention_requests.schemas import InterventionRequestListItem
 
 
 class InterventionCreate(BaseModel):
@@ -19,6 +20,7 @@ class InterventionCreate(BaseModel):
     status_actual: Optional[str] = None
     printed_fiche: Optional[bool] = None
     reported_date: Optional[date] = None
+    request_id: Optional[UUID] = None
 
     class Config:
         from_attributes = True
@@ -65,7 +67,7 @@ class InterventionOut(BaseModel):
     updated_by: Optional[UUID] = None
     printed_fiche: Optional[bool] = None
     reported_date: Optional[date] = None
-    request_id: Optional[UUID] = None
+    request: Optional[InterventionRequestListItem] = None
 
     stats: InterventionStats
     actions: List[InterventionActionOut] = []

@@ -24,6 +24,12 @@ en_attente → rejetee
 | `rejetee`    | Rejetée    | **oui**  | Motif (`notes`) obligatoire                                                |
 | `cloturee`   | Clôturée   | **oui**  | Ferme l'intervention liée (`status_actual = ferme`)                        |
 
+### Verrouillage de la liaison
+
+Une fois qu'une demande est liée à une intervention (statut `acceptee`), **la liaison est verrouillée dans les deux sens** :
+- La demande ne peut plus être liée à une autre intervention (erreur `400`).
+- L'intervention ne peut plus être liée à une autre demande (erreur `400`).
+
 ### Clôture automatique depuis l'intervention
 
 Quand une intervention liée est fermée via `PUT /interventions/{id}`, la demande associée passe automatiquement à `cloturee`.
@@ -60,9 +66,10 @@ Liste paginée des demandes avec filtres.
 | ------------ | ------ | ------ | ------------------------------------------------------------ |
 | `skip`       | int    | 0      | Offset                                                       |
 | `limit`      | int    | 50     | Max: 500                                                     |
-| `statut`     | string | —      | Filtrer par code statut (`nouvelle`, `acceptee`, etc.)       |
-| `machine_id` | uuid   | —      | Filtrer par équipement                                       |
-| `search`     | string | —      | Recherche sur `code`, `demandeur_nom`, `description` (ILIKE) |
+| `statut`           | string | —      | Filtrer par code statut (`nouvelle`, `acceptee`, etc.)                     |
+| `exclude_statuses` | csv    | —      | Statuts à exclure, séparés par virgule. Ex: `rejetee,cloturee`             |
+| `machine_id`       | uuid   | —      | Filtrer par équipement                                                     |
+| `search`           | string | —      | Recherche sur `code`, `demandeur_nom`, `description` (ILIKE)               |
 
 ### Réponse `200`
 

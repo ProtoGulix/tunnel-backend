@@ -13,7 +13,15 @@ ALLOWED_TRANSITIONS: Dict[str, List[str]] = {
 
 
 class InterventionRequestValidator:
-    """Validation des règles métier pour les demandes d'intervention."""
+    """
+    Validation des règles métier pour les demandes d'intervention.
+
+    Règles de liaison :
+    - Une demande liée à une intervention est verrouillée : elle ne peut plus être liée à une autre.
+    - Une intervention liée à une demande est verrouillée : elle ne peut plus être liée à une autre demande.
+    Ces vérifications sont effectuées dans InterventionRepository._link_request() et
+    InterventionRequestRepository.transition_status() au moment de l'acceptation.
+    """
 
     @staticmethod
     def validate_transition(
@@ -21,6 +29,7 @@ class InterventionRequestValidator:
         status_to: str,
         notes: Optional[str],
         intervention_data: Optional[Dict[str, Any]],
+        current_intervention_id: Optional[Any] = None,
     ) -> None:
         """
         Valide qu'une transition de statut est autorisée et que les données
@@ -31,6 +40,13 @@ class InterventionRequestValidator:
             raise ValidationError(
                 f"Transition '{current_statut}' → '{status_to}' non autorisée. "
                 f"Transitions possibles : {allowed or 'aucune'}"
+            )
+
+        # Liaison verrouillée : une demande déjà liée ne peut pas être re-acceptée
+        if status_to == "acceptee" and current_intervention_id is not None:
+            raise ValidationError(
+                f"Cette demande est déjà liée à l'intervention '{current_intervention_id}'. "
+                f"Une demande ne peut être liée qu'à une seule intervention."
             )
 
         # Motif obligatoire pour rejet

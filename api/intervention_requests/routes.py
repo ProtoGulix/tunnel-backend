@@ -37,6 +37,7 @@ async def list_requests(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=500),
     statut: Optional[str] = Query(None),
+    exclude_statuses: Optional[str] = Query(None, description="Statuts à exclure, séparés par virgule. Ex: rejetee,cloturee"),
     machine_id: Optional[UUID] = Query(None),
     search: Optional[str] = Query(None),
 ):
@@ -45,12 +46,13 @@ async def list_requests(
     Retourne une réponse paginée.
     """
     machine_id_str = str(machine_id) if machine_id else None
+    exclude_list = [s.strip() for s in exclude_statuses.split(",") if s.strip()] if exclude_statuses else None
     items = repo.get_list(
         limit=limit, offset=skip,
-        statut=statut, machine_id=machine_id_str, search=search,
+        statut=statut, exclude_statuses=exclude_list, machine_id=machine_id_str, search=search,
     )
     total = repo.count_list(
-        statut=statut, machine_id=machine_id_str, search=search)
+        statut=statut, exclude_statuses=exclude_list, machine_id=machine_id_str, search=search)
     facets = repo.get_facets(machine_id=machine_id_str, search=search)
     return {
         "items": items,

@@ -94,6 +94,7 @@ class InterventionRequestRepository:
         limit: int = 50,
         offset: int = 0,
         statut: Optional[str] = None,
+        exclude_statuses: Optional[List[str]] = None,
         machine_id: Optional[str] = None,
         search: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
@@ -107,6 +108,10 @@ class InterventionRequestRepository:
             if statut:
                 where.append("ir.statut = %s")
                 params.append(statut)
+            if exclude_statuses:
+                placeholders = ",".join(["%s"] * len(exclude_statuses))
+                where.append(f"ir.statut NOT IN ({placeholders})")
+                params.extend(exclude_statuses)
             if machine_id:
                 where.append("ir.machine_id = %s")
                 params.append(machine_id)
@@ -154,6 +159,7 @@ class InterventionRequestRepository:
     def count_list(
         self,
         statut: Optional[str] = None,
+        exclude_statuses: Optional[List[str]] = None,
         machine_id: Optional[str] = None,
         search: Optional[str] = None,
     ) -> int:
@@ -166,6 +172,10 @@ class InterventionRequestRepository:
             if statut:
                 where.append("statut = %s")
                 params.append(statut)
+            if exclude_statuses:
+                placeholders = ",".join(["%s"] * len(exclude_statuses))
+                where.append(f"statut NOT IN ({placeholders})")
+                params.extend(exclude_statuses)
             if machine_id:
                 where.append("machine_id = %s")
                 params.append(machine_id)
@@ -348,11 +358,14 @@ class InterventionRequestRepository:
         existing = self.get_by_id(request_id)
         current_statut = existing["statut"]
 
+        intervention_id = existing.get("intervention_id")
+
         InterventionRequestValidator.validate_transition(
             current_statut=current_statut,
             status_to=status_to,
             notes=notes,
             intervention_data=intervention_data,
+            current_intervention_id=intervention_id,
         )
 
         # Valider que status_to existe dans le référentiel
@@ -364,8 +377,6 @@ class InterventionRequestRepository:
             )
             if not cur.fetchone():
                 raise ValidationError(f"Statut '{status_to}' inconnu")
-
-            intervention_id = existing.get("intervention_id")
 
             # ── Acceptation : création de l'intervention ───────────────
             if status_to == "acceptee":
