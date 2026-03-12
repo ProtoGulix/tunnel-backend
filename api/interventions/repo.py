@@ -95,6 +95,15 @@ class InterventionRepository:
             query = f"""
                 SELECT
                     i.*,
+                    ir.id        AS req_id,
+                    ir.code      AS req_code,
+                    ir.demandeur_nom, ir.demandeur_service, ir.description AS req_description,
+                    ir.statut    AS req_statut,
+                    rs2.label    AS req_statut_label,
+                    rs2.color    AS req_statut_color,
+                    ir.intervention_id AS req_intervention_id,
+                    ir.created_at AS req_created_at,
+                    ir.updated_at AS req_updated_at,
                     m.code as m_code, m.name as m_name,
                     m.equipement_mere as m_parent_id,
                     ec.id as ec_id, ec.code as ec_code, ec.label as ec_label,
@@ -104,6 +113,8 @@ class InterventionRepository:
                     ROUND(AVG(ia.complexity_score)::numeric, 2)::float as avg_complexity,
                     COUNT(DISTINCT iapr.purchase_request_id) as purchase_count
                 FROM intervention i
+                LEFT JOIN intervention_request ir ON ir.intervention_id = i.id
+                LEFT JOIN request_status_ref rs2 ON rs2.code = ir.statut
                 LEFT JOIN machine m ON i.machine_id = m.id
                 LEFT JOIN equipement_class ec ON ec.id = m.equipement_class_id
                 LEFT JOIN LATERAL (
@@ -117,7 +128,7 @@ class InterventionRepository:
                 LEFT JOIN intervention_action_purchase_request iapr ON ia.id = iapr.intervention_action_id
                 {" ".join(joins)}
                 {where_sql}
-                GROUP BY i.id, m.id, ec.id, mh.m_open_count, mh.m_urgent_count
+                GROUP BY i.id, ir.id, ir.code, ir.demandeur_nom, ir.demandeur_service, ir.description, ir.statut, rs2.label, rs2.color, ir.intervention_id, ir.created_at, ir.updated_at, m.id, ec.id, mh.m_open_count, mh.m_urgent_count
                 {order_sql}
                 LIMIT %s OFFSET %s
             """
@@ -177,6 +188,30 @@ class InterventionRepository:
                     row_dict.pop('avg_complexity', None)
                     row_dict.pop('purchase_count', None)
 
+                # Construire l'objet request depuis les colonnes préfixées req_
+                req_id = row_dict.pop('req_id', None)
+                if req_id is not None:
+                    row_dict['request'] = {
+                        'id': req_id,
+                        'code': row_dict.pop('req_code', None),
+                        'demandeur_nom': row_dict.pop('demandeur_nom', None),
+                        'demandeur_service': row_dict.pop('demandeur_service', None),
+                        'description': row_dict.pop('req_description', None),
+                        'statut': row_dict.pop('req_statut', None),
+                        'statut_label': row_dict.pop('req_statut_label', None),
+                        'statut_color': row_dict.pop('req_statut_color', None),
+                        'intervention_id': row_dict.pop('req_intervention_id', None),
+                        'created_at': row_dict.pop('req_created_at', None),
+                        'updated_at': row_dict.pop('req_updated_at', None),
+                        'equipement': None,
+                    }
+                else:
+                    row_dict['request'] = None
+                    for key in ['req_code', 'demandeur_nom', 'demandeur_service', 'req_description',
+                                'req_statut', 'req_statut_label', 'req_statut_color',
+                                'req_intervention_id', 'req_created_at', 'req_updated_at']:
+                        row_dict.pop(key, None)
+
                 row_dict['actions'] = []  # Vide pour get_all
                 row_dict['status_logs'] = []  # Vide pour get_all
                 result.append(row_dict)
@@ -195,7 +230,25 @@ class InterventionRepository:
         try:
             cur = conn.cursor()
             cur.execute(
-                "SELECT * FROM intervention WHERE id = %s",
+                """
+                SELECT
+                    i.*,
+                    ir.id           AS req_id,
+                    ir.code         AS req_code,
+                    ir.demandeur_nom,
+                    ir.demandeur_service,
+                    ir.description  AS req_description,
+                    ir.statut       AS req_statut,
+                    rs2.label       AS req_statut_label,
+                    rs2.color       AS req_statut_color,
+                    ir.intervention_id AS req_intervention_id,
+                    ir.created_at   AS req_created_at,
+                    ir.updated_at   AS req_updated_at
+                FROM intervention i
+                LEFT JOIN intervention_request ir ON ir.intervention_id = i.id
+                LEFT JOIN request_status_ref rs2 ON rs2.code = ir.statut
+                WHERE i.id = %s
+                """,
                 (intervention_id,)
             )
             row = cur.fetchone()
@@ -206,6 +259,30 @@ class InterventionRepository:
 
             cols = [desc[0] for desc in cur.description]
             intervention = dict(zip(cols, row))
+
+            # Construire l'objet request
+            req_id = intervention.pop('req_id', None)
+            if req_id is not None:
+                intervention['request'] = {
+                    'id': req_id,
+                    'code': intervention.pop('req_code', None),
+                    'demandeur_nom': intervention.pop('demandeur_nom', None),
+                    'demandeur_service': intervention.pop('demandeur_service', None),
+                    'description': intervention.pop('req_description', None),
+                    'statut': intervention.pop('req_statut', None),
+                    'statut_label': intervention.pop('req_statut_label', None),
+                    'statut_color': intervention.pop('req_statut_color', None),
+                    'intervention_id': intervention.pop('req_intervention_id', None),
+                    'created_at': intervention.pop('req_created_at', None),
+                    'updated_at': intervention.pop('req_updated_at', None),
+                    'equipement': None,
+                }
+            else:
+                intervention['request'] = None
+                for key in ['req_code', 'demandeur_nom', 'demandeur_service', 'req_description',
+                            'req_statut', 'req_statut_label', 'req_statut_color',
+                            'req_intervention_id', 'req_created_at', 'req_updated_at']:
+                    intervention.pop(key, None)
 
             # Récupérer l'équipement via EquipementRepository pour garantir la cohérence
             if intervention.get('machine_id'):
@@ -271,6 +348,11 @@ class InterventionRepository:
 
     def add(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Crée une nouvelle intervention"""
+        from api.interventions.validators import InterventionValidator
+        InterventionValidator.validate_create(data)
+
+        request_id = str(data['request_id']) if data.get('request_id') else None
+
         conn = self._get_connection()
         try:
             cur = conn.cursor()
@@ -297,6 +379,10 @@ class InterventionRepository:
                     data.get('reported_date')
                 )
             )
+
+            if request_id:
+                self._link_request(cur, intervention_id, request_id)
+
             conn.commit()
         except Exception as e:
             conn.rollback()
@@ -307,9 +393,63 @@ class InterventionRepository:
 
         return self.get_by_id(intervention_id)
 
+    def _link_request(self, cur: Any, intervention_id: str, request_id: str) -> None:
+        """
+        Lie une demande d'intervention à l'intervention créée :
+        - Vérifie que la demande existe et est dans un état linkable
+        - Met à jour intervention_request.intervention_id
+        - Insère le log de transition vers 'acceptee'
+        """
+        cur.execute(
+            "SELECT id, statut, intervention_id FROM intervention_request WHERE id = %s",
+            (request_id,),
+        )
+        row = cur.fetchone()
+        if not row:
+            raise DatabaseError(f"Demande d'intervention {request_id} introuvable")
+
+        current_statut = row[1]
+        existing_intervention_id = row[2]
+
+        if existing_intervention_id is not None:
+            raise DatabaseError(
+                f"La demande '{request_id}' est déjà liée à l'intervention '{existing_intervention_id}'. "
+                f"Une demande ne peut être liée qu'à une seule intervention."
+            )
+
+        linkable = ("nouvelle", "en_attente")
+        if current_statut not in linkable:
+            raise DatabaseError(
+                f"La demande '{request_id}' est au statut '{current_statut}' "
+                f"et ne peut pas être liée (statuts acceptés : {linkable})"
+            )
+
+        # Vérifier que l'intervention n'est pas déjà liée à une autre demande
+        cur.execute(
+            "SELECT id FROM intervention_request WHERE intervention_id = %s AND id != %s LIMIT 1",
+            (intervention_id, request_id),
+        )
+        if cur.fetchone():
+            raise DatabaseError(
+                f"L'intervention '{intervention_id}' est déjà liée à une autre demande d'intervention."
+            )
+
+        cur.execute(
+            "UPDATE intervention_request SET intervention_id = %s WHERE id = %s",
+            (intervention_id, request_id),
+        )
+        cur.execute("SET LOCAL app.skip_request_status_log = 'true'")
+        cur.execute(
+            """
+            INSERT INTO request_status_log (request_id, status_from, status_to, changed_by, notes)
+            VALUES (%s, %s, 'acceptee', NULL, %s)
+            """,
+            (request_id, current_statut, "Intervention créée manuellement"),
+        )
+
     def update(self, intervention_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
         """Met à jour une intervention existante"""
-        self.get_by_id(intervention_id, include_actions=False)
+        existing = self.get_by_id(intervention_id, include_actions=False)
 
         conn = self._get_connection()
         try:
@@ -349,11 +489,43 @@ class InterventionRepository:
         finally:
             release_connection(conn)
 
-        return self.get_by_id(intervention_id)
+        result = self.get_by_id(intervention_id)
+
+        # Si le statut vient de changer vers 'ferme', clôturer la demande liée
+        if 'status_actual' in data:
+            new_status = result.get('status_actual')
+            old_status = existing.get('status_actual')
+            if new_status != old_status:
+                # Résoudre le code du nouveau statut
+                self._notify_if_closed(intervention_id, new_status)
+
+        return result
+
+    def _notify_if_closed(self, intervention_id: str, status_actual_id: Any) -> None:
+        """Notifie le repo des demandes si l'intervention vient d'être fermée."""
+        if not status_actual_id:
+            return
+        conn = self._get_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT code FROM intervention_status_ref WHERE id = %s LIMIT 1",
+                (str(status_actual_id),),
+            )
+            row = cur.fetchone()
+            if row and row[0] == CLOSED_STATUS_CODE:
+                from api.intervention_requests.repo import InterventionRequestRepository
+                InterventionRequestRepository().on_intervention_closed(intervention_id)
+        except Exception:
+            pass  # Ne pas bloquer la mise à jour de l'intervention
+        finally:
+            release_connection(conn)
 
     def delete(self, intervention_id: str) -> bool:
-        """Supprime une intervention"""
+        """Supprime une intervention (interdit si actions ou demandes d'achat liées)"""
+        from api.interventions.validators import InterventionValidator
         self.get_by_id(intervention_id, include_actions=False)
+        InterventionValidator.validate_deletable(intervention_id)
 
         conn = self._get_connection()
         try:

@@ -2,6 +2,48 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [2.10.0] - 12 mars 2026
+
+### Nouveautés
+
+- **Création automatique d'intervention lors de l'acceptation d'une demande** (`POST /intervention-requests/{id}/transition`)
+  - Quand une demande passe au statut `acceptee`, une intervention est créée automatiquement en base
+  - Champs requis dans le corps : `type_inter` (type d'intervention), `tech_initials` (initiales du technicien)
+  - Champs optionnels : `priority` (priorité), `reported_date` (date de signalement)
+  - L'intervention est directement liée à la demande (champ `intervention_id` dans la réponse)
+
+- **Filtre `exclude_statuses` sur `GET /intervention-requests`**
+  - Nouveau query param permettant d'exclure plusieurs statuts en une seule requête
+  - Exemple : `?exclude_statuses=rejetee,cloturee` pour ne voir que les demandes actives
+
+- **Facettes par statut sur `GET /intervention-requests`**
+  - La réponse contient désormais un objet `facets.statut` avec le nombre de demandes par statut
+  - Utile pour afficher des compteurs sans requête supplémentaire
+
+- **Demande liée dans les détails d'une intervention** (`GET /interventions/{id}`)
+  - Nouveau champ `request` dans la réponse : la demande d'intervention à l'origine de l'intervention (si applicable)
+
+- **Champ `equipement` (objet complet) dans la liste des demandes** (`GET /intervention-requests`)
+  - Remplace les champs `machine_id` et `machine_name` par un objet `equipement` structuré
+  - Inclut le code, le nom et l'affectation de l'équipement
+
+- **Champ `intervention_id` dans la liste des demandes** (`GET /intervention-requests`)
+  - Indique directement l'identifiant de l'intervention liée (si la demande a été acceptée)
+
+### Améliorations
+
+- **Validation métier renforcée sur les demandes d'intervention**
+  - Une demande déjà liée à une intervention ne peut pas être acceptée une deuxième fois (erreur 422)
+  - Les champs `type_inter` et `tech_initials` sont vérifiés avant toute acceptation
+
+- **Validation métier renforcée sur les interventions**
+  - Unicité du code intervention vérifiée avant création (même machine, même type, même technicien, même jour → 409)
+  - Le type d'intervention est validé par rapport aux types connus
+  - La suppression d'une intervention est bloquée si elle possède des actions ou des demandes d'achat liées
+
+- **Liaison verrouillée entre demandes et interventions**
+  - Une demande ne peut être liée qu'à une seule intervention, et vice-versa
+
 ## [2.9.2] - 11 mars 2026
 
 ### Nouveautés
