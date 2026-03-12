@@ -3,6 +3,9 @@
 # Statut fermé d'une intervention (constante)
 CLOSED_STATUS_CODE = 'ferme'
 
+# Statut "pris en charge" d'une intervention (appliqué à la création depuis une demande acceptée)
+IN_PROGRESS_STATUS_CODE = 'in_progress'
+
 # Statuts dérivés des demandes d'achat (calculés automatiquement)
 DERIVED_STATUS_CONFIG = {
     # Pas de référence normalisée
