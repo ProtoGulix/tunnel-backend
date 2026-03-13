@@ -21,6 +21,7 @@ Tri par défaut : urgents DESC, ouverts DESC, nom ASC.
 | `search`        | string | —      | Recherche insensible à la casse sur `code`, `name`, `affectation`        |
 | `skip`          | int    | 0      | Nombre d'éléments à ignorer (offset)                                     |
 | `limit`         | int    | 50     | Nombre d'éléments par page (max 500)                                     |
+| `select_class`  | string | —      | Codes de classes à inclure (filtre exclusif), séparés par virgule. Ex: `POM,SCI` |
 | `exclude_class` | string | —      | Codes de classes à exclure, séparés par virgule. Ex: `POM,SCI`          |
 
 ### Réponse `200`

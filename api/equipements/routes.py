@@ -14,22 +14,31 @@ from api.utils.pagination import create_pagination_meta
 
 from api.auth.permissions import require_authenticated
 
-router = APIRouter(prefix="/equipements", tags=["equipements"], dependencies=[Depends(require_authenticated)])
+router = APIRouter(prefix="/equipements",
+                   tags=["equipements"], dependencies=[Depends(require_authenticated)])
 
 
 @router.get("", response_model=EquipementListPaginated)
 @router.get("/", response_model=EquipementListPaginated)
 async def list_equipements(
-    search: str | None = Query(None, description="Recherche insensible à la casse sur code, nom ou affectation"),
+    search: str | None = Query(
+        None, description="Recherche insensible à la casse sur code, nom ou affectation"),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=500),
-    exclude_class: str | None = Query(None, description="Codes de classes à exclure, séparés par virgule. Ex: POM,SCI"),
+    exclude_class: str | None = Query(
+        None, description="Codes de classes à exclure, séparés par virgule. Ex: POM,SCI"),
+    select_class: str | None = Query(
+        None, description="Codes de classes à inclure (filtre exclusif), séparés par virgule. Ex: POM,SCI"),
 ):
     """Liste les équipements avec pagination et facettes par classe"""
     repo = EquipementRepository()
-    exclude_list = [c.strip() for c in exclude_class.split(",") if c.strip()] if exclude_class else None
-    items = repo.get_all(search=search, skip=skip, limit=limit, exclude_class=exclude_list)
-    total = repo.count_all(search=search, exclude_class=exclude_list)
+    exclude_list = [c.strip() for c in exclude_class.split(",")
+                    if c.strip()] if exclude_class else None
+    select_list = [c.strip() for c in select_class.split(",")
+                   if c.strip()] if select_class else None
+    items = repo.get_all(search=search, skip=skip,
+                         limit=limit, exclude_class=exclude_list, select_class=select_list)
+    total = repo.count_all(search=search, exclude_class=exclude_list, select_class=select_list)
     facets = repo.get_facets(search=search)
     return {
         "items": items,
@@ -43,8 +52,10 @@ async def list_equipements(
 @router.get("/{equipement_id}", response_model=EquipementDetail)
 async def get_equipement(
     equipement_id: str,
-    interventions_page: int = Query(1, ge=1, description="Page des interventions"),
-    interventions_limit: int = Query(20, ge=1, le=100, description="Nombre d'interventions par page")
+    interventions_page: int = Query(
+        1, ge=1, description="Page des interventions"),
+    interventions_limit: int = Query(
+        20, ge=1, le=100, description="Nombre d'interventions par page")
 ):
     """Récupère un équipement par ID avec tous les champs, children_count et interventions paginées"""
     repo = EquipementRepository()
@@ -59,7 +70,8 @@ async def get_equipement(
 async def get_equipement_children(
     equipement_id: str,
     page: int = Query(1, ge=1, description="Page"),
-    limit: int = Query(20, ge=1, le=100, description="Nombre d'enfants par page"),
+    limit: int = Query(
+        20, ge=1, le=100, description="Nombre d'enfants par page"),
     search: str | None = Query(None, description="Filtre sur code ou nom")
 ):
     """Récupère les enfants paginés d'un équipement avec health"""

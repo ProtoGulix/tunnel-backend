@@ -22,17 +22,24 @@ class EquipementRepository:
         self,
         search: str | None = None,
         exclude_class: list[str] | None = None,
+        select_class: list[str] | None = None,
     ) -> tuple[str, list]:
         """Construit la clause WHERE et les params associés pour les filtres de liste."""
         conditions = []
         params: list = []
         if search:
             like = f"%{search}%"
-            conditions.append("(m.code ILIKE %s OR m.name ILIKE %s OR m.affectation ILIKE %s)")
+            conditions.append(
+                "(m.code ILIKE %s OR m.name ILIKE %s OR m.affectation ILIKE %s)")
             params.extend([like, like, like])
+        if select_class:
+            placeholders = ",".join(["%s"] * len(select_class))
+            conditions.append(f"ec.code IN ({placeholders})")
+            params.extend(select_class)
         if exclude_class:
             placeholders = ",".join(["%s"] * len(exclude_class))
-            conditions.append(f"(ec.code IS NULL OR ec.code NOT IN ({placeholders}))")
+            conditions.append(
+                f"(ec.code IS NULL OR ec.code NOT IN ({placeholders}))")
             params.extend(exclude_class)
         where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
         return where_clause, params
@@ -43,13 +50,15 @@ class EquipementRepository:
         skip: int = 0,
         limit: int = 50,
         exclude_class: list[str] | None = None,
+        select_class: list[str] | None = None,
     ) -> List[Dict[str, Any]]:
         """Récupère les équipements paginés - liste légère avec health"""
         conn = self._get_connection()
         try:
             cur = conn.cursor()
             csq = self._closed_status_subquery()
-            where_clause, filter_params = self._build_filter_clause(search=search, exclude_class=exclude_class)
+            where_clause, filter_params = self._build_filter_clause(
+                search=search, exclude_class=exclude_class, select_class=select_class)
 
             query = f"""
                 SELECT
@@ -71,7 +80,8 @@ class EquipementRepository:
                 LIMIT %s OFFSET %s
             """
 
-            cur.execute(query, (CLOSED_STATUS_CODE, CLOSED_STATUS_CODE, *filter_params, limit, skip))
+            cur.execute(query, (CLOSED_STATUS_CODE,
+                        CLOSED_STATUS_CODE, *filter_params, limit, skip))
             rows = cur.fetchall()
             cols = [desc[0] for desc in cur.description]
             equipements = [dict(zip(cols, row)) for row in rows]
@@ -86,14 +96,16 @@ class EquipementRepository:
                     'level': health['level'],
                     'reason': health['reason']
                 }
-                equipement['parent_id'] = equipement.pop('equipement_mere', None)
+                equipement['parent_id'] = equipement.pop(
+                    'equipement_mere', None)
 
                 ec_id = equipement.pop('equipement_class_id', None)
                 ec_code = equipement.pop('equipement_class_code', None)
                 ec_label = equipement.pop('equipement_class_label', None)
 
                 equipement['equipement_class'] = (
-                    {'id': ec_id, 'code': ec_code, 'label': ec_label} if ec_id else None
+                    {'id': ec_id, 'code': ec_code,
+                        'label': ec_label} if ec_id else None
                 )
 
             return equipements
@@ -109,12 +121,14 @@ class EquipementRepository:
         self,
         search: str | None = None,
         exclude_class: list[str] | None = None,
+        select_class: list[str] | None = None,
     ) -> int:
         """Compte le nombre total d'équipements avec les mêmes filtres que get_all."""
         conn = self._get_connection()
         try:
             cur = conn.cursor()
-            where_clause, filter_params = self._build_filter_clause(search=search, exclude_class=exclude_class)
+            where_clause, filter_params = self._build_filter_clause(
+                search=search, exclude_class=exclude_class, select_class=select_class)
             cur.execute(
                 f"""
                 SELECT COUNT(*)
@@ -135,7 +149,8 @@ class EquipementRepository:
         conn = self._get_connection()
         try:
             cur = conn.cursor()
-            where_clause, filter_params = self._build_filter_clause(search=search)
+            where_clause, filter_params = self._build_filter_clause(
+                search=search)
             cur.execute(
                 f"""
                 SELECT ec.code, ec.label, COUNT(m.id) as count
@@ -191,7 +206,8 @@ class EquipementRepository:
                 GROUP BY m.id, ec.id, ec.code, ec.label
             """
 
-            cur.execute(query, (CLOSED_STATUS_CODE, CLOSED_STATUS_CODE, equipement_id))
+            cur.execute(query, (CLOSED_STATUS_CODE,
+                        CLOSED_STATUS_CODE, equipement_id))
             row = cur.fetchone()
             if not row:
                 raise NotFoundError(f"Équipement {equipement_id} non trouvé")
@@ -317,7 +333,8 @@ class EquipementRepository:
 
             search_clause = ""
             params_count: list = [equipement_id]
-            params_items: list = [CLOSED_STATUS_CODE, CLOSED_STATUS_CODE, equipement_id]
+            params_items: list = [CLOSED_STATUS_CODE,
+                                  CLOSED_STATUS_CODE, equipement_id]
 
             if search:
                 search_clause = " AND (m.code ILIKE %s OR m.name ILIKE %s)"
@@ -495,7 +512,8 @@ class EquipementRepository:
                 ORDER BY urgent_count DESC, open_interventions_count DESC, m.name ASC
             """
 
-            cur.execute(query, (CLOSED_STATUS_CODE, CLOSED_STATUS_CODE, equipement_mere_id))
+            cur.execute(query, (CLOSED_STATUS_CODE,
+                        CLOSED_STATUS_CODE, equipement_mere_id))
             rows = cur.fetchall()
             cols = [desc[0] for desc in cur.description]
             equipements = [dict(zip(cols, row)) for row in rows]
@@ -568,7 +586,8 @@ class EquipementRepository:
                 )
 
             where_clauses = ["i.machine_id = %s"]
-            params: list = [CLOSED_STATUS_CODE, CLOSED_STATUS_CODE, equipement_id]
+            params: list = [CLOSED_STATUS_CODE,
+                            CLOSED_STATUS_CODE, equipement_id]
 
             # Période: start_date optionnel, end_date optionnel (defaut = NOW())
             if start_date:
@@ -640,7 +659,8 @@ class EquipementRepository:
                 GROUP BY m.id
             """
 
-            cur.execute(query, (CLOSED_STATUS_CODE, CLOSED_STATUS_CODE, equipement_id))
+            cur.execute(query, (CLOSED_STATUS_CODE,
+                        CLOSED_STATUS_CODE, equipement_id))
             row = cur.fetchone()
 
             if row is None:
