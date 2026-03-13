@@ -16,13 +16,14 @@ Tri par défaut : urgents DESC, ouverts DESC, nom ASC.
 
 ### Query params
 
-| Param           | Type   | Défaut | Description                                                              |
-| --------------- | ------ | ------ | ------------------------------------------------------------------------ |
-| `search`        | string | —      | Recherche insensible à la casse sur `code`, `name`, `affectation`        |
-| `skip`          | int    | 0      | Nombre d'éléments à ignorer (offset)                                     |
-| `limit`         | int    | 50     | Nombre d'éléments par page (max 500)                                     |
+| Param           | Type   | Défaut | Description                                                                      |
+| --------------- | ------ | ------ | -------------------------------------------------------------------------------- |
+| `search`        | string | —      | Recherche insensible à la casse sur `code`, `name`, `affectation`                |
+| `skip`          | int    | 0      | Nombre d'éléments à ignorer (offset)                                             |
+| `limit`         | int    | 50     | Nombre d'éléments par page (max 500)                                             |
 | `select_class`  | string | —      | Codes de classes à inclure (filtre exclusif), séparés par virgule. Ex: `POM,SCI` |
-| `exclude_class` | string | —      | Codes de classes à exclure, séparés par virgule. Ex: `POM,SCI`          |
+| `exclude_class` | string | —      | Codes de classes à exclure, séparés par virgule. Ex: `POM,SCI`                   |
+| `select_mere`   | uuid   | —      | UUID de l'équipement parent : retourne uniquement ses enfants directs            |
 
 ### Réponse `200`
 
@@ -124,43 +125,6 @@ Détail complet d'un équipement avec tous les champs de la base, `children_coun
 ```
 
 > Les interventions retournées sont uniquement celles **directement liées** à cet équipement (`machine_id`), triées par `reported_date DESC`.
-
----
-
-## `GET /equipements/{id}/children`
-
-Liste paginée des enfants d'un équipement avec leur état de santé. Utile pour naviguer dans l'arborescence.
-
-### Query params
-
-| Param    | Type   | Défaut | Description                                         |
-| -------- | ------ | ------ | --------------------------------------------------- |
-| `page`   | int    | 1      | Page                                                |
-| `limit`  | int    | 20     | Taille de page (max 100)                            |
-| `search` | string | —      | Filtre sur `code` ou `name` (insensible à la casse) |
-
-### Réponse `200`
-
-```json
-{
-  "total": 233,
-  "page": 1,
-  "page_size": 20,
-  "total_pages": 12,
-  "items": [
-    {
-      "id": "7f2cda3c-...",
-      "code": "EQ-042",
-      "name": "Lame #1",
-      "health": {
-        "level": "ok",
-        "reason": "Aucune intervention ouverte",
-        "rules_triggered": []
-      }
-    }
-  ]
-}
-```
 
 ---
 

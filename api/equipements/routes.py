@@ -4,7 +4,6 @@ from api.equipements.repo import EquipementRepository
 from api.equipements.schemas import (
     EquipementListPaginated,
     EquipementDetail,
-    EquipementChildrenPaginated,
     EquipementStatsDetailed,
     EquipementHealthOnly,
     EquipementCreate,
@@ -29,6 +28,8 @@ async def list_equipements(
         None, description="Codes de classes à exclure, séparés par virgule. Ex: POM,SCI"),
     select_class: str | None = Query(
         None, description="Codes de classes à inclure (filtre exclusif), séparés par virgule. Ex: POM,SCI"),
+    select_mere: str | None = Query(
+        None, description="UUID de l'équipement parent : retourne uniquement ses enfants directs"),
 ):
     """Liste les équipements avec pagination et facettes par classe"""
     repo = EquipementRepository()
@@ -36,9 +37,11 @@ async def list_equipements(
                     if c.strip()] if exclude_class else None
     select_list = [c.strip() for c in select_class.split(",")
                    if c.strip()] if select_class else None
-    items = repo.get_all(search=search, skip=skip,
-                         limit=limit, exclude_class=exclude_list, select_class=select_list)
-    total = repo.count_all(search=search, exclude_class=exclude_list, select_class=select_list)
+    items = repo.get_all(search=search, skip=skip, limit=limit,
+                         exclude_class=exclude_list, select_class=select_list, select_mere=select_mere)
+    total = repo.count_all(
+        search=search, exclude_class=exclude_list, select_class=select_list, select_mere=select_mere)
+    facets = repo.get_facets(search=search)
     facets = repo.get_facets(search=search)
     return {
         "items": items,
@@ -65,18 +68,6 @@ async def get_equipement(
         interventions_limit=interventions_limit
     )
 
-
-@router.get("/{equipement_id}/children", response_model=EquipementChildrenPaginated)
-async def get_equipement_children(
-    equipement_id: str,
-    page: int = Query(1, ge=1, description="Page"),
-    limit: int = Query(
-        20, ge=1, le=100, description="Nombre d'enfants par page"),
-    search: str | None = Query(None, description="Filtre sur code ou nom")
-):
-    """Récupère les enfants paginés d'un équipement avec health"""
-    repo = EquipementRepository()
-    return repo.get_children(equipement_id, page=page, limit=limit, search=search)
 
 
 @router.post("", response_model=EquipementDetail, status_code=status.HTTP_201_CREATED)

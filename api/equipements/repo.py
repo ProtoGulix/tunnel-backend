@@ -23,6 +23,7 @@ class EquipementRepository:
         search: str | None = None,
         exclude_class: list[str] | None = None,
         select_class: list[str] | None = None,
+        select_mere: str | None = None,
     ) -> tuple[str, list]:
         """Construit la clause WHERE et les params associés pour les filtres de liste."""
         conditions = []
@@ -32,6 +33,9 @@ class EquipementRepository:
             conditions.append(
                 "(m.code ILIKE %s OR m.name ILIKE %s OR m.affectation ILIKE %s)")
             params.extend([like, like, like])
+        if select_mere:
+            conditions.append("m.equipement_mere = %s")
+            params.append(select_mere)
         if select_class:
             placeholders = ",".join(["%s"] * len(select_class))
             conditions.append(f"ec.code IN ({placeholders})")
@@ -51,6 +55,7 @@ class EquipementRepository:
         limit: int = 50,
         exclude_class: list[str] | None = None,
         select_class: list[str] | None = None,
+        select_mere: str | None = None,
     ) -> List[Dict[str, Any]]:
         """Récupère les équipements paginés - liste légère avec health"""
         conn = self._get_connection()
@@ -58,7 +63,7 @@ class EquipementRepository:
             cur = conn.cursor()
             csq = self._closed_status_subquery()
             where_clause, filter_params = self._build_filter_clause(
-                search=search, exclude_class=exclude_class, select_class=select_class)
+                search=search, exclude_class=exclude_class, select_class=select_class, select_mere=select_mere)
 
             query = f"""
                 SELECT
@@ -122,13 +127,14 @@ class EquipementRepository:
         search: str | None = None,
         exclude_class: list[str] | None = None,
         select_class: list[str] | None = None,
+        select_mere: str | None = None,
     ) -> int:
         """Compte le nombre total d'équipements avec les mêmes filtres que get_all."""
         conn = self._get_connection()
         try:
             cur = conn.cursor()
             where_clause, filter_params = self._build_filter_clause(
-                search=search, exclude_class=exclude_class, select_class=select_class)
+                search=search, exclude_class=exclude_class, select_class=select_class, select_mere=select_mere)
             cur.execute(
                 f"""
                 SELECT COUNT(*)
@@ -303,89 +309,6 @@ class EquipementRepository:
             }
 
             return equipement
-        except NotFoundError:
-            raise
-        except HTTPException:
-            raise
-        except Exception as e:
-            raise_db_error(e, "opération")
-        finally:
-            release_connection(conn)
-
-    def get_children(
-        self,
-        equipement_id: str,
-        page: int = 1,
-        limit: int = 20,
-        search: str | None = None
-    ) -> Dict[str, Any]:
-        """Récupère les enfants paginés d'un équipement avec health"""
-        conn = self._get_connection()
-        try:
-            cur = conn.cursor()
-            csq = self._closed_status_subquery()
-
-            # Vérifier que l'équipement existe
-            cur.execute("SELECT id FROM machine WHERE id = %s",
-                        (equipement_id,))
-            if not cur.fetchone():
-                raise NotFoundError(f"Équipement {equipement_id} non trouvé")
-
-            search_clause = ""
-            params_count: list = [equipement_id]
-            params_items: list = [CLOSED_STATUS_CODE,
-                                  CLOSED_STATUS_CODE, equipement_id]
-
-            if search:
-                search_clause = " AND (m.code ILIKE %s OR m.name ILIKE %s)"
-                like = f"%{search}%"
-                params_count += [like, like]
-                params_items += [like, like]
-
-            # Total
-            cur.execute(
-                f"SELECT COUNT(*) FROM machine m WHERE m.equipement_mere = %s{search_clause}",
-                params_count
-            )
-            total = cur.fetchone()[0] or 0
-
-            from math import ceil
-            total_pages = ceil(total / limit) if limit > 0 else 1
-            offset = (page - 1) * limit
-
-            query = f"""
-                SELECT
-                    m.id,
-                    m.code,
-                    m.name,
-                    COUNT(CASE WHEN i.status_actual != {csq} THEN i.id END) as open_interventions_count,
-                    COUNT(CASE WHEN i.status_actual != {csq} AND i.priority = 'urgent' THEN i.id END) as urgent_count
-                FROM machine m
-                LEFT JOIN intervention i ON i.machine_id = m.id
-                WHERE m.equipement_mere = %s{search_clause}
-                GROUP BY m.id
-                ORDER BY m.name ASC
-                LIMIT %s OFFSET %s
-            """
-            params_items += [limit, offset]
-            cur.execute(query, params_items)
-            rows = cur.fetchall()
-            cols = [desc[0] for desc in cur.description]
-            items = []
-            for row in rows:
-                child = dict(zip(cols, row))
-                open_c = child.pop('open_interventions_count', 0) or 0
-                urgent_c = child.pop('urgent_count', 0) or 0
-                child['health'] = self._calculate_health(open_c, urgent_c)
-                items.append(child)
-
-            return {
-                'total': total,
-                'page': page,
-                'page_size': limit,
-                'total_pages': total_pages,
-                'items': items
-            }
         except NotFoundError:
             raise
         except HTTPException:

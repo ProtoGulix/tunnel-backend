@@ -82,15 +82,6 @@ class EquipementChildItem(BaseModel):
         from_attributes = True
 
 
-class EquipementChildrenPaginated(BaseModel):
-    """Enfants paginés pour GET /equipements/{id}/children"""
-    total: int
-    page: int
-    page_size: int
-    total_pages: int
-    items: list[EquipementChildItem]
-
-
 class EquipementDetail(BaseModel):
     """Équipement détaillé avec tous les champs, children_count et interventions paginées"""
     id: UUID
