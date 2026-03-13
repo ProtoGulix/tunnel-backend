@@ -2,7 +2,7 @@
 from fastapi import APIRouter, Query, status, Depends
 from api.equipements.repo import EquipementRepository
 from api.equipements.schemas import (
-    EquipementListItem,
+    EquipementListPaginated,
     EquipementDetail,
     EquipementChildrenPaginated,
     EquipementStatsDetailed,
@@ -10,20 +10,34 @@ from api.equipements.schemas import (
     EquipementCreate,
     EquipementUpdate
 )
+from api.utils.pagination import create_pagination_meta
 
 from api.auth.permissions import require_authenticated
 
 router = APIRouter(prefix="/equipements", tags=["equipements"], dependencies=[Depends(require_authenticated)])
 
 
-@router.get("", response_model=list[EquipementListItem])
-@router.get("/", response_model=list[EquipementListItem])
+@router.get("", response_model=EquipementListPaginated)
+@router.get("/", response_model=EquipementListPaginated)
 async def list_equipements(
-    search: str | None = Query(None, description="Recherche insensible à la casse sur code, nom ou affectation")
+    search: str | None = Query(None, description="Recherche insensible à la casse sur code, nom ou affectation"),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=500),
+    exclude_class: str | None = Query(None, description="Codes de classes à exclure, séparés par virgule. Ex: POM,SCI"),
 ):
-    """Liste tous les équipements - vue légère avec health"""
+    """Liste les équipements avec pagination et facettes par classe"""
     repo = EquipementRepository()
-    return repo.get_all(search=search)
+    exclude_list = [c.strip() for c in exclude_class.split(",") if c.strip()] if exclude_class else None
+    items = repo.get_all(search=search, skip=skip, limit=limit, exclude_class=exclude_list)
+    total = repo.count_all(search=search, exclude_class=exclude_list)
+    facets = repo.get_facets(search=search)
+    return {
+        "items": items,
+        "pagination": create_pagination_meta(total=total, offset=skip, limit=limit, count=len(items)),
+        "facets": {
+            "equipement_class": facets,
+        },
+    }
 
 
 @router.get("/{equipement_id}", response_model=EquipementDetail)

@@ -18,19 +18,38 @@ class EquipementRepository:
         """Retourne une sous-requête paramétrée pour l'ID du statut fermé"""
         return "(SELECT id FROM intervention_status_ref WHERE code = %s LIMIT 1)"
 
-    def get_all(self, search: str | None = None) -> List[Dict[str, Any]]:
-        """Récupère tous les équipements - liste légère avec health"""
+    def _build_filter_clause(
+        self,
+        search: str | None = None,
+        exclude_class: list[str] | None = None,
+    ) -> tuple[str, list]:
+        """Construit la clause WHERE et les params associés pour les filtres de liste."""
+        conditions = []
+        params: list = []
+        if search:
+            like = f"%{search}%"
+            conditions.append("(m.code ILIKE %s OR m.name ILIKE %s OR m.affectation ILIKE %s)")
+            params.extend([like, like, like])
+        if exclude_class:
+            placeholders = ",".join(["%s"] * len(exclude_class))
+            conditions.append(f"(ec.code IS NULL OR ec.code NOT IN ({placeholders}))")
+            params.extend(exclude_class)
+        where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+        return where_clause, params
+
+    def get_all(
+        self,
+        search: str | None = None,
+        skip: int = 0,
+        limit: int = 50,
+        exclude_class: list[str] | None = None,
+    ) -> List[Dict[str, Any]]:
+        """Récupère les équipements paginés - liste légère avec health"""
         conn = self._get_connection()
         try:
             cur = conn.cursor()
             csq = self._closed_status_subquery()
-
-            search_clause = ""
-            search_params: list = []
-            if search:
-                search_clause = " WHERE (m.code ILIKE %s OR m.name ILIKE %s OR m.affectation ILIKE %s)"
-                like = f"%{search}%"
-                search_params = [like, like, like]
+            where_clause, filter_params = self._build_filter_clause(search=search, exclude_class=exclude_class)
 
             query = f"""
                 SELECT
@@ -46,12 +65,13 @@ class EquipementRepository:
                 FROM machine m
                 LEFT JOIN intervention i ON i.machine_id = m.id
                 LEFT JOIN equipement_class ec ON ec.id = m.equipement_class_id
-                {search_clause}
+                {where_clause}
                 GROUP BY m.id, ec.id, ec.code, ec.label
                 ORDER BY urgent_count DESC, open_interventions_count DESC, m.name ASC
+                LIMIT %s OFFSET %s
             """
 
-            cur.execute(query, (*search_params, CLOSED_STATUS_CODE, CLOSED_STATUS_CODE))
+            cur.execute(query, (CLOSED_STATUS_CODE, CLOSED_STATUS_CODE, *filter_params, limit, skip))
             rows = cur.fetchall()
             cols = [desc[0] for desc in cur.description]
             equipements = [dict(zip(cols, row)) for row in rows]
@@ -66,22 +86,15 @@ class EquipementRepository:
                     'level': health['level'],
                     'reason': health['reason']
                 }
-                equipement['parent_id'] = equipement.pop(
-                    'equipement_mere', None)
+                equipement['parent_id'] = equipement.pop('equipement_mere', None)
 
-                # Restructurer equipement_class
                 ec_id = equipement.pop('equipement_class_id', None)
                 ec_code = equipement.pop('equipement_class_code', None)
                 ec_label = equipement.pop('equipement_class_label', None)
 
-                if ec_id:
-                    equipement['equipement_class'] = {
-                        'id': ec_id,
-                        'code': ec_code,
-                        'label': ec_label
-                    }
-                else:
-                    equipement['equipement_class'] = None
+                equipement['equipement_class'] = (
+                    {'id': ec_id, 'code': ec_code, 'label': ec_label} if ec_id else None
+                )
 
             return equipements
 
@@ -89,6 +102,55 @@ class EquipementRepository:
             raise
         except Exception as e:
             raise_db_error(e, "opération")
+        finally:
+            release_connection(conn)
+
+    def count_all(
+        self,
+        search: str | None = None,
+        exclude_class: list[str] | None = None,
+    ) -> int:
+        """Compte le nombre total d'équipements avec les mêmes filtres que get_all."""
+        conn = self._get_connection()
+        try:
+            cur = conn.cursor()
+            where_clause, filter_params = self._build_filter_clause(search=search, exclude_class=exclude_class)
+            cur.execute(
+                f"""
+                SELECT COUNT(*)
+                FROM machine m
+                LEFT JOIN equipement_class ec ON ec.id = m.equipement_class_id
+                {where_clause}
+                """,
+                filter_params,
+            )
+            return cur.fetchone()[0] or 0
+        except Exception as e:
+            raise_db_error(e, "comptage équipements")
+        finally:
+            release_connection(conn)
+
+    def get_facets(self, search: str | None = None) -> List[Dict[str, Any]]:
+        """Retourne le nombre d'équipements par classe."""
+        conn = self._get_connection()
+        try:
+            cur = conn.cursor()
+            where_clause, filter_params = self._build_filter_clause(search=search)
+            cur.execute(
+                f"""
+                SELECT ec.code, ec.label, COUNT(m.id) as count
+                FROM machine m
+                LEFT JOIN equipement_class ec ON ec.id = m.equipement_class_id
+                {where_clause}
+                GROUP BY ec.code, ec.label
+                ORDER BY count DESC
+                """,
+                filter_params,
+            )
+            rows = cur.fetchall()
+            return [{"code": r[0], "label": r[1], "count": r[2]} for r in rows]
+        except Exception as e:
+            raise_db_error(e, "facettes équipements")
         finally:
             release_connection(conn)
 

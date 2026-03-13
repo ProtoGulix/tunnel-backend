@@ -5,6 +5,8 @@ from uuid import UUID
 
 from pydantic import BaseModel
 
+from api.utils.pagination import PaginationMeta
+
 
 class EquipmentClassRef(BaseModel):
     """Référence à une classe d'équipement"""
@@ -144,3 +146,17 @@ class EquipementHealthOnly(BaseModel):
     """Health uniquement pour endpoint ultra-léger"""
     level: str
     reason: str
+
+
+class EquipementClassFacetItem(BaseModel):
+    """Facette par classe d'équipement"""
+    code: str | None = None
+    label: str | None = None
+    count: int
+
+
+class EquipementListPaginated(BaseModel):
+    """Réponse paginée de la liste des équipements avec facettes"""
+    items: list[EquipementListItem]
+    pagination: PaginationMeta
+    facets: dict[str, list[EquipementClassFacetItem]]
