@@ -6,24 +6,59 @@ Demandes d'achat de matériel, liées aux interventions et aux commandes fournis
 
 ---
 
-## `GET /purchase-requests`
+## `GET /purchase-requests` · `GET /purchase-requests/list`
 
-Liste toutes les demandes d'achat avec filtres. Alias de `/list`.
+Ces deux routes sont **strictement identiques** : même logique, mêmes paramètres, même réponse. `/list` est conservé pour compatibilité ; préférer `/purchase-requests` dans les nouveaux appels.
+
+Retourne une liste légère (`PurchaseRequestListItem`) — pas d'objets imbriqués, statut calculé en SQL. Payload ~95% plus léger que le détail complet.
 
 ### Query params
 
-| Param              | Type   | Défaut | Description                                                |
-| ------------------ | ------ | ------ | ---------------------------------------------------------- |
-| `skip`             | int    | 0      | Offset                                                     |
-| `limit`            | int    | 100    | Max: 1000                                                  |
-| `status`           | string | —      | Filtrer par statut dérivé                                  |
-| `exclude_statuses` | string | —      | Statuts à exclure, séparés par virgule. Ex : `RECEIVED,REJECTED` |
-| `intervention_id`  | uuid   | —      | Filtrer par intervention                                   |
-| `urgency`          | string | —      | `normal`, `high`, `critical`                               |
+| Param              | Type   | Défaut | Description                                                              |
+| ------------------ | ------ | ------ | ------------------------------------------------------------------------ |
+| `skip`             | int    | 0      | Offset de pagination                                                     |
+| `limit`            | int    | 100    | Max : 1000                                                               |
+| `status`           | string | —      | Filtrer par statut dérivé exact (ex : `PENDING_DISPATCH`)                |
+| `exclude_statuses` | string | —      | Statuts à exclure, séparés par virgule (ex : `RECEIVED,REJECTED,PARTIAL`)|
+| `intervention_id`  | uuid   | —      | Filtrer par intervention                                                 |
+| `urgency`          | string | —      | `normal`, `high`, `critical`                                             |
+
+> `status` et `exclude_statuses` sont mutuellement redondants — utiliser l'un ou l'autre.
 
 ### Réponse `200` — `List[PurchaseRequestListItem]`
 
-Même structure que `GET /purchase-requests/list`.
+```json
+[
+  {
+    "id": "uuid",
+    "item_label": "Roulement SKF 6205",
+    "quantity": 2,
+    "unit": "pcs",
+    "derived_status": {
+      "code": "PENDING_DISPATCH",
+      "label": "À dispatcher",
+      "color": "#f59e0b"
+    },
+    "stock_item_id": "uuid",
+    "stock_item_ref": "OUT-ROUL-SKF-6205",
+    "stock_item_name": "Roulement SKF 6205",
+    "intervention_code": "CN001-REA-20260113-QC",
+    "requester_name": "Jean Dupont",
+    "urgency": "high",
+    "urgent": true,
+    "quotes_count": 0,
+    "selected_count": 0,
+    "suppliers_count": 2,
+    "created_at": "2026-01-13T10:00:00",
+    "updated_at": "2026-01-13T10:00:00"
+  }
+]
+```
+
+| Champ      | Description                                                           |
+| ---------- | --------------------------------------------------------------------- |
+| `urgency`  | Niveau d'urgence stocké en base : `normal` (défaut), `high`, `critical` |
+| `urgent`   | Calculé à la volée : `true` si `urgency` = `high` ou `critical`         |
 
 ---
 
@@ -78,60 +113,11 @@ Le statut d'une demande d'achat est **calculé dynamiquement** à chaque lecture
 
 > **`REJECTED`** : Statut calculé automatiquement. Se déclenche quand toutes les lignes de commande liées à la DA appartiennent à des paniers terminaux (`CANCELLED` ou `CLOSED`) et qu'aucune n'a été sélectionnée (`is_selected = false`). Cela couvre aussi le cas des **lignes jumelles** (mode consultation, plusieurs fournisseurs) où aucune offre n'a été retenue.
 
-> Pour filtrer par statut : `GET /purchase-requests/list?status=PENDING_DISPATCH` ou l'endpoint dédié `GET /purchase-requests/status/PENDING_DISPATCH`.
+> Pour filtrer par statut : `GET /purchase-requests?status=PENDING_DISPATCH` ou l'endpoint dédié `GET /purchase-requests/status/PENDING_DISPATCH`.
 
 ---
 
-## `GET /purchase-requests/list` [v1.2.0]
-
-Liste optimisée légère pour tableaux. Payload ~95% plus léger.
-
-### Query params
-
-| Param              | Type   | Défaut | Description                                                |
-| ------------------ | ------ | ------ | ---------------------------------------------------------- |
-| `skip`             | int    | 0      | Offset                                                     |
-| `limit`            | int    | 100    | Max: 1000                                                  |
-| `status`           | string | —      | Filtrer par statut dérivé exact                            |
-| `exclude_statuses` | string | —      | Statuts à exclure, séparés par virgule. Ex : `RECEIVED,REJECTED,PARTIAL` |
-| `intervention_id`  | uuid   | —      | Filtrer par intervention                                   |
-| `urgency`          | string | —      | `normal`, `high`, `critical`                               |
-
-> `status` et `exclude_statuses` sont compatibles mais mutuellement redondants — préférer l'un ou l'autre.
-
-### Réponse `200` — PurchaseRequestListItem
-
-```json
-[
-  {
-    "id": "uuid",
-    "item_label": "Roulement SKF 6205",
-    "quantity": 2,
-    "unit": "pcs",
-    "derived_status": {
-      "code": "PENDING_DISPATCH",
-      "label": "À dispatcher",
-      "color": "#f59e0b"
-    },
-    "stock_item_id": "uuid",
-    "stock_item_ref": "OUT-ROUL-SKF-6205",
-    "stock_item_name": "Roulement SKF 6205",
-    "intervention_code": "CN001-REA-20260113-QC",
-    "requester_name": "Jean Dupont",
-    "urgency": "high",
-    "urgent": true,
-    "quotes_count": 0,
-    "selected_count": 0,
-    "suppliers_count": 2,
-    "created_at": "2026-01-13T10:00:00",
-    "updated_at": "2026-01-13T10:00:00"
-  }
-]
-```
-
----
-
-## `GET /purchase-requests/detail/{id}` [v1.2.0]
+## `GET /purchase-requests/detail/{id}`
 
 Détail complet avec contexte enrichi : intervention + machine, stock item avec compteur fournisseurs, order lines avec fournisseur hydraté.
 
@@ -296,7 +282,7 @@ Même structure que `GET /purchase-requests/detail/{id}`.
 
 ## `GET /purchase-requests/status/{status}`
 
-Liste les demandes filtrées par statut dérivé. Raccourci sémantique vers `GET /purchase-requests/list?status={status}`.
+Liste les demandes filtrées par statut dérivé. Raccourci sémantique vers `GET /purchase-requests?status={status}`.
 
 ### Path param
 
@@ -314,7 +300,7 @@ Liste les demandes filtrées par statut dérivé. Raccourci sémantique vers `GE
 
 ### Réponse `200` — `List[PurchaseRequestListItem]`
 
-Même structure que `GET /purchase-requests/list`.
+Même structure que `GET /purchase-requests`.
 
 ### Erreurs
 
@@ -330,7 +316,7 @@ Demandes liées à une intervention. Alias de `/intervention/{id}/optimized?view
 
 ### Réponse `200` — `List[PurchaseRequestListItem]`
 
-Même structure que `GET /purchase-requests/list`.
+Même structure que `GET /purchase-requests`.
 
 ---
 
@@ -364,21 +350,22 @@ Crée une demande d'achat.
   "notes": null,
   "workshop": "Atelier 1",
   "intervention_id": "uuid",
-  "quantity_requested": 2,
-  "urgent": true,
   "requester_name": "Jean Dupont"
 }
 ```
 
-| Champ             | Type   | Requis | Description              |
-| ----------------- | ------ | ------ | ------------------------ |
-| `item_label`      | string | oui    | Libellé de l'article     |
-| `quantity`        | int    | oui    | Quantité (> 0)           |
-| `stock_item_id`   | uuid   | non    | Article stock normalisé  |
-| `unit`            | string | non    | Unité (pcs, m, kg, etc.) |
-| `intervention_id` | uuid   | non    | Intervention liée        |
-| `urgent`          | bool   | non    | Défaut: false            |
-| `requester_name`  | string | non    | Nom du demandeur         |
+| Champ             | Type   | Requis | Défaut   | Description                               |
+| ----------------- | ------ | ------ | -------- | ----------------------------------------- |
+| `item_label`      | string | **oui**| —        | Libellé de l’article                       |
+| `quantity`        | int    | **oui**| —        | Quantité (doit être > 0)                   |
+| `stock_item_id`   | uuid   | non    | null     | Article stock normalisé                   |
+| `unit`            | string | non    | null     | Unité (`pcs`, `m`, `kg`, etc.)            |
+| `intervention_id` | uuid   | non    | null     | Intervention liée                          |
+| `urgency`         | string | non    | `normal` | `normal`, `high`, `critical`              |
+| `requester_name`  | string | non    | null     | Nom du demandeur                          |
+| `reason`          | string | non    | null     | Raison de la demande                      |
+| `notes`           | string | non    | null     | Notes complémentaires                     |
+| `workshop`        | string | non    | null     | Atelier concerné                          |
 
 ### Règles métier
 
