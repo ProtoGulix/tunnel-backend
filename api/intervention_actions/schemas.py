@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
 from typing import Optional, List, Any
-from datetime import datetime
+from datetime import datetime, time
 from uuid import UUID
 from api.users.schemas import UserListItem
 
@@ -9,12 +9,14 @@ class InterventionActionIn(BaseModel):
     """Schéma d'entrée pour créer une action d'intervention"""
     intervention_id: UUID
     description: str
-    time_spent: float
+    time_spent: Optional[float] = Field(default=None)
     action_subcategory: int
     tech: UUID
     complexity_score: int
     complexity_factor: Optional[str] = Field(default=None)
     created_at: Optional[str] = Field(default=None)
+    action_start: Optional[time] = Field(default=None)
+    action_end: Optional[time] = Field(default=None)
 
     class Config:
         from_attributes = True
@@ -65,6 +67,8 @@ class InterventionActionOut(BaseModel):
     tech: Optional[UserListItem] = Field(default=None)
     complexity_score: Optional[int] = Field(default=None)
     complexity_factor: Optional[str] = Field(default=None)
+    action_start: Optional[time] = None
+    action_end: Optional[time] = None
     purchase_requests: List[Any] = Field(
         default_factory=list,
         description="Demandes d'achat liées (PurchaseRequestOut) via table de jonction"

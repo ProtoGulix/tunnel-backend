@@ -108,5 +108,8 @@ def raise_db_error(e: Exception, context: str = "opération") -> None:
         raise ConflictError(f"Cette ressource existe déjà ({context})")
     if pgcode == "23503":
         raise ValidationError(f"Référence invalide : une ressource liée est introuvable ({context})")
+    if pgcode == "P0001":
+        msg = getattr(getattr(e, "diag", None), "message_primary", None) or str(e)
+        raise ValidationError(msg)
 
     raise DatabaseError(str(e))

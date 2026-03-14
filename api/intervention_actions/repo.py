@@ -77,7 +77,8 @@ class InterventionActionRepository:
                 """,
                 (action_id,)
             )
-            pr_ids = [str(row[0]) for row in cur.fetchall() if row[0] is not None]
+            pr_ids = [str(row[0])
+                      for row in cur.fetchall() if row[0] is not None]
 
             if not pr_ids:
                 return []
@@ -107,7 +108,8 @@ class InterventionActionRepository:
                 where_clauses.append("ia.tech = %s")
                 params.append(tech_id)
 
-            where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
+            where_sql = ("WHERE " + " AND ".join(where_clauses)
+                         ) if where_clauses else ""
 
             cur.execute(f"""
                 SELECT ia.*,

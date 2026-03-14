@@ -9,6 +9,19 @@ from api.equipements.schemas import EquipementDetail
 from api.intervention_requests.schemas import InterventionRequestListItem
 
 
+class InterventionOpenItem(BaseModel):
+    """Schéma léger pour les interventions ouvertes d'un équipement"""
+    id: UUID
+    code: Optional[str] = None
+    title: Optional[str] = None
+    status_actual: Optional[str] = None
+    priority: Optional[str] = None
+    reported_date: Optional[date] = None
+
+    class Config:
+        from_attributes = True
+
+
 class InterventionCreate(BaseModel):
     """Schéma d'entrée pour créer une intervention (champs requis par le trigger)"""
     machine_id: UUID

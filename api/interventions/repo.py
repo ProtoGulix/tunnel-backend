@@ -346,6 +346,32 @@ class InterventionRepository:
         finally:
             release_connection(conn)
 
+    def get_open_by_equipement(self, equipement_id: str) -> List[Dict[str, Any]]:
+        """Retourne les interventions ouvertes ou en cours pour un équipement donné"""
+        conn = self._get_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                SELECT i.id, i.code, i.title, i.status_actual, i.priority, i.reported_date
+                FROM intervention i
+                JOIN intervention_status_ref isr ON isr.id = i.status_actual
+                WHERE i.machine_id = %s
+                  AND isr.code IN ('ouvert', 'en_cours')
+                ORDER BY i.reported_date DESC
+                """,
+                (equipement_id,)
+            )
+            rows = cur.fetchall()
+            cols = [desc[0] for desc in cur.description]
+            return [dict(zip(cols, row)) for row in rows]
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise_db_error(e, "opération")
+        finally:
+            release_connection(conn)
+
     def add(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Crée une nouvelle intervention"""
         from api.interventions.validators import InterventionValidator

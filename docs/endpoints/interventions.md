@@ -199,6 +199,8 @@ Détail complet d'une intervention. **La structure est différente de la liste**
       },
       "complexity_score": 7,
       "complexity_factor": "PCE",
+      "action_start": "08:00:00",
+      "action_end": "09:30:00",
       "purchase_requests": [
         {
           "id": "uuid",
@@ -242,6 +244,31 @@ Détail complet d'une intervention. **La structure est différente de la liste**
 | `actions`              | Toujours `[]`                                                           | Tableau de [InterventionActionOut](intervention-actions.md) complet avec `subcategory`, `tech`, `purchase_requests`                                         |
 | `status_logs`          | Toujours `[]`                                                           | Tableau de [InterventionStatusLogOut](intervention-status-log.md)                                                                                           |
 | `stats.purchase_count` | Calculé en SQL (agrégat)                                                | Calculé depuis les `purchase_requests` chargées dans les actions                                                                                            |
+
+---
+
+## `GET /interventions/open-by-equipement/{equipement_id}`
+
+Retourne les interventions ouvertes ou en cours d'un équipement. Utilisé par le formulaire de saisie planning pour le sélecteur équipement → intervention.
+
+### Réponse `200`
+
+```json
+[
+  {
+    "id": "uuid",
+    "code": "CN001-REA-20260314-QC",
+    "title": "Remplacement roulement principal",
+    "status_actual": "en_cours",
+    "priority": "urgent",
+    "reported_date": "2026-03-14"
+  }
+]
+```
+
+- Filtre : `status_actual` dont le code est `ouvert` ou `en_cours`
+- Ordonné par `reported_date DESC`
+- Retourne `[]` si aucun résultat (pas de 404)
 
 ---
 

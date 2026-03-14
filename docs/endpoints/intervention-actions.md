@@ -12,10 +12,10 @@ Liste toutes les actions d'intervention.
 
 ### Query params
 
-| Param   | Type | Défaut          |
-| ------- | ---- | --------------- |
-| `skip`  | int  | 0               |
-| `limit` | int  | 100 (max: 1000) |
+| Param     | Type | Défaut | Description                                      |
+| --------- | ---- | ------ | ------------------------------------------------ |
+| `date`    | date | —      | Filtre sur `created_at::date` (ex: `2026-03-14`) |
+| `tech_id` | uuid | —      | Filtre sur le technicien                         |
 
 ---
 
@@ -53,6 +53,8 @@ Détail d'une action avec sous-catégorie et demandes d'achat.
   },
   "complexity_score": 7,
   "complexity_factor": "PCE",
+  "action_start": "08:00:00",
+  "action_end": "09:30:00",
   "purchase_requests": [
     {
       "id": "uuid",
@@ -94,7 +96,29 @@ Détail d'une action avec sous-catégorie et demandes d'achat.
 
 Ajoute une action à une intervention.
 
-### Entrée
+Deux modes exclusifs pour saisir le temps — la logique est gérée par trigger PostgreSQL :
+
+- **Mode bornes** : fournir `action_start` + `action_end` → `time_spent` est calculé automatiquement (ignoré si fourni)
+- **Mode direct** : fournir `time_spent` → `action_start`/`action_end` sont ignorés
+
+Fournir les deux ou aucun des deux déclenche une erreur `400` avec le message du trigger.
+
+### Entrée — mode bornes
+
+```json
+{
+  "intervention_id": "5ecf60d5-8471-4739-8ba8-0fdad7b51781",
+  "description": "Remplacement du roulement SKF 6205",
+  "action_start": "08:00:00",
+  "action_end": "09:30:00",
+  "action_subcategory": 30,
+  "tech": "a1b2c3d4-...",
+  "complexity_score": 7,
+  "complexity_factor": "PCE"
+}
+```
+
+### Entrée — mode direct
 
 ```json
 {
@@ -113,7 +137,9 @@ Ajoute une action à une intervention.
 | -------------------- | -------- | ------------ | --------------------------------------------------------------------------------------- |
 | `intervention_id`    | uuid     | oui          | Intervention parente                                                                    |
 | `description`        | string   | oui          | Description (HTML nettoyé)                                                              |
-| `time_spent`         | float    | oui          | Quarts d'heure uniquement : 0.25, 0.5, 0.75, 1.0... Min: 0.25                           |
+| `time_spent`         | float    | conditionnel | Mode direct : quarts d'heure uniquement (0.25, 0.5…). Min: 0.25. Mutuellement exclusif avec `action_start`/`action_end` |
+| `action_start`       | time     | conditionnel | Mode bornes : heure de début (HH:MM:SS). Mutuellement exclusif avec `time_spent`        |
+| `action_end`         | time     | conditionnel | Mode bornes : heure de fin (HH:MM:SS). Doit être > `action_start`                      |
 | `action_subcategory` | int      | oui          | ID de la sous-catégorie                                                                 |
 | `tech`               | uuid     | oui          | Technicien                                                                              |
 | `complexity_score`   | int      | oui          | Score 1-10                                                                              |
@@ -123,6 +149,15 @@ Ajoute une action à une intervention.
 ### Réponse `201`
 
 Action complète avec sous-catégorie enrichie.
+
+### Erreurs
+
+| Code | Cas                                                           |
+| ---- | ------------------------------------------------------------- |
+| 400  | `action_start` et `time_spent` tous les deux fournis          |
+| 400  | Ni `action_start`/`action_end` ni `time_spent` fournis        |
+| 400  | `action_end` ≤ `action_start`                                 |
+| 400  | Bornes ou `time_spent` non multiples de 0.25h                 |
 
 ---
 

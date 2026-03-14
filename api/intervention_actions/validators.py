@@ -40,7 +40,6 @@ class InterventionActionValidator:
         required_fields = [
             'intervention_id',
             'description',
-            'time_spent',
             'action_subcategory',
             'tech',
             'complexity_score'
@@ -110,8 +109,9 @@ class InterventionActionValidator:
         action_data['description'] = cls.sanitize_description(
             action_data['description'])
 
-        # Valide time_spent
-        cls.validate_time_spent(action_data['time_spent'])
+        # Valide time_spent si fourni (sinon le trigger calcule depuis action_start/action_end)
+        if action_data.get('time_spent') is not None:
+            cls.validate_time_spent(action_data['time_spent'])
 
         # Valide complexity_score
         cls.validate_complexity_score(action_data['complexity_score'])

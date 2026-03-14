@@ -2,7 +2,7 @@ from fastapi import APIRouter, Request, Query, Depends
 from typing import List, Dict, Any
 from api.interventions.repo import InterventionRepository
 from api.intervention_actions.repo import InterventionActionRepository
-from api.interventions.schemas import InterventionOut, InterventionIn, InterventionCreate
+from api.interventions.schemas import InterventionOut, InterventionIn, InterventionCreate, InterventionOpenItem
 from api.intervention_actions.schemas import InterventionActionOut
 
 from api.auth.permissions import require_authenticated
@@ -56,6 +56,13 @@ async def list_interventions(
         include_stats=include_stats,
         printed=printed
     )
+
+
+@router.get("/open-by-equipement/{equipement_id}", response_model=List[InterventionOpenItem])
+async def get_open_interventions_by_equipement(equipement_id: str, request: Request):
+    """Retourne les interventions ouvertes ou en cours d'un équipement (pour sélecteur planning)"""
+    repo = InterventionRepository()
+    return repo.get_open_by_equipement(equipement_id)
 
 
 @router.get("/{intervention_id}", response_model=InterventionOut)
