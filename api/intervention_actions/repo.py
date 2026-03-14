@@ -1,7 +1,7 @@
 from fastapi import HTTPException
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from uuid import uuid4
-from datetime import datetime
+from datetime import datetime, date
 
 from api.settings import settings
 from api.db import get_connection, release_connection
@@ -77,7 +77,7 @@ class InterventionActionRepository:
                 """,
                 (action_id,)
             )
-            pr_ids = [str(row[0]) for row in cur.fetchall()]
+            pr_ids = [str(row[0]) for row in cur.fetchall() if row[0] is not None]
 
             if not pr_ids:
                 return []
@@ -88,12 +88,28 @@ class InterventionActionRepository:
         except Exception:
             return []
 
-    def get_all(self) -> List[Dict[str, Any]]:
-        """Récupère toutes les actions avec tech hydraté"""
+    def get_all(
+        self,
+        filter_date: Optional[date] = None,
+        tech_id: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """Récupère toutes les actions avec tech hydraté, filtres optionnels date et tech_id"""
         conn = self._get_connection()
         try:
             cur = conn.cursor()
-            cur.execute("""
+            where_clauses = []
+            params: List[Any] = []
+
+            if filter_date is not None:
+                where_clauses.append("ia.created_at::date = %s")
+                params.append(filter_date)
+            if tech_id is not None:
+                where_clauses.append("ia.tech = %s")
+                params.append(tech_id)
+
+            where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
+
+            cur.execute(f"""
                 SELECT ia.*,
                     u.id as tech_id, u.first_name as tech_first_name,
                     u.last_name as tech_last_name, u.email as tech_email,
@@ -101,8 +117,9 @@ class InterventionActionRepository:
                     u.role as tech_role
                 FROM intervention_action ia
                 LEFT JOIN directus_users u ON ia.tech = u.id
+                {where_sql}
                 ORDER BY ia.created_at DESC
-            """)
+            """, params)
             rows = cur.fetchall()
             cols = [desc[0] for desc in cur.description]
             return [self._map_tech_user(dict(zip(cols, row))) for row in rows]
@@ -254,19 +271,22 @@ class InterventionActionRepository:
                 """
                 INSERT INTO intervention_action
                 (id, intervention_id, description, time_spent, action_subcategory,
-                 tech, complexity_score, complexity_factor, created_at, updated_at)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                 tech, complexity_score, complexity_factor, action_start, action_end,
+                 created_at, updated_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING *
                 """,
                 (
                     action_id,
                     validated_data['intervention_id'],
                     validated_data['description'],
-                    validated_data['time_spent'],
+                    validated_data.get('time_spent'),
                     validated_data['action_subcategory'],
                     validated_data['tech'],
                     validated_data['complexity_score'],
                     validated_data.get('complexity_factor'),
+                    validated_data.get('action_start'),
+                    validated_data.get('action_end'),
                     created_at,
                     now
                 )
@@ -274,10 +294,12 @@ class InterventionActionRepository:
             conn.commit()
             # Renvoie l'action avec les informations de sous-catégorie
             return self.get_by_id_with_subcategory(action_id)
+        except HTTPException:
+            conn.rollback()
+            raise
         except Exception as e:
             conn.rollback()
-            raise DatabaseError(
-                f"Erreur lors de l'ajout de l'action: {str(e)}") from e
+            raise_db_error(e, "ajout action")
         finally:
             release_connection(conn)
 
