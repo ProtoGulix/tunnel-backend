@@ -166,18 +166,18 @@ Fournir les deux ou aucun des deux déclenche une erreur `400` avec le message d
 }
 ```
 
-| Champ                | Type     | Requis       | Description                                                                             |
-| -------------------- | -------- | ------------ | --------------------------------------------------------------------------------------- |
-| `intervention_id`    | uuid     | oui          | Intervention parente                                                                    |
-| `description`        | string   | oui          | Description (HTML nettoyé)                                                              |
+| Champ                | Type     | Requis       | Description                                                                                                             |
+| -------------------- | -------- | ------------ | ----------------------------------------------------------------------------------------------------------------------- |
+| `intervention_id`    | uuid     | oui          | Intervention parente                                                                                                    |
+| `description`        | string   | oui          | Description (HTML nettoyé)                                                                                              |
 | `time_spent`         | float    | conditionnel | Mode direct : quarts d'heure uniquement (0.25, 0.5…). Min: 0.25. Mutuellement exclusif avec `action_start`/`action_end` |
-| `action_start`       | time     | conditionnel | Mode bornes : heure de début (HH:MM:SS). Mutuellement exclusif avec `time_spent`        |
-| `action_end`         | time     | conditionnel | Mode bornes : heure de fin (HH:MM:SS). Doit être > `action_start`                      |
-| `action_subcategory` | int      | oui          | ID de la sous-catégorie                                                                 |
-| `tech`               | uuid     | oui          | Technicien                                                                              |
-| `complexity_score`   | int      | oui          | Score 1-10                                                                              |
-| `complexity_factor`  | string   | conditionnel | **Requis si score > 5**. Code existant dans [complexity_factors](complexity-factors.md) |
-| `created_at`         | datetime | non          | Défaut: `now()`. Permet le backdating                                                   |
+| `action_start`       | time     | conditionnel | Mode bornes : heure de début (HH:MM:SS). Mutuellement exclusif avec `time_spent`                                        |
+| `action_end`         | time     | conditionnel | Mode bornes : heure de fin (HH:MM:SS). Doit être > `action_start`                                                       |
+| `action_subcategory` | int      | oui          | ID de la sous-catégorie                                                                                                 |
+| `tech`               | uuid     | oui          | Technicien                                                                                                              |
+| `complexity_score`   | int      | oui          | Score 1-10                                                                                                              |
+| `complexity_factor`  | string   | conditionnel | **Requis si score > 5**. Code existant dans [complexity_factors](complexity-factors.md)                                 |
+| `created_at`         | datetime | non          | Défaut: `now()`. Permet le backdating                                                                                   |
 
 ### Réponse `201`
 
@@ -185,12 +185,12 @@ Action complète avec sous-catégorie enrichie.
 
 ### Erreurs
 
-| Code | Cas                                                           |
-| ---- | ------------------------------------------------------------- |
-| 400  | `action_start` et `time_spent` tous les deux fournis          |
-| 400  | Ni `action_start`/`action_end` ni `time_spent` fournis        |
-| 400  | `action_end` ≤ `action_start`                                 |
-| 400  | Bornes ou `time_spent` non multiples de 0.25h                 |
+| Code | Cas                                                    |
+| ---- | ------------------------------------------------------ |
+| 400  | `action_start` et `time_spent` tous les deux fournis   |
+| 400  | Ni `action_start`/`action_end` ni `time_spent` fournis |
+| 400  | `action_end` ≤ `action_start`                          |
+| 400  | Bornes ou `time_spent` non multiples de 0.25h          |
 
 ---
 

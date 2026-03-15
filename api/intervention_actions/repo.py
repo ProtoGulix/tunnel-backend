@@ -138,7 +138,8 @@ class InterventionActionRepository:
             cols = [desc[0] for desc in cur.description]
             results = []
             for row in rows:
-                action = self._map_action_with_subcategory(dict(zip(cols, row)))
+                action = self._map_action_with_subcategory(
+                    dict(zip(cols, row)))
                 action = self._map_tech_user(action)
                 action['intervention'] = {
                     'id': action['intervention_id'],
@@ -149,7 +150,8 @@ class InterventionActionRepository:
                     'equipement_code': action.pop('interv_equipement_code', None),
                     'equipement_name': action.pop('interv_equipement_name', None),
                 } if action.get('intervention_id') else None
-                action['purchase_requests'] = self._get_linked_purchase_requests(str(action['id']), conn)
+                action['purchase_requests'] = self._get_linked_purchase_requests(
+                    str(action['id']), conn)
                 results.append(action)
             return results
         except HTTPException:
