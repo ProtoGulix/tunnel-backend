@@ -17,6 +17,39 @@ Liste toutes les actions d'intervention.
 | `date`    | date | —      | Filtre sur `created_at::date` (ex: `2026-03-14`) |
 | `tech_id` | uuid | —      | Filtre sur le technicien                         |
 
+### Réponse `200`
+
+Même structure que `GET /intervention-actions/{id}` avec en plus un objet `intervention` embarqué :
+
+```json
+[
+  {
+    "id": "uuid",
+    "intervention_id": "uuid",
+    "intervention": {
+      "id": "uuid",
+      "code": "CN001-REA-20260315-QC",
+      "title": "Remplacement roulement principal",
+      "status_actual": "en_cours",
+      "equipement_id": "uuid",
+      "equipement_code": "EQ-001",
+      "equipement_name": "Scie principale"
+    },
+    "description": "TEST",
+    "time_spent": 4.5,
+    "subcategory": { "id": 59, "name": "Catégorisation / Inventaire", "code": "SUP_INV", "category": { "..." } },
+    "tech": { "..." },
+    "complexity_score": 2,
+    "complexity_factor": null,
+    "action_start": "12:30:00",
+    "action_end": "17:00:00",
+    "purchase_requests": [],
+    "created_at": "2026-03-15T10:22:37Z",
+    "updated_at": "2026-03-15T10:22:37Z"
+  }
+]
+```
+
 ---
 
 ## `GET /intervention-actions/{id}`

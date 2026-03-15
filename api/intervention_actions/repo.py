@@ -122,11 +122,15 @@ class InterventionActionRepository:
                     u.id as tech_id, u.first_name as tech_first_name,
                     u.last_name as tech_last_name, u.email as tech_email,
                     u.initial as tech_initial, u.status as tech_status,
-                    u.role as tech_role
+                    u.role as tech_role,
+                    i.code as interv_code, i.title as interv_title, i.status_actual as interv_status,
+                    m.id as interv_equipement_id, m.code as interv_equipement_code, m.name as interv_equipement_name
                 FROM intervention_action ia
                 LEFT JOIN action_subcategory sc ON ia.action_subcategory = sc.id
                 LEFT JOIN action_category ac ON sc.category_id = ac.id
                 LEFT JOIN directus_users u ON ia.tech = u.id
+                LEFT JOIN intervention i ON ia.intervention_id = i.id
+                LEFT JOIN machine m ON i.machine_id = m.id
                 {where_sql}
                 ORDER BY ia.created_at DESC
             """, params)
@@ -136,6 +140,15 @@ class InterventionActionRepository:
             for row in rows:
                 action = self._map_action_with_subcategory(dict(zip(cols, row)))
                 action = self._map_tech_user(action)
+                action['intervention'] = {
+                    'id': action['intervention_id'],
+                    'code': action.pop('interv_code', None),
+                    'title': action.pop('interv_title', None),
+                    'status_actual': action.pop('interv_status', None),
+                    'equipement_id': action.pop('interv_equipement_id', None),
+                    'equipement_code': action.pop('interv_equipement_code', None),
+                    'equipement_name': action.pop('interv_equipement_name', None),
+                } if action.get('intervention_id') else None
                 action['purchase_requests'] = self._get_linked_purchase_requests(str(action['id']), conn)
                 results.append(action)
             return results

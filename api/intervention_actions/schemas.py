@@ -57,10 +57,25 @@ class InterventionActionPatch(BaseModel):
         from_attributes = True
 
 
+class InterventionRef(BaseModel):
+    """Intervention légère embarquée dans une action"""
+    id: UUID
+    code: Optional[str] = None
+    title: Optional[str] = None
+    status_actual: Optional[str] = None
+    equipement_id: Optional[UUID] = None
+    equipement_code: Optional[str] = None
+    equipement_name: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
 class InterventionActionOut(BaseModel):
     """Schéma de sortie pour une action d'intervention"""
     id: UUID
     intervention_id: Optional[UUID] = Field(default=None)
+    intervention: Optional[InterventionRef] = Field(default=None)
     description: Optional[str] = Field(default=None)
     time_spent: Optional[float] = Field(default=None)
     subcategory: Optional[ActionSubcategoryDetail] = Field(default=None)
