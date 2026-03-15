@@ -247,31 +247,6 @@ Détail complet d'une intervention. **La structure est différente de la liste**
 
 ---
 
-## `GET /interventions/open-by-equipement/{equipement_id}`
-
-Retourne les interventions ouvertes ou en cours d'un équipement. Utilisé par le formulaire de saisie planning pour le sélecteur équipement → intervention.
-
-### Réponse `200`
-
-```json
-[
-  {
-    "id": "uuid",
-    "code": "CN001-REA-20260314-QC",
-    "title": "Remplacement roulement principal",
-    "status_actual": "en_cours",
-    "priority": "urgent",
-    "reported_date": "2026-03-14"
-  }
-]
-```
-
-- Filtre : `status_actual` dont le code est `ouvert` ou `en_cours`
-- Ordonné par `reported_date DESC`
-- Retourne `[]` si aucun résultat (pas de 404)
-
----
-
 ## `GET /interventions/{id}/actions`
 
 Raccourci vers les actions d'une intervention. Voir [Intervention Actions](intervention-actions.md).
