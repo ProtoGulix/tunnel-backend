@@ -94,7 +94,7 @@ class InterventionActionRepository:
         filter_date: Optional[date] = None,
         tech_id: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
-        """Récupère toutes les actions avec tech hydraté, filtres optionnels date et tech_id"""
+        """Récupère toutes les actions avec subcategory, tech et purchase_requests hydratés"""
         conn = self._get_connection()
         try:
             cur = conn.cursor()
@@ -112,19 +112,33 @@ class InterventionActionRepository:
                          ) if where_clauses else ""
 
             cur.execute(f"""
-                SELECT ia.*,
+                SELECT
+                    ia.id, ia.intervention_id, ia.description, ia.time_spent,
+                    ia.tech, ia.complexity_score, ia.complexity_factor,
+                    ia.action_start, ia.action_end,
+                    ia.created_at, ia.updated_at,
+                    sc.id as subcategory_id, sc.name as subcategory_name, sc.code as subcategory_code,
+                    ac.id as category_id, ac.name as category_name, ac.code as category_code, ac.color,
                     u.id as tech_id, u.first_name as tech_first_name,
                     u.last_name as tech_last_name, u.email as tech_email,
                     u.initial as tech_initial, u.status as tech_status,
                     u.role as tech_role
                 FROM intervention_action ia
+                LEFT JOIN action_subcategory sc ON ia.action_subcategory = sc.id
+                LEFT JOIN action_category ac ON sc.category_id = ac.id
                 LEFT JOIN directus_users u ON ia.tech = u.id
                 {where_sql}
                 ORDER BY ia.created_at DESC
             """, params)
             rows = cur.fetchall()
             cols = [desc[0] for desc in cur.description]
-            return [self._map_tech_user(dict(zip(cols, row))) for row in rows]
+            results = []
+            for row in rows:
+                action = self._map_action_with_subcategory(dict(zip(cols, row)))
+                action = self._map_tech_user(action)
+                action['purchase_requests'] = self._get_linked_purchase_requests(str(action['id']), conn)
+                results.append(action)
+            return results
         except HTTPException:
             raise
         except Exception as e:
