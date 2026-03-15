@@ -25,6 +25,8 @@ Liste les interventions avec filtres, tri et pagination.
 | `sort`          | csv  | —      | Tri avec `-` pour DESC (ex: `-priority,-reported_date`)    |
 | `include`       | csv  | —      | Données optionnelles (`stats`). Stats incluses par défaut  |
 
+> Pour lister les interventions ouvertes d'un équipement (ex: sélecteur planning) : `GET /interventions?equipement_id=<uuid>&status=ouvert,en_cours`
+
 ### Réponse `200`
 
 ```json
@@ -79,9 +81,9 @@ Liste les interventions avec filtres, tri et pagination.
 ]
 ```
 
-| Champ     | Description                                                                                                              |
-| --------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `request` | Demande d'intervention à l'origine de cette intervention (`InterventionRequestListItem`). `null` si création manuelle.  |
+| Champ     | Description                                                                                                            |
+| --------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `request` | Demande d'intervention à l'origine de cette intervention (`InterventionRequestListItem`). `null` si création manuelle. |
 
 > **Note** : `actions` et `status_logs` sont toujours `[]` en liste. Utilisez `GET /interventions/{id}` pour les obtenir.
 
@@ -275,18 +277,18 @@ Crée une nouvelle intervention.
 
 > **Note** : `machine_id`, `type_inter` et `tech_initials` sont requis par le trigger PostgreSQL `trg_interv_code` qui génère le code d'intervention (`{machine.code}-{type_inter}-{YYYYMMDD}-{tech_initials}`). Une erreur DB est levée si l'un d'eux est absent ou si la machine est inconnue.
 
-| Champ           | Type   | Requis | Défaut   | Description                                |
-| --------------- | ------ | ------ | -------- | ------------------------------------------ |
-| `machine_id`    | uuid   | **oui**| —        | Équipement concerné (trigger exige une machine existante) |
-| `type_inter`    | string | **oui**| —        | Type d'intervention (ex: `curatif`, `preventif`) — intégré dans le code |
-| `tech_initials` | string | **oui**| —        | Initiales du technicien — intégrées dans le code |
-| `title`         | string | non    | null     | Titre de l'intervention                    |
-| `priority`      | string | non    | null     | `faible`, `normale`, `important`, `urgent` |
-| `reported_by`   | string | non    | null     | Nom du signaleur                           |
-| `status_actual` | string | non    | `ouvert` | Code statut initial (géré par trigger)     |
-| `printed_fiche` | bool   | non    | `false`  | Fiche imprimée ?                           |
-| `reported_date` | date   | non    | null     | Date de signalement                        |
-| `request_id`    | uuid   | non    | null     | UUID d'une demande existante à lier (statuts `nouvelle` ou `en_attente`). La demande passe automatiquement à `acceptee`. La liaison est **verrouillée** : la demande et l'intervention ne peuvent ensuite plus être liées à d'autres entités (`400` sinon). |
+| Champ           | Type   | Requis  | Défaut   | Description                                                                                                                                                                                                                                                 |
+| --------------- | ------ | ------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `machine_id`    | uuid   | **oui** | —        | Équipement concerné (trigger exige une machine existante)                                                                                                                                                                                                   |
+| `type_inter`    | string | **oui** | —        | Type d'intervention (ex: `curatif`, `preventif`) — intégré dans le code                                                                                                                                                                                     |
+| `tech_initials` | string | **oui** | —        | Initiales du technicien — intégrées dans le code                                                                                                                                                                                                            |
+| `title`         | string | non     | null     | Titre de l'intervention                                                                                                                                                                                                                                     |
+| `priority`      | string | non     | null     | `faible`, `normale`, `important`, `urgent`                                                                                                                                                                                                                  |
+| `reported_by`   | string | non     | null     | Nom du signaleur                                                                                                                                                                                                                                            |
+| `status_actual` | string | non     | `ouvert` | Code statut initial (géré par trigger)                                                                                                                                                                                                                      |
+| `printed_fiche` | bool   | non     | `false`  | Fiche imprimée ?                                                                                                                                                                                                                                            |
+| `reported_date` | date   | non     | null     | Date de signalement                                                                                                                                                                                                                                         |
+| `request_id`    | uuid   | non     | null     | UUID d'une demande existante à lier (statuts `nouvelle` ou `en_attente`). La demande passe automatiquement à `acceptee`. La liaison est **verrouillée** : la demande et l'intervention ne peuvent ensuite plus être liées à d'autres entités (`400` sinon). |
 
 ### Réponse `201`
 
@@ -318,8 +320,8 @@ Supprime une intervention. La suppression est **interdite** si l'intervention po
 
 ### Erreurs
 
-| Code | Cas                                                     |
-| ---- | ------------------------------------------------------- |
-| 404  | Intervention introuvable                                |
-| 400  | Intervention possède des actions liées                  |
-| 400  | Intervention possède des demandes d'achat liées         |
+| Code | Cas                                             |
+| ---- | ----------------------------------------------- |
+| 404  | Intervention introuvable                        |
+| 400  | Intervention possède des actions liées          |
+| 400  | Intervention possède des demandes d'achat liées |
