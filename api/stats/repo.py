@@ -152,7 +152,8 @@ class StatsRepository:
             
             # Calcul #4 : Charge vs capacité
             period_days = (end_date - start_date).days + 1
-            capacity_hours = 320 * (period_days / 30)  # 320h/mois
+            from api.constants import TEAM_CAPACITY_HOURS_PER_MONTH
+            capacity_hours = TEAM_CAPACITY_HOURS_PER_MONTH * (period_days / 30)
             total_hours = breakdown.get('total_hours', 0)
             charge_percent = (total_hours / capacity_hours * 100) if capacity_hours > 0 else 0
             
@@ -207,7 +208,8 @@ class StatsRepository:
     def _empty_metrics(self, start_date: date, end_date: date) -> ServiceStatusResponse:
         """Retourne des métriques vides quand pas de données"""
         period_days = (end_date - start_date).days + 1
-        capacity_hours = round(320 * (period_days / 30), 2)
+        from api.constants import TEAM_CAPACITY_HOURS_PER_MONTH
+        capacity_hours = round(TEAM_CAPACITY_HOURS_PER_MONTH * (period_days / 30), 2)
 
         return self._build_response(
             start_date=start_date,
@@ -628,7 +630,10 @@ class StatsRepository:
 
             charge_dep = global_charges.get('charge_depannage', 0)
             charge_evitable = global_charges.get('charge_depannage_evitable', 0)
+            charge_totale = global_charges.get('charge_totale', 0)
             taux = (charge_evitable / charge_dep * 100) if charge_dep > 0 else 0
+            from api.constants import ETP_HOURS_PER_DAY
+            etp = round(charge_totale / (period_days * ETP_HOURS_PER_DAY), 2) if period_days > 0 else 0
 
             return ChargeTechniquePeriod(
                 period=Period(
@@ -636,6 +641,7 @@ class StatsRepository:
                     end_date=end_date.isoformat(),
                     days=period_days,
                 ),
+                etp=etp,
                 charges=ChargeBreakdown(
                     charge_totale=round(global_charges.get('charge_totale', 0), 2),
                     charge_depannage=round(charge_dep, 2),
@@ -830,6 +836,7 @@ class StatsRepository:
                 end_date=end_date.isoformat(),
                 days=period_days,
             ),
+            etp=0.0,
             charges=ChargeBreakdown(
                 charge_totale=0,
                 charge_depannage=0,

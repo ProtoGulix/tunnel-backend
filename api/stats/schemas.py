@@ -135,6 +135,7 @@ class EquipementClassBreakdown(BaseModel):
 class ChargeTechniquePeriod(BaseModel):
     period: Period
     charges: ChargeBreakdown
+    etp: float
     taux_depannage_evitable: TauxDepannageEvitable
     cause_breakdown: List[ComplexityFactorBreakdown]
     by_equipement_class: List[EquipementClassBreakdown]
