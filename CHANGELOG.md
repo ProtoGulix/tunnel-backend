@@ -2,6 +2,42 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [2.11.0] - 16 mars 2026
+
+### Nouveautés
+
+- **Champ `etp` dans la charge technique** (`GET /stats/charge-technique`)
+  - Chaque période retourne désormais un champ `etp` : équivalent temps plein consommé
+  - Formule : `charge_totale / (period_days × 7.8h)` (base contrat 39h/sem)
+  - Constantes centralisées : `TEAM_CAPACITY_HOURS_PER_MONTH = 400` et `ETP_HOURS_PER_DAY = 7.8` dans `api/constants.py`
+
+- **Actions groupées par date dans `GET /intervention-actions`**
+  - Nouvelle structure de réponse avec groupement journalier et métriques de santé par jour
+  - Inclut le total d'heures, le nombre d'actions et la répartition par type
+
+- **Infos intervention embarquées dans chaque action** (`GET /intervention-actions`)
+  - Chaque action retourne désormais un objet `intervention` avec le code, le titre et l'équipement concerné
+
+- **Champs `start_time` et `end_time` sur les actions d'intervention**
+  - Nouveaux champs optionnels pour horodater précisément le début et la fin d'une action
+
+- **Filtres enrichis sur `GET /equipements`**
+  - `select_mere` : ne retourner que les équipements parents (mères)
+  - `select_class` : filtrer par classe d'équipement
+  - `exclude_class` : exclure une ou plusieurs classes
+  - Pagination ajoutée
+  - Facettes par classe d'équipement dans la réponse
+
+### Corrections
+
+- **`GET /intervention-actions`** : hydratation correcte de la sous-catégorie et des demandes d'achat liées dans le listing
+- **Demandes d'achat liées** : les `purchase_request_id` NULL sont désormais ignorés lors de la récupération
+- **Capacité mensuelle** corrigée de 320h à 400h (reflet de l'équipe réelle : 2 techs 39h + renfort mensuel)
+
+### Suppressions
+
+- **`GET /interventions/open-by-equipement`** supprimé — remplacé par `GET /interventions?equipement_id=&status=ouvert`
+
 ## [2.10.0] - 12 mars 2026
 
 ### Nouveautés
