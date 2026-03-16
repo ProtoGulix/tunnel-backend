@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
 from typing import Optional, List, Any
-from datetime import datetime, time
+from datetime import datetime, time, date
 from uuid import UUID
 from api.users.schemas import UserListItem
 
@@ -52,6 +52,8 @@ class InterventionActionPatch(BaseModel):
     tech: Optional[UUID] = Field(default=None)
     complexity_score: Optional[int] = Field(default=None)
     complexity_factor: Optional[str] = Field(default=None)
+    action_start: Optional[time] = Field(default=None)
+    action_end: Optional[time] = Field(default=None)
 
     class Config:
         from_attributes = True
@@ -93,3 +95,9 @@ class InterventionActionOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class InterventionActionsByDate(BaseModel):
+    """Actions groupées par jour — réponse de GET /intervention-actions"""
+    date: date
+    actions: List[InterventionActionOut]

@@ -36,7 +36,9 @@ Tri par défaut : urgents DESC, ouverts DESC, nom ASC.
       "name": "Scie principale",
       "health": {
         "level": "ok",
-        "reason": "Aucune anomalie détectée"
+        "reason": "Aucune intervention ouverte",
+        "open_interventions_count": 0,
+        "urgent_count": 0
       },
       "parent_id": null,
       "equipement_class": {
@@ -96,6 +98,8 @@ Détail complet d'un équipement avec tous les champs de la base, `children_coun
   "health": {
     "level": "critical",
     "reason": "1 intervention urgente ouverte",
+    "open_interventions_count": 3,
+    "urgent_count": 1,
     "rules_triggered": ["URGENT_OPEN >= 1"]
   },
   "parent_id": null,
@@ -203,6 +207,8 @@ Statistiques détaillées pour un équipement.
 ```json
 {
   "level": "ok",
-  "reason": "Aucune anomalie détectée"
+  "reason": "Aucune intervention ouverte",
+  "open_interventions_count": 0,
+  "urgent_count": 0
 }
 ```

@@ -5,7 +5,7 @@ from datetime import datetime, date
 
 from api.settings import settings
 from api.db import get_connection, release_connection
-from api.errors.exceptions import DatabaseError, raise_db_error, NotFoundError
+from api.errors.exceptions import DatabaseError, raise_db_error, NotFoundError, ValidationError
 from api.utils.sanitizer import strip_html
 from api.intervention_actions.validators import InterventionActionValidator
 
@@ -91,25 +91,28 @@ class InterventionActionRepository:
 
     def get_all(
         self,
-        filter_date: Optional[date] = None,
+        date_from: Optional[date] = None,
+        date_to: Optional[date] = None,
         tech_id: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
-        """Récupère toutes les actions avec subcategory, tech et purchase_requests hydratés"""
+        """Récupère les actions groupées par date (created_at::date), triées du plus récent au plus ancien"""
         conn = self._get_connection()
         try:
             cur = conn.cursor()
             where_clauses = []
             params: List[Any] = []
 
-            if filter_date is not None:
-                where_clauses.append("ia.created_at::date = %s")
-                params.append(filter_date)
+            if date_from is not None:
+                where_clauses.append("ia.created_at::date >= %s")
+                params.append(date_from)
+            if date_to is not None:
+                where_clauses.append("ia.created_at::date <= %s")
+                params.append(date_to)
             if tech_id is not None:
                 where_clauses.append("ia.tech = %s")
                 params.append(tech_id)
 
-            where_sql = ("WHERE " + " AND ".join(where_clauses)
-                         ) if where_clauses else ""
+            where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
 
             cur.execute(f"""
                 SELECT
@@ -132,14 +135,15 @@ class InterventionActionRepository:
                 LEFT JOIN intervention i ON ia.intervention_id = i.id
                 LEFT JOIN machine m ON i.machine_id = m.id
                 {where_sql}
-                ORDER BY ia.created_at DESC
+                ORDER BY ia.created_at::date DESC, ia.created_at ASC
             """, params)
             rows = cur.fetchall()
             cols = [desc[0] for desc in cur.description]
-            results = []
+
+            # Groupement par date
+            groups: Dict[date, List[Dict[str, Any]]] = {}
             for row in rows:
-                action = self._map_action_with_subcategory(
-                    dict(zip(cols, row)))
+                action = self._map_action_with_subcategory(dict(zip(cols, row)))
                 action = self._map_tech_user(action)
                 action['intervention'] = {
                     'id': action['intervention_id'],
@@ -152,8 +156,15 @@ class InterventionActionRepository:
                 } if action.get('intervention_id') else None
                 action['purchase_requests'] = self._get_linked_purchase_requests(
                     str(action['id']), conn)
-                results.append(action)
-            return results
+                day = action['created_at'].date() if action.get('created_at') else None
+                if day is not None:
+                    groups.setdefault(day, []).append(action)
+
+            # Retourne les jours du plus récent au plus ancien
+            return [
+                {'date': d, 'actions': groups[d]}
+                for d in sorted(groups.keys(), reverse=True)
+            ]
         except HTTPException:
             raise
         except Exception as e:
@@ -282,12 +293,8 @@ class InterventionActionRepository:
 
     def add(self, action_data: Dict[str, Any]) -> Dict[str, Any]:
         """Ajoute une nouvelle action à une intervention"""
-        # Validation et préparation des données selon les règles métier
-        try:
-            validated_data = InterventionActionValidator.validate_and_prepare(
-                action_data)
-        except ValueError as e:
-            raise DatabaseError(f"Erreur de validation: {str(e)}") from e
+        # Validation et préparation des données — lève ValidationError (400) si invalide
+        validated_data = InterventionActionValidator.validate_and_prepare(action_data)
 
         conn = self._get_connection()
         try:
@@ -345,6 +352,8 @@ class InterventionActionRepository:
             'tech': None,
             'complexity_score': None,
             'complexity_factor': None,
+            'action_start': None,
+            'action_end': None,
         }
 
         updates = {k: v for k, v in patch_data.items(
@@ -367,14 +376,14 @@ class InterventionActionRepository:
             updates['complexity_factor'] = InterventionActionValidator.validate_complexity_factor(
                 updates['complexity_factor'])
 
-        # Si l'un des deux score/factor est fourni, on valide la règle score > 5
+        # Valide la règle score > 5 → complexity_factor obligatoire (valeurs fusionnées)
         current = self.get_by_id_with_subcategory(action_id)
-        score = updates.get('complexity_score',
-                            current.get('complexity_score'))
-        factor = updates.get('complexity_factor',
-                             current.get('complexity_factor'))
-        InterventionActionValidator.validate_complexity_with_factor(
-            score, factor)
+        score = updates.get('complexity_score', current.get('complexity_score'))
+        factor = updates.get('complexity_factor', current.get('complexity_factor'))
+        if isinstance(score, int) and score > 5 and (not factor or not str(factor).strip()):
+            raise ValidationError(
+                "complexity_factor est obligatoire quand complexity_score > 5"
+            )
 
         conn = self._get_connection()
         try:
@@ -390,10 +399,12 @@ class InterventionActionRepository:
                 params
             )
             conn.commit()
+        except HTTPException:
+            conn.rollback()
+            raise
         except Exception as e:
             conn.rollback()
-            raise DatabaseError(
-                f"Erreur lors de la mise à jour: {str(e)}") from e
+            raise_db_error(e, "mise à jour action")
         finally:
             release_connection(conn)
 

@@ -3,7 +3,7 @@ from typing import List, Optional
 from datetime import date
 from uuid import UUID
 from api.intervention_actions.repo import InterventionActionRepository
-from api.intervention_actions.schemas import InterventionActionOut, InterventionActionIn, InterventionActionPatch
+from api.intervention_actions.schemas import InterventionActionOut, InterventionActionIn, InterventionActionPatch, InterventionActionsByDate
 
 from api.auth.permissions import require_authenticated
 
@@ -11,14 +11,23 @@ router = APIRouter(prefix="/intervention-actions",
                    tags=["intervention-actions"], dependencies=[Depends(require_authenticated)])
 
 
-@router.get("/", response_model=List[InterventionActionOut])
+@router.get("/", response_model=List[InterventionActionsByDate])
 async def list_actions(
-    date: Optional[date] = Query(None, description="Filtre sur created_at::date"),
+    start_date: Optional[date] = Query(None, description="Date de début incluse (YYYY-MM-DD). Défaut : aujourd'hui"),
+    end_date: Optional[date] = Query(None, description="Date de fin incluse (YYYY-MM-DD). Défaut : aujourd'hui"),
     tech_id: Optional[UUID] = Query(None, description="Filtre sur l'UUID du technicien"),
 ):
-    """Liste toutes les actions avec filtres optionnels"""
+    """Liste les actions groupées par date, du plus récent au plus ancien"""
+    if not end_date:
+        end_date = date.today()
+    if not start_date:
+        start_date = end_date
     repo = InterventionActionRepository()
-    return repo.get_all(filter_date=date, tech_id=str(tech_id) if tech_id else None)
+    return repo.get_all(
+        date_from=start_date,
+        date_to=end_date,
+        tech_id=str(tech_id) if tech_id else None,
+    )
 
 
 @router.get("/{action_id}", response_model=InterventionActionOut)

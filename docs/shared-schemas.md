@@ -63,11 +63,14 @@ Indicateur de santé calculé automatiquement selon les interventions ouvertes.
 {
   "level": "ok|maintenance|warning|critical",
   "reason": "string",
+  "open_interventions_count": 3,
+  "urgent_count": 1,
   "rules_triggered": ["string"]
 }
 ```
 
 > `rules_triggered` est inclus uniquement dans le détail (`GET /equipements/{id}`), pas dans les listes.
+> `open_interventions_count` et `urgent_count` sont présents dans tous les contextes (liste, détail, endpoint `/health`).
 
 ---
 
@@ -252,6 +255,15 @@ Tous les endpoints de liste supportent :
 
 - `skip` (default: 0)
 - `limit` (default: 100, max: 1000)
+
+### Filtres de période
+
+Les endpoints qui acceptent une plage de dates utilisent les paramètres `start_date` / `end_date` (format `YYYY-MM-DD`, inclus des deux côtés). Le défaut varie selon l'endpoint :
+
+| Endpoint                    | `start_date` défaut | `end_date` défaut |
+| --------------------------- | ------------------- | ----------------- |
+| `GET /stats/*`              | aujourd'hui − 90j   | aujourd'hui       |
+| `GET /intervention-actions` | aujourd'hui         | aujourd'hui       |
 
 ### Dates
 
