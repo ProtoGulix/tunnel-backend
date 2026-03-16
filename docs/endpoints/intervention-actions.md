@@ -8,14 +8,57 @@ Actions réalisées sur une intervention (réparation, diagnostic, etc.). Chaque
 
 ## `GET /intervention-actions`
 
-Liste toutes les actions d'intervention.
+Liste les actions groupées par date (`created_at::date`), du plus récent au plus ancien. À l'intérieur de chaque jour, les actions sont triées par heure croissante.
 
 ### Query params
 
-| Param   | Type | Défaut          |
-| ------- | ---- | --------------- |
-| `skip`  | int  | 0               |
-| `limit` | int  | 100 (max: 1000) |
+| Param        | Type | Défaut      | Description                               |
+| ------------ | ---- | ----------- | ----------------------------------------- |
+| `start_date` | date | aujourd'hui | Date de début incluse (ex: `2026-03-10`)  |
+| `end_date`   | date | aujourd'hui | Date de fin incluse (ex: `2026-03-15`)    |
+| `tech_id`    | uuid | —           | Filtre sur le technicien                  |
+
+> Sans paramètre, retourne uniquement les actions du jour. Pour une semaine : `start_date=2026-03-10&end_date=2026-03-15`.
+
+### Réponse `200`
+
+```json
+[
+  {
+    "date": "2026-03-15",
+    "actions": [
+      {
+        "id": "uuid",
+        "intervention_id": "uuid",
+        "intervention": {
+          "id": "uuid",
+          "code": "CN001-REA-20260315-QC",
+          "title": "Remplacement roulement principal",
+          "status_actual": "en_cours",
+          "equipement_id": "uuid",
+          "equipement_code": "EQ-001",
+          "equipement_name": "Scie principale"
+        },
+        "description": "Diagnostic complet",
+        "time_spent": 1.5,
+        "subcategory": { "id": 30, "name": "Remplacement pièce", "code": "DEP_REM", "category": { "..." } },
+        "tech": { "..." },
+        "complexity_score": 5,
+        "complexity_factor": null,
+        "action_start": "08:00:00",
+        "action_end": "09:30:00",
+        "purchase_requests": [],
+        "created_at": "2026-03-15T08:00:00",
+        "updated_at": "2026-03-15T08:00:00"
+      }
+    ]
+  },
+  {
+    "date": "2026-03-14",
+    "actions": [ { "..." } ]
+  }
+]
+```
 
 ---
 
@@ -53,6 +96,8 @@ Détail d'une action avec sous-catégorie et demandes d'achat.
   },
   "complexity_score": 7,
   "complexity_factor": "PCE",
+  "action_start": "08:00:00",
+  "action_end": "09:30:00",
   "purchase_requests": [
     {
       "id": "uuid",
@@ -94,7 +139,29 @@ Détail d'une action avec sous-catégorie et demandes d'achat.
 
 Ajoute une action à une intervention.
 
-### Entrée
+Deux modes exclusifs pour saisir le temps — la logique est gérée par trigger PostgreSQL :
+
+- **Mode bornes** : fournir `action_start` + `action_end` → `time_spent` est calculé automatiquement (ignoré si fourni)
+- **Mode direct** : fournir `time_spent` → `action_start`/`action_end` sont ignorés
+
+Fournir les deux ou aucun des deux déclenche une erreur `400` avec le message du trigger.
+
+### Entrée — mode bornes
+
+```json
+{
+  "intervention_id": "5ecf60d5-8471-4739-8ba8-0fdad7b51781",
+  "description": "Remplacement du roulement SKF 6205",
+  "action_start": "08:00:00",
+  "action_end": "09:30:00",
+  "action_subcategory": 30,
+  "tech": "a1b2c3d4-...",
+  "complexity_score": 7,
+  "complexity_factor": "PCE"
+}
+```
+
+### Entrée — mode direct
 
 ```json
 {
@@ -109,20 +176,31 @@ Ajoute une action à une intervention.
 }
 ```
 
-| Champ                | Type     | Requis       | Description                                                                             |
-| -------------------- | -------- | ------------ | --------------------------------------------------------------------------------------- |
-| `intervention_id`    | uuid     | oui          | Intervention parente                                                                    |
-| `description`        | string   | oui          | Description (HTML nettoyé)                                                              |
-| `time_spent`         | float    | oui          | Quarts d'heure uniquement : 0.25, 0.5, 0.75, 1.0... Min: 0.25                           |
-| `action_subcategory` | int      | oui          | ID de la sous-catégorie                                                                 |
-| `tech`               | uuid     | oui          | Technicien                                                                              |
-| `complexity_score`   | int      | oui          | Score 1-10                                                                              |
-| `complexity_factor`  | string   | conditionnel | **Requis si score > 5**. Code existant dans [complexity_factors](complexity-factors.md) |
-| `created_at`         | datetime | non          | Défaut: `now()`. Permet le backdating                                                   |
+| Champ                | Type     | Requis       | Description                                                                                                             |
+| -------------------- | -------- | ------------ | ----------------------------------------------------------------------------------------------------------------------- |
+| `intervention_id`    | uuid     | oui          | Intervention parente                                                                                                    |
+| `description`        | string   | oui          | Description (HTML nettoyé)                                                                                              |
+| `time_spent`         | float    | conditionnel | Mode direct : quarts d'heure uniquement (0.25, 0.5…). Min: 0.25. Mutuellement exclusif avec `action_start`/`action_end` |
+| `action_start`       | time     | conditionnel | Mode bornes : heure de début (HH:MM:SS). Mutuellement exclusif avec `time_spent`                                        |
+| `action_end`         | time     | conditionnel | Mode bornes : heure de fin (HH:MM:SS). Doit être > `action_start`                                                       |
+| `action_subcategory` | int      | oui          | ID de la sous-catégorie                                                                                                 |
+| `tech`               | uuid     | oui          | Technicien                                                                                                              |
+| `complexity_score`   | int      | oui          | Score 1-10                                                                                                              |
+| `complexity_factor`  | string   | conditionnel | **Requis si score > 5**. Code existant dans [complexity_factors](complexity-factors.md)                                 |
+| `created_at`         | datetime | non          | Défaut: `now()`. Permet le backdating                                                                                   |
 
 ### Réponse `201`
 
 Action complète avec sous-catégorie enrichie.
+
+### Erreurs
+
+| Code | Cas                                                    |
+| ---- | ------------------------------------------------------ |
+| 400  | `action_start` et `time_spent` tous les deux fournis   |
+| 400  | Ni `action_start`/`action_end` ni `time_spent` fournis |
+| 400  | `action_end` ≤ `action_start`                          |
+| 400  | Bornes ou `time_spent` non multiples de 0.25h          |
 
 ---
 

@@ -351,7 +351,8 @@ class InterventionRepository:
         from api.interventions.validators import InterventionValidator
         InterventionValidator.validate_create(data)
 
-        request_id = str(data['request_id']) if data.get('request_id') else None
+        request_id = str(data['request_id']) if data.get(
+            'request_id') else None
 
         conn = self._get_connection()
         try:
@@ -406,7 +407,8 @@ class InterventionRepository:
         )
         row = cur.fetchone()
         if not row:
-            raise DatabaseError(f"Demande d'intervention {request_id} introuvable")
+            raise DatabaseError(
+                f"Demande d'intervention {request_id} introuvable")
 
         current_statut = row[1]
         existing_intervention_id = row[2]

@@ -69,7 +69,6 @@ async def get_equipement(
     )
 
 
-
 @router.post("", response_model=EquipementDetail, status_code=status.HTTP_201_CREATED)
 @router.post("/", response_model=EquipementDetail, status_code=status.HTTP_201_CREATED)
 async def create_equipement(data: EquipementCreate):

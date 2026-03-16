@@ -15,8 +15,8 @@ class EquipementRepository:
         return get_connection()
 
     def _closed_status_subquery(self) -> str:
-        """Retourne une sous-requête paramétrée pour l'ID du statut fermé"""
-        return "(SELECT id FROM intervention_status_ref WHERE code = %s LIMIT 1)"
+        """Retourne un placeholder pour le code du statut fermé (comparaison directe sur status_actual)"""
+        return "%s"
 
     def _build_filter_clause(
         self,
@@ -96,11 +96,7 @@ class EquipementRepository:
                 open_count = equipement.pop('open_interventions_count', 0) or 0
                 urgent_count = equipement.pop('urgent_count', 0) or 0
 
-                health = self._calculate_health(open_count, urgent_count)
-                equipement['health'] = {
-                    'level': health['level'],
-                    'reason': health['reason']
-                }
+                equipement['health'] = self._calculate_health(open_count, urgent_count)
                 equipement['parent_id'] = equipement.pop(
                     'equipement_mere', None)
 
@@ -446,11 +442,7 @@ class EquipementRepository:
                 open_count = equipement.pop('open_interventions_count', 0) or 0
                 urgent_count = equipement.pop('urgent_count', 0) or 0
 
-                health = self._calculate_health(open_count, urgent_count)
-                equipement['health'] = {
-                    'level': health['level'],
-                    'reason': health['reason']
-                }
+                equipement['health'] = self._calculate_health(open_count, urgent_count)
                 equipement['parent_id'] = equipement.pop(
                     'equipement_mere', None)
 
@@ -493,11 +485,12 @@ class EquipementRepository:
             cur.execute("SELECT id, code FROM intervention_status_ref")
             all_status = [(row[0], row[1]) for row in cur.fetchall()]
 
-            # Générer colonnes par statut (status_id est un UUID issu de la DB)
+            # Générer colonnes par statut (comparaison sur le code, pas l'UUID)
             status_columns = []
-            for status_id, _ in all_status:
+            for _, status_code in all_status:
+                safe_code = status_code.replace("'", "''")
                 status_columns.append(
-                    f"COUNT(CASE WHEN i.status_actual = '{status_id}' THEN i.id END) as status_{status_id}"
+                    f"COUNT(CASE WHEN i.status_actual = '{safe_code}' THEN i.id END) as status_{safe_code}"
                 )
 
             # Générer colonnes par priorité (pid est une constante applicative)
@@ -539,9 +532,9 @@ class EquipementRepository:
 
             # Formater stats
             by_status = {}
-            for status_id, _ in all_status:
-                by_status[str(status_id)] = data.pop(
-                    f'status_{status_id}', 0) or 0
+            for _, status_code in all_status:
+                by_status[status_code] = data.pop(
+                    f'status_{status_code}', 0) or 0
 
             by_priority = {}
             for p in PRIORITY_TYPES:
@@ -599,11 +592,7 @@ class EquipementRepository:
                 open_count = row[0] or 0
                 urgent_count = row[1] or 0
 
-            health = self._calculate_health(open_count, urgent_count)
-            return {
-                'level': health['level'],
-                'reason': health['reason']
-            }
+            return self._calculate_health(open_count, urgent_count)
         except NotFoundError:
             raise
         except HTTPException:
@@ -635,5 +624,7 @@ class EquipementRepository:
         return {
             'level': level,
             'reason': reason,
+            'open_interventions_count': open_count,
+            'urgent_count': urgent_count,
             'rules_triggered': rules_triggered
         }

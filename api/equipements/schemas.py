@@ -19,6 +19,8 @@ class EquipementHealth(BaseModel):
     """Santé d'un équipement"""
     level: str
     reason: str
+    open_interventions_count: int = 0
+    urgent_count: int = 0
     rules_triggered: list[str] | None = None
 
 
@@ -137,6 +139,8 @@ class EquipementHealthOnly(BaseModel):
     """Health uniquement pour endpoint ultra-léger"""
     level: str
     reason: str
+    open_interventions_count: int = 0
+    urgent_count: int = 0
 
 
 class EquipementClassFacetItem(BaseModel):
