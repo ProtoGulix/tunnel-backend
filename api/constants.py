@@ -3,6 +3,14 @@
 # Statut fermé d'une intervention (constante)
 CLOSED_STATUS_CODE = 'ferme'
 
+# Capacité de l'équipe maintenance
+# Équipe : 2 techs à 39h/sem + 1 renfort 1 sem/mois à 39h (tech 3 à 35h exclu)
+# Calcul : (2 × 39 × 4.33) + 39 ≈ 377h → arrondi conservateur
+TEAM_CAPACITY_HOURS_PER_MONTH = 400
+
+# Base horaire journalière d'un ETP (contrat 39h ÷ 5 jours)
+ETP_HOURS_PER_DAY = 7.8
+
 # Statut "pris en charge" d'une intervention (appliqué à la création depuis une demande acceptée)
 IN_PROGRESS_STATUS_CODE = 'in_progress'
 

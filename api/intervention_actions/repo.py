@@ -1,11 +1,11 @@
 from fastapi import HTTPException
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from uuid import uuid4
-from datetime import datetime
+from datetime import datetime, date
 
 from api.settings import settings
 from api.db import get_connection, release_connection
-from api.errors.exceptions import DatabaseError, raise_db_error, NotFoundError
+from api.errors.exceptions import DatabaseError, raise_db_error, NotFoundError, ValidationError
 from api.utils.sanitizer import strip_html
 from api.intervention_actions.validators import InterventionActionValidator
 
@@ -77,7 +77,8 @@ class InterventionActionRepository:
                 """,
                 (action_id,)
             )
-            pr_ids = [str(row[0]) for row in cur.fetchall()]
+            pr_ids = [str(row[0])
+                      for row in cur.fetchall() if row[0] is not None]
 
             if not pr_ids:
                 return []
@@ -88,24 +89,82 @@ class InterventionActionRepository:
         except Exception:
             return []
 
-    def get_all(self) -> List[Dict[str, Any]]:
-        """Récupère toutes les actions avec tech hydraté"""
+    def get_all(
+        self,
+        date_from: Optional[date] = None,
+        date_to: Optional[date] = None,
+        tech_id: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """Récupère les actions groupées par date (created_at::date), triées du plus récent au plus ancien"""
         conn = self._get_connection()
         try:
             cur = conn.cursor()
-            cur.execute("""
-                SELECT ia.*,
+            where_clauses = []
+            params: List[Any] = []
+
+            if date_from is not None:
+                where_clauses.append("ia.created_at::date >= %s")
+                params.append(date_from)
+            if date_to is not None:
+                where_clauses.append("ia.created_at::date <= %s")
+                params.append(date_to)
+            if tech_id is not None:
+                where_clauses.append("ia.tech = %s")
+                params.append(tech_id)
+
+            where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
+
+            cur.execute(f"""
+                SELECT
+                    ia.id, ia.intervention_id, ia.description, ia.time_spent,
+                    ia.tech, ia.complexity_score, ia.complexity_factor,
+                    ia.action_start, ia.action_end,
+                    ia.created_at, ia.updated_at,
+                    sc.id as subcategory_id, sc.name as subcategory_name, sc.code as subcategory_code,
+                    ac.id as category_id, ac.name as category_name, ac.code as category_code, ac.color,
                     u.id as tech_id, u.first_name as tech_first_name,
                     u.last_name as tech_last_name, u.email as tech_email,
                     u.initial as tech_initial, u.status as tech_status,
-                    u.role as tech_role
+                    u.role as tech_role,
+                    i.code as interv_code, i.title as interv_title, i.status_actual as interv_status,
+                    m.id as interv_equipement_id, m.code as interv_equipement_code, m.name as interv_equipement_name
                 FROM intervention_action ia
+                LEFT JOIN action_subcategory sc ON ia.action_subcategory = sc.id
+                LEFT JOIN action_category ac ON sc.category_id = ac.id
                 LEFT JOIN directus_users u ON ia.tech = u.id
-                ORDER BY ia.created_at DESC
-            """)
+                LEFT JOIN intervention i ON ia.intervention_id = i.id
+                LEFT JOIN machine m ON i.machine_id = m.id
+                {where_sql}
+                ORDER BY ia.created_at::date DESC, ia.created_at ASC
+            """, params)
             rows = cur.fetchall()
             cols = [desc[0] for desc in cur.description]
-            return [self._map_tech_user(dict(zip(cols, row))) for row in rows]
+
+            # Groupement par date
+            groups: Dict[date, List[Dict[str, Any]]] = {}
+            for row in rows:
+                action = self._map_action_with_subcategory(dict(zip(cols, row)))
+                action = self._map_tech_user(action)
+                action['intervention'] = {
+                    'id': action['intervention_id'],
+                    'code': action.pop('interv_code', None),
+                    'title': action.pop('interv_title', None),
+                    'status_actual': action.pop('interv_status', None),
+                    'equipement_id': action.pop('interv_equipement_id', None),
+                    'equipement_code': action.pop('interv_equipement_code', None),
+                    'equipement_name': action.pop('interv_equipement_name', None),
+                } if action.get('intervention_id') else None
+                action['purchase_requests'] = self._get_linked_purchase_requests(
+                    str(action['id']), conn)
+                day = action['created_at'].date() if action.get('created_at') else None
+                if day is not None:
+                    groups.setdefault(day, []).append(action)
+
+            # Retourne les jours du plus récent au plus ancien
+            return [
+                {'date': d, 'actions': groups[d]}
+                for d in sorted(groups.keys(), reverse=True)
+            ]
         except HTTPException:
             raise
         except Exception as e:
@@ -234,12 +293,8 @@ class InterventionActionRepository:
 
     def add(self, action_data: Dict[str, Any]) -> Dict[str, Any]:
         """Ajoute une nouvelle action à une intervention"""
-        # Validation et préparation des données selon les règles métier
-        try:
-            validated_data = InterventionActionValidator.validate_and_prepare(
-                action_data)
-        except ValueError as e:
-            raise DatabaseError(f"Erreur de validation: {str(e)}") from e
+        # Validation et préparation des données — lève ValidationError (400) si invalide
+        validated_data = InterventionActionValidator.validate_and_prepare(action_data)
 
         conn = self._get_connection()
         try:
@@ -254,19 +309,22 @@ class InterventionActionRepository:
                 """
                 INSERT INTO intervention_action
                 (id, intervention_id, description, time_spent, action_subcategory,
-                 tech, complexity_score, complexity_factor, created_at, updated_at)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                 tech, complexity_score, complexity_factor, action_start, action_end,
+                 created_at, updated_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING *
                 """,
                 (
                     action_id,
                     validated_data['intervention_id'],
                     validated_data['description'],
-                    validated_data['time_spent'],
+                    validated_data.get('time_spent'),
                     validated_data['action_subcategory'],
                     validated_data['tech'],
                     validated_data['complexity_score'],
                     validated_data.get('complexity_factor'),
+                    validated_data.get('action_start'),
+                    validated_data.get('action_end'),
                     created_at,
                     now
                 )
@@ -274,10 +332,12 @@ class InterventionActionRepository:
             conn.commit()
             # Renvoie l'action avec les informations de sous-catégorie
             return self.get_by_id_with_subcategory(action_id)
+        except HTTPException:
+            conn.rollback()
+            raise
         except Exception as e:
             conn.rollback()
-            raise DatabaseError(
-                f"Erreur lors de l'ajout de l'action: {str(e)}") from e
+            raise_db_error(e, "ajout action")
         finally:
             release_connection(conn)
 
@@ -292,6 +352,8 @@ class InterventionActionRepository:
             'tech': None,
             'complexity_score': None,
             'complexity_factor': None,
+            'action_start': None,
+            'action_end': None,
         }
 
         updates = {k: v for k, v in patch_data.items(
@@ -314,14 +376,14 @@ class InterventionActionRepository:
             updates['complexity_factor'] = InterventionActionValidator.validate_complexity_factor(
                 updates['complexity_factor'])
 
-        # Si l'un des deux score/factor est fourni, on valide la règle score > 5
+        # Valide la règle score > 5 → complexity_factor obligatoire (valeurs fusionnées)
         current = self.get_by_id_with_subcategory(action_id)
-        score = updates.get('complexity_score',
-                            current.get('complexity_score'))
-        factor = updates.get('complexity_factor',
-                             current.get('complexity_factor'))
-        InterventionActionValidator.validate_complexity_with_factor(
-            score, factor)
+        score = updates.get('complexity_score', current.get('complexity_score'))
+        factor = updates.get('complexity_factor', current.get('complexity_factor'))
+        if isinstance(score, int) and score > 5 and (not factor or not str(factor).strip()):
+            raise ValidationError(
+                "complexity_factor est obligatoire quand complexity_score > 5"
+            )
 
         conn = self._get_connection()
         try:
@@ -337,10 +399,12 @@ class InterventionActionRepository:
                 params
             )
             conn.commit()
+        except HTTPException:
+            conn.rollback()
+            raise
         except Exception as e:
             conn.rollback()
-            raise DatabaseError(
-                f"Erreur lors de la mise à jour: {str(e)}") from e
+            raise_db_error(e, "mise à jour action")
         finally:
             release_connection(conn)
 

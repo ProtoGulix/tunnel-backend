@@ -15,22 +15,55 @@ class EquipementRepository:
         return get_connection()
 
     def _closed_status_subquery(self) -> str:
-        """Retourne une sous-requête paramétrée pour l'ID du statut fermé"""
-        return "(SELECT id FROM intervention_status_ref WHERE code = %s LIMIT 1)"
+        """Retourne un placeholder pour le code du statut fermé (comparaison directe sur status_actual)"""
+        return "%s"
 
-    def get_all(self, search: str | None = None) -> List[Dict[str, Any]]:
-        """Récupère tous les équipements - liste légère avec health"""
+    def _build_filter_clause(
+        self,
+        search: str | None = None,
+        exclude_class: list[str] | None = None,
+        select_class: list[str] | None = None,
+        select_mere: str | None = None,
+    ) -> tuple[str, list]:
+        """Construit la clause WHERE et les params associés pour les filtres de liste."""
+        conditions = []
+        params: list = []
+        if search:
+            like = f"%{search}%"
+            conditions.append(
+                "(m.code ILIKE %s OR m.name ILIKE %s OR m.affectation ILIKE %s)")
+            params.extend([like, like, like])
+        if select_mere:
+            conditions.append("m.equipement_mere = %s")
+            params.append(select_mere)
+        if select_class:
+            placeholders = ",".join(["%s"] * len(select_class))
+            conditions.append(f"ec.code IN ({placeholders})")
+            params.extend(select_class)
+        if exclude_class:
+            placeholders = ",".join(["%s"] * len(exclude_class))
+            conditions.append(
+                f"(ec.code IS NULL OR ec.code NOT IN ({placeholders}))")
+            params.extend(exclude_class)
+        where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+        return where_clause, params
+
+    def get_all(
+        self,
+        search: str | None = None,
+        skip: int = 0,
+        limit: int = 50,
+        exclude_class: list[str] | None = None,
+        select_class: list[str] | None = None,
+        select_mere: str | None = None,
+    ) -> List[Dict[str, Any]]:
+        """Récupère les équipements paginés - liste légère avec health"""
         conn = self._get_connection()
         try:
             cur = conn.cursor()
             csq = self._closed_status_subquery()
-
-            search_clause = ""
-            search_params: list = []
-            if search:
-                search_clause = " WHERE (m.code ILIKE %s OR m.name ILIKE %s OR m.affectation ILIKE %s)"
-                like = f"%{search}%"
-                search_params = [like, like, like]
+            where_clause, filter_params = self._build_filter_clause(
+                search=search, exclude_class=exclude_class, select_class=select_class, select_mere=select_mere)
 
             query = f"""
                 SELECT
@@ -46,12 +79,14 @@ class EquipementRepository:
                 FROM machine m
                 LEFT JOIN intervention i ON i.machine_id = m.id
                 LEFT JOIN equipement_class ec ON ec.id = m.equipement_class_id
-                {search_clause}
+                {where_clause}
                 GROUP BY m.id, ec.id, ec.code, ec.label
                 ORDER BY urgent_count DESC, open_interventions_count DESC, m.name ASC
+                LIMIT %s OFFSET %s
             """
 
-            cur.execute(query, (*search_params, CLOSED_STATUS_CODE, CLOSED_STATUS_CODE))
+            cur.execute(query, (CLOSED_STATUS_CODE,
+                        CLOSED_STATUS_CODE, *filter_params, limit, skip))
             rows = cur.fetchall()
             cols = [desc[0] for desc in cur.description]
             equipements = [dict(zip(cols, row)) for row in rows]
@@ -61,27 +96,18 @@ class EquipementRepository:
                 open_count = equipement.pop('open_interventions_count', 0) or 0
                 urgent_count = equipement.pop('urgent_count', 0) or 0
 
-                health = self._calculate_health(open_count, urgent_count)
-                equipement['health'] = {
-                    'level': health['level'],
-                    'reason': health['reason']
-                }
+                equipement['health'] = self._calculate_health(open_count, urgent_count)
                 equipement['parent_id'] = equipement.pop(
                     'equipement_mere', None)
 
-                # Restructurer equipement_class
                 ec_id = equipement.pop('equipement_class_id', None)
                 ec_code = equipement.pop('equipement_class_code', None)
                 ec_label = equipement.pop('equipement_class_label', None)
 
-                if ec_id:
-                    equipement['equipement_class'] = {
-                        'id': ec_id,
-                        'code': ec_code,
-                        'label': ec_label
-                    }
-                else:
-                    equipement['equipement_class'] = None
+                equipement['equipement_class'] = (
+                    {'id': ec_id, 'code': ec_code,
+                        'label': ec_label} if ec_id else None
+                )
 
             return equipements
 
@@ -89,6 +115,59 @@ class EquipementRepository:
             raise
         except Exception as e:
             raise_db_error(e, "opération")
+        finally:
+            release_connection(conn)
+
+    def count_all(
+        self,
+        search: str | None = None,
+        exclude_class: list[str] | None = None,
+        select_class: list[str] | None = None,
+        select_mere: str | None = None,
+    ) -> int:
+        """Compte le nombre total d'équipements avec les mêmes filtres que get_all."""
+        conn = self._get_connection()
+        try:
+            cur = conn.cursor()
+            where_clause, filter_params = self._build_filter_clause(
+                search=search, exclude_class=exclude_class, select_class=select_class, select_mere=select_mere)
+            cur.execute(
+                f"""
+                SELECT COUNT(*)
+                FROM machine m
+                LEFT JOIN equipement_class ec ON ec.id = m.equipement_class_id
+                {where_clause}
+                """,
+                filter_params,
+            )
+            return cur.fetchone()[0] or 0
+        except Exception as e:
+            raise_db_error(e, "comptage équipements")
+        finally:
+            release_connection(conn)
+
+    def get_facets(self, search: str | None = None) -> List[Dict[str, Any]]:
+        """Retourne le nombre d'équipements par classe."""
+        conn = self._get_connection()
+        try:
+            cur = conn.cursor()
+            where_clause, filter_params = self._build_filter_clause(
+                search=search)
+            cur.execute(
+                f"""
+                SELECT ec.code, ec.label, COUNT(m.id) as count
+                FROM machine m
+                LEFT JOIN equipement_class ec ON ec.id = m.equipement_class_id
+                {where_clause}
+                GROUP BY ec.code, ec.label
+                ORDER BY count DESC
+                """,
+                filter_params,
+            )
+            rows = cur.fetchall()
+            return [{"code": r[0], "label": r[1], "count": r[2]} for r in rows]
+        except Exception as e:
+            raise_db_error(e, "facettes équipements")
         finally:
             release_connection(conn)
 
@@ -129,7 +208,8 @@ class EquipementRepository:
                 GROUP BY m.id, ec.id, ec.code, ec.label
             """
 
-            cur.execute(query, (CLOSED_STATUS_CODE, CLOSED_STATUS_CODE, equipement_id))
+            cur.execute(query, (CLOSED_STATUS_CODE,
+                        CLOSED_STATUS_CODE, equipement_id))
             row = cur.fetchone()
             if not row:
                 raise NotFoundError(f"Équipement {equipement_id} non trouvé")
@@ -225,88 +305,6 @@ class EquipementRepository:
             }
 
             return equipement
-        except NotFoundError:
-            raise
-        except HTTPException:
-            raise
-        except Exception as e:
-            raise_db_error(e, "opération")
-        finally:
-            release_connection(conn)
-
-    def get_children(
-        self,
-        equipement_id: str,
-        page: int = 1,
-        limit: int = 20,
-        search: str | None = None
-    ) -> Dict[str, Any]:
-        """Récupère les enfants paginés d'un équipement avec health"""
-        conn = self._get_connection()
-        try:
-            cur = conn.cursor()
-            csq = self._closed_status_subquery()
-
-            # Vérifier que l'équipement existe
-            cur.execute("SELECT id FROM machine WHERE id = %s",
-                        (equipement_id,))
-            if not cur.fetchone():
-                raise NotFoundError(f"Équipement {equipement_id} non trouvé")
-
-            search_clause = ""
-            params_count: list = [equipement_id]
-            params_items: list = [CLOSED_STATUS_CODE, CLOSED_STATUS_CODE, equipement_id]
-
-            if search:
-                search_clause = " AND (m.code ILIKE %s OR m.name ILIKE %s)"
-                like = f"%{search}%"
-                params_count += [like, like]
-                params_items += [like, like]
-
-            # Total
-            cur.execute(
-                f"SELECT COUNT(*) FROM machine m WHERE m.equipement_mere = %s{search_clause}",
-                params_count
-            )
-            total = cur.fetchone()[0] or 0
-
-            from math import ceil
-            total_pages = ceil(total / limit) if limit > 0 else 1
-            offset = (page - 1) * limit
-
-            query = f"""
-                SELECT
-                    m.id,
-                    m.code,
-                    m.name,
-                    COUNT(CASE WHEN i.status_actual != {csq} THEN i.id END) as open_interventions_count,
-                    COUNT(CASE WHEN i.status_actual != {csq} AND i.priority = 'urgent' THEN i.id END) as urgent_count
-                FROM machine m
-                LEFT JOIN intervention i ON i.machine_id = m.id
-                WHERE m.equipement_mere = %s{search_clause}
-                GROUP BY m.id
-                ORDER BY m.name ASC
-                LIMIT %s OFFSET %s
-            """
-            params_items += [limit, offset]
-            cur.execute(query, params_items)
-            rows = cur.fetchall()
-            cols = [desc[0] for desc in cur.description]
-            items = []
-            for row in rows:
-                child = dict(zip(cols, row))
-                open_c = child.pop('open_interventions_count', 0) or 0
-                urgent_c = child.pop('urgent_count', 0) or 0
-                child['health'] = self._calculate_health(open_c, urgent_c)
-                items.append(child)
-
-            return {
-                'total': total,
-                'page': page,
-                'page_size': limit,
-                'total_pages': total_pages,
-                'items': items
-            }
         except NotFoundError:
             raise
         except HTTPException:
@@ -433,7 +431,8 @@ class EquipementRepository:
                 ORDER BY urgent_count DESC, open_interventions_count DESC, m.name ASC
             """
 
-            cur.execute(query, (CLOSED_STATUS_CODE, CLOSED_STATUS_CODE, equipement_mere_id))
+            cur.execute(query, (CLOSED_STATUS_CODE,
+                        CLOSED_STATUS_CODE, equipement_mere_id))
             rows = cur.fetchall()
             cols = [desc[0] for desc in cur.description]
             equipements = [dict(zip(cols, row)) for row in rows]
@@ -443,11 +442,7 @@ class EquipementRepository:
                 open_count = equipement.pop('open_interventions_count', 0) or 0
                 urgent_count = equipement.pop('urgent_count', 0) or 0
 
-                health = self._calculate_health(open_count, urgent_count)
-                equipement['health'] = {
-                    'level': health['level'],
-                    'reason': health['reason']
-                }
+                equipement['health'] = self._calculate_health(open_count, urgent_count)
                 equipement['parent_id'] = equipement.pop(
                     'equipement_mere', None)
 
@@ -490,11 +485,12 @@ class EquipementRepository:
             cur.execute("SELECT id, code FROM intervention_status_ref")
             all_status = [(row[0], row[1]) for row in cur.fetchall()]
 
-            # Générer colonnes par statut (status_id est un UUID issu de la DB)
+            # Générer colonnes par statut (comparaison sur le code, pas l'UUID)
             status_columns = []
-            for status_id, _ in all_status:
+            for _, status_code in all_status:
+                safe_code = status_code.replace("'", "''")
                 status_columns.append(
-                    f"COUNT(CASE WHEN i.status_actual = '{status_id}' THEN i.id END) as status_{status_id}"
+                    f"COUNT(CASE WHEN i.status_actual = '{safe_code}' THEN i.id END) as status_{safe_code}"
                 )
 
             # Générer colonnes par priorité (pid est une constante applicative)
@@ -506,7 +502,8 @@ class EquipementRepository:
                 )
 
             where_clauses = ["i.machine_id = %s"]
-            params: list = [CLOSED_STATUS_CODE, CLOSED_STATUS_CODE, equipement_id]
+            params: list = [CLOSED_STATUS_CODE,
+                            CLOSED_STATUS_CODE, equipement_id]
 
             # Période: start_date optionnel, end_date optionnel (defaut = NOW())
             if start_date:
@@ -535,9 +532,9 @@ class EquipementRepository:
 
             # Formater stats
             by_status = {}
-            for status_id, _ in all_status:
-                by_status[str(status_id)] = data.pop(
-                    f'status_{status_id}', 0) or 0
+            for _, status_code in all_status:
+                by_status[status_code] = data.pop(
+                    f'status_{status_code}', 0) or 0
 
             by_priority = {}
             for p in PRIORITY_TYPES:
@@ -578,7 +575,8 @@ class EquipementRepository:
                 GROUP BY m.id
             """
 
-            cur.execute(query, (CLOSED_STATUS_CODE, CLOSED_STATUS_CODE, equipement_id))
+            cur.execute(query, (CLOSED_STATUS_CODE,
+                        CLOSED_STATUS_CODE, equipement_id))
             row = cur.fetchone()
 
             if row is None:
@@ -594,11 +592,7 @@ class EquipementRepository:
                 open_count = row[0] or 0
                 urgent_count = row[1] or 0
 
-            health = self._calculate_health(open_count, urgent_count)
-            return {
-                'level': health['level'],
-                'reason': health['reason']
-            }
+            return self._calculate_health(open_count, urgent_count)
         except NotFoundError:
             raise
         except HTTPException:
@@ -630,5 +624,7 @@ class EquipementRepository:
         return {
             'level': level,
             'reason': reason,
+            'open_interventions_count': open_count,
+            'urgent_count': urgent_count,
             'rules_triggered': rules_triggered
         }

@@ -7,7 +7,8 @@ from api.intervention_actions.schemas import InterventionActionOut
 
 from api.auth.permissions import require_authenticated
 
-router = APIRouter(prefix="/interventions", tags=["interventions"], dependencies=[Depends(require_authenticated)])
+router = APIRouter(prefix="/interventions",
+                   tags=["interventions"], dependencies=[Depends(require_authenticated)])
 
 
 def add_stats_to_intervention(intervention: Dict[str, Any], actions: List[Dict[str, Any]]) -> None:

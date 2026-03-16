@@ -3,7 +3,7 @@ from datetime import datetime
 from api.utils.sanitizer import strip_html
 from api.utils.validators import validate_date
 from api.complexity_factors.repo import ComplexityFactorRepository
-from api.errors.exceptions import NotFoundError
+from api.errors.exceptions import NotFoundError, ValidationError
 
 
 class InterventionActionValidator:
@@ -12,45 +12,50 @@ class InterventionActionValidator:
     @staticmethod
     def validate_time_spent(time_spent: float) -> None:
         """Valide que time_spent est un quart d'heure (0.25, 0.5, 0.75, 1.0, etc.) >= 0.25"""
-        if time_spent is None:
-            raise ValueError("time_spent est obligatoire")
-
         if time_spent < 0.25:
-            raise ValueError(
+            raise ValidationError(
                 "time_spent doit être au minimum 0.25 heure (15 minutes)")
 
-        # Vérifie que c'est un multiple de 0.25
         if round(time_spent % 0.25, 2) != 0:
-            raise ValueError(
-                "time_spent doit être un quart d'heure (0.25, 0.5, 0.75, 1.0, etc.)")
+            raise ValidationError(
+                "time_spent doit être un multiple de 0.25h (ex: 0.25, 0.5, 0.75, 1.0...)")
 
     @staticmethod
     def validate_complexity_score(score: int) -> None:
         """Valide que complexity_score est entre 1 et 10"""
-        if score is None:
-            raise ValueError("complexity_score est obligatoire")
-
         if not isinstance(score, int) or score < 1 or score > 10:
-            raise ValueError(
+            raise ValidationError(
                 "complexity_score doit être un entier entre 1 et 10")
 
     @staticmethod
     def validate_required_fields(action_data: Dict[str, Any]) -> None:
-        """Valide que tous les champs obligatoires sont présents"""
+        """
+        Valide que tous les champs obligatoires sont présents.
+        complexity_factor est ajouté aux champs manquants si complexity_score > 5.
+        """
         required_fields = [
             'intervention_id',
             'description',
-            'time_spent',
             'action_subcategory',
             'tech',
-            'complexity_score'
+            'complexity_score',
         ]
 
         missing = [
-            field for field in required_fields if not action_data.get(field)]
+            field for field in required_fields
+            if action_data.get(field) is None
+        ]
+
+        # complexity_factor obligatoire si complexity_score > 5
+        score = action_data.get('complexity_score')
+        if isinstance(score, int) and score > 5:
+            factor = action_data.get('complexity_factor')
+            if not factor or not str(factor).strip():
+                missing.append('complexity_factor (obligatoire si complexity_score > 5)')
+
         if missing:
-            raise ValueError(
-                f"Champs obligatoires manquants: {', '.join(missing)}")
+            raise ValidationError(
+                f"Champs obligatoires manquants : {', '.join(missing)}")
 
     @staticmethod
     def validate_complexity_factor(factor: str | None) -> str | None:
@@ -58,73 +63,53 @@ class InterventionActionValidator:
         if factor is None or factor == "":
             return None
 
-        if not isinstance(factor, str):
-            raise ValueError("complexity_factor doit être un code (string)")
-
-        code = factor.strip()
+        code = str(factor).strip()
         if not code:
             return None
 
         repo = ComplexityFactorRepository()
         try:
             repo.get_by_code(code)
-        except NotFoundError as exc:
-            raise ValueError(
-                f"complexity_factor contient un facteur inconnu: {code}") from exc
+        except NotFoundError:
+            raise ValidationError(
+                f"complexity_factor '{code}' est inconnu. Vérifiez les facteurs disponibles.")
 
         return code
 
     @staticmethod
-    def validate_complexity_with_factor(complexity_score: int, complexity_factor: str | None) -> None:
-        """
-        Valide que si complexity_score > 5, un facteur de complexité valide est renseigné
-        """
-        if complexity_score > 5 and (not complexity_factor or not complexity_factor.strip()):
-            raise ValueError(
-                "Un facteur de complexité (complexity_factor) est obligatoire pour un score de complexité supérieur à 5"
-            )
-
-    @staticmethod
     def sanitize_description(description: str) -> str:
         """Nettoie la description en supprimant le HTML"""
-        if not description:
-            raise ValueError("description est obligatoire")
-
         sanitized = strip_html(description).strip()
         if not sanitized:
-            raise ValueError(
-                "description ne peut pas être vide après nettoyage")
+            raise ValidationError(
+                "description ne peut pas être vide")
 
         return sanitized
 
     @classmethod
     def validate_and_prepare(cls, action_data: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Valide toutes les règles métier et prépare les données
-        Retourne les données validées et nettoyées
+        Valide toutes les règles métier et prépare les données.
+        Lève ValidationError (HTTP 400) en cas d'erreur.
+        Retourne les données validées et nettoyées.
         """
-        # Vérifie les champs obligatoires
+        # Vérifie les champs obligatoires (incluant complexity_factor si score > 5)
         cls.validate_required_fields(action_data)
 
         # Valide et sanitise la description
         action_data['description'] = cls.sanitize_description(
             action_data['description'])
 
-        # Valide time_spent
-        cls.validate_time_spent(action_data['time_spent'])
+        # Valide time_spent si fourni (sinon le trigger calcule depuis action_start/action_end)
+        if action_data.get('time_spent') is not None:
+            cls.validate_time_spent(action_data['time_spent'])
 
         # Valide complexity_score
         cls.validate_complexity_score(action_data['complexity_score'])
 
-        # Valide complexity_factor (si fourni)
+        # Valide complexity_factor (existence en base si fourni)
         action_data['complexity_factor'] = cls.validate_complexity_factor(
             action_data.get('complexity_factor'))
-
-        # Valide que si score > 5, un facteur de complexité est obligatoire
-        cls.validate_complexity_with_factor(
-            action_data['complexity_score'],
-            action_data.get('complexity_factor')
-        )
 
         # Valide et normalise created_at (utilise now() si None)
         created_at = action_data.get('created_at')

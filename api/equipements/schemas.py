@@ -5,6 +5,8 @@ from uuid import UUID
 
 from pydantic import BaseModel
 
+from api.utils.pagination import PaginationMeta
+
 
 class EquipmentClassRef(BaseModel):
     """Référence à une classe d'équipement"""
@@ -17,6 +19,8 @@ class EquipementHealth(BaseModel):
     """Santé d'un équipement"""
     level: str
     reason: str
+    open_interventions_count: int = 0
+    urgent_count: int = 0
     rules_triggered: list[str] | None = None
 
 
@@ -80,15 +84,6 @@ class EquipementChildItem(BaseModel):
         from_attributes = True
 
 
-class EquipementChildrenPaginated(BaseModel):
-    """Enfants paginés pour GET /equipements/{id}/children"""
-    total: int
-    page: int
-    page_size: int
-    total_pages: int
-    items: list[EquipementChildItem]
-
-
 class EquipementDetail(BaseModel):
     """Équipement détaillé avec tous les champs, children_count et interventions paginées"""
     id: UUID
@@ -144,3 +139,19 @@ class EquipementHealthOnly(BaseModel):
     """Health uniquement pour endpoint ultra-léger"""
     level: str
     reason: str
+    open_interventions_count: int = 0
+    urgent_count: int = 0
+
+
+class EquipementClassFacetItem(BaseModel):
+    """Facette par classe d'équipement"""
+    code: str | None = None
+    label: str | None = None
+    count: int
+
+
+class EquipementListPaginated(BaseModel):
+    """Réponse paginée de la liste des équipements avec facettes"""
+    items: list[EquipementListItem]
+    pagination: PaginationMeta
+    facets: dict[str, list[EquipementClassFacetItem]]

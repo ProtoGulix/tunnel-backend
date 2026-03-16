@@ -10,39 +10,63 @@ Gestion du parc d'équipements avec état de santé calculé, classification et 
 
 ## `GET /equipements`
 
-Liste tous les équipements avec leur état de santé (léger, cacheable).
+Liste les équipements avec leur état de santé, paginée, avec facettes par classe.
 
 Tri par défaut : urgents DESC, ouverts DESC, nom ASC.
 
 ### Query params
 
-| Param    | Type   | Défaut | Description                                                       |
-| -------- | ------ | ------ | ----------------------------------------------------------------- |
-| `search` | string | —      | Recherche insensible à la casse sur `code`, `name`, `affectation` |
+| Param           | Type   | Défaut | Description                                                                      |
+| --------------- | ------ | ------ | -------------------------------------------------------------------------------- |
+| `search`        | string | —      | Recherche insensible à la casse sur `code`, `name`, `affectation`                |
+| `skip`          | int    | 0      | Nombre d'éléments à ignorer (offset)                                             |
+| `limit`         | int    | 50     | Nombre d'éléments par page (max 500)                                             |
+| `select_class`  | string | —      | Codes de classes à inclure (filtre exclusif), séparés par virgule. Ex: `POM,SCI` |
+| `exclude_class` | string | —      | Codes de classes à exclure, séparés par virgule. Ex: `POM,SCI`                   |
+| `select_mere`   | uuid   | —      | UUID de l'équipement parent : retourne uniquement ses enfants directs            |
 
 ### Réponse `200`
 
 ```json
-[
-  {
-    "id": "5e6b5a20-5d7f-4f6b-9a1f-4ccfb0b7a2a1",
-    "code": "EQ-001",
-    "name": "Scie principale",
-    "health": {
-      "level": "ok",
-      "reason": "Aucune anomalie détectée"
-    },
-    "parent_id": null,
-    "equipement_class": {
-      "id": "b28f1f4f-...",
-      "code": "SCIE",
-      "label": "Scie"
+{
+  "items": [
+    {
+      "id": "5e6b5a20-5d7f-4f6b-9a1f-4ccfb0b7a2a1",
+      "code": "EQ-001",
+      "name": "Scie principale",
+      "health": {
+        "level": "ok",
+        "reason": "Aucune intervention ouverte",
+        "open_interventions_count": 0,
+        "urgent_count": 0
+      },
+      "parent_id": null,
+      "equipement_class": {
+        "id": "b28f1f4f-...",
+        "code": "SCIE",
+        "label": "Scie"
+      }
     }
+  ],
+  "pagination": {
+    "total": 142,
+    "page": 1,
+    "page_size": 50,
+    "total_pages": 3,
+    "offset": 0,
+    "count": 50
+  },
+  "facets": {
+    "equipement_class": [
+      { "code": "SCIE", "label": "Scie", "count": 12 },
+      { "code": null, "label": null, "count": 5 }
+    ]
   }
-]
+}
 ```
 
-> `equipement_class` est `null` si aucune classe assignée.
+> `equipement_class` dans les items est `null` si aucune classe assignée.
+> Les facettes comptent les équipements **sans** tenir compte du filtre `exclude_class`, pour permettre l'affichage des compteurs même sur les classes exclues.
 
 ---
 
@@ -74,6 +98,8 @@ Détail complet d'un équipement avec tous les champs de la base, `children_coun
   "health": {
     "level": "critical",
     "reason": "1 intervention urgente ouverte",
+    "open_interventions_count": 3,
+    "urgent_count": 1,
     "rules_triggered": ["URGENT_OPEN >= 1"]
   },
   "parent_id": null,
@@ -103,43 +129,6 @@ Détail complet d'un équipement avec tous les champs de la base, `children_coun
 ```
 
 > Les interventions retournées sont uniquement celles **directement liées** à cet équipement (`machine_id`), triées par `reported_date DESC`.
-
----
-
-## `GET /equipements/{id}/children`
-
-Liste paginée des enfants d'un équipement avec leur état de santé. Utile pour naviguer dans l'arborescence.
-
-### Query params
-
-| Param    | Type   | Défaut | Description                                         |
-| -------- | ------ | ------ | --------------------------------------------------- |
-| `page`   | int    | 1      | Page                                                |
-| `limit`  | int    | 20     | Taille de page (max 100)                            |
-| `search` | string | —      | Filtre sur `code` ou `name` (insensible à la casse) |
-
-### Réponse `200`
-
-```json
-{
-  "total": 233,
-  "page": 1,
-  "page_size": 20,
-  "total_pages": 12,
-  "items": [
-    {
-      "id": "7f2cda3c-...",
-      "code": "EQ-042",
-      "name": "Lame #1",
-      "health": {
-        "level": "ok",
-        "reason": "Aucune intervention ouverte",
-        "rules_triggered": []
-      }
-    }
-  ]
-}
-```
 
 ---
 
@@ -218,6 +207,8 @@ Statistiques détaillées pour un équipement.
 ```json
 {
   "level": "ok",
-  "reason": "Aucune anomalie détectée"
+  "reason": "Aucune intervention ouverte",
+  "open_interventions_count": 0,
+  "urgent_count": 0
 }
 ```
