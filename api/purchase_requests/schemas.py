@@ -214,8 +214,9 @@ class PurchaseRequestIn(BaseModel):
         default=None, description="Notes complémentaires")
     workshop: Optional[str] = Field(
         default=None, max_length=255, description="Atelier concerné")
-    intervention_id: Optional[UUID] = Field(
-        default=None, description="ID de l'intervention associée (si liée à une action)")
+    intervention_action_id: Optional[UUID] = Field(
+        default=None,
+        description="ID de l'action d'intervention. Si fourni, la DA est liée à cette action (préventif, gestion stock, kit retrofit). Sinon, la DA est autonome (réappro spontanée, sans relation).")
     quantity_requested: Optional[int] = Field(
         default=None, description="Quantité demandée (détail)")
     requester_name: Optional[str] = Field(

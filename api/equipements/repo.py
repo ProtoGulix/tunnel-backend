@@ -75,9 +75,11 @@ class EquipementRepository:
                     ec.code as equipement_class_code,
                     ec.label as equipement_class_label,
                     COUNT(CASE WHEN i.status_actual != {csq} THEN i.id END) as open_interventions_count,
-                    COUNT(CASE WHEN i.status_actual != {csq} AND i.priority = 'urgent' THEN i.id END) as urgent_count
+                    COUNT(CASE WHEN i.status_actual != {csq} AND i.priority = 'urgent' THEN i.id END) as urgent_count,
+                    COUNT(CASE WHEN ir.statut = 'nouvelle' THEN ir.id END) as new_requests_count
                 FROM machine m
                 LEFT JOIN intervention i ON i.machine_id = m.id
+                LEFT JOIN intervention_request ir ON ir.machine_id = m.id
                 LEFT JOIN equipement_class ec ON ec.id = m.equipement_class_id
                 {where_clause}
                 GROUP BY m.id, ec.id, ec.code, ec.label
@@ -95,8 +97,9 @@ class EquipementRepository:
             for equipement in equipements:
                 open_count = equipement.pop('open_interventions_count', 0) or 0
                 urgent_count = equipement.pop('urgent_count', 0) or 0
+                new_requests_count = equipement.pop('new_requests_count', 0) or 0
 
-                equipement['health'] = self._calculate_health(open_count, urgent_count)
+                equipement['health'] = self._calculate_health(open_count, urgent_count, new_requests_count)
                 equipement['parent_id'] = equipement.pop(
                     'equipement_mere', None)
 
@@ -200,9 +203,11 @@ class EquipementRepository:
                     ec.code as equipement_class_code,
                     ec.label as equipement_class_label,
                     COUNT(CASE WHEN i.status_actual != {csq} THEN i.id END) as open_interventions_count,
-                    COUNT(CASE WHEN i.status_actual != {csq} AND i.priority = 'urgent' THEN i.id END) as urgent_count
+                    COUNT(CASE WHEN i.status_actual != {csq} AND i.priority = 'urgent' THEN i.id END) as urgent_count,
+                    COUNT(CASE WHEN ir.statut = 'nouvelle' THEN ir.id END) as new_requests_count
                 FROM machine m
                 LEFT JOIN intervention i ON i.machine_id = m.id
+                LEFT JOIN intervention_request ir ON ir.machine_id = m.id
                 LEFT JOIN equipement_class ec ON ec.id = m.equipement_class_id
                 WHERE m.id = %s
                 GROUP BY m.id, ec.id, ec.code, ec.label
@@ -220,7 +225,8 @@ class EquipementRepository:
             # Health calculation
             open_count = equipement.pop('open_interventions_count', 0) or 0
             urgent_count = equipement.pop('urgent_count', 0) or 0
-            health = self._calculate_health(open_count, urgent_count)
+            new_requests_count = equipement.pop('new_requests_count', 0) or 0
+            health = self._calculate_health(open_count, urgent_count, new_requests_count)
 
             equipement['health'] = health
             equipement['parent_id'] = equipement.pop('equipement_mere', None)
@@ -422,9 +428,11 @@ class EquipementRepository:
                     ec.code as equipement_class_code,
                     ec.label as equipement_class_label,
                     COUNT(CASE WHEN i.status_actual != {csq} THEN i.id END) as open_interventions_count,
-                    COUNT(CASE WHEN i.status_actual != {csq} AND i.priority = 'urgent' THEN i.id END) as urgent_count
+                    COUNT(CASE WHEN i.status_actual != {csq} AND i.priority = 'urgent' THEN i.id END) as urgent_count,
+                    COUNT(CASE WHEN ir.statut = 'nouvelle' THEN ir.id END) as new_requests_count
                 FROM machine m
                 LEFT JOIN intervention i ON i.machine_id = m.id
+                LEFT JOIN intervention_request ir ON ir.machine_id = m.id
                 LEFT JOIN equipement_class ec ON ec.id = m.equipement_class_id
                 WHERE m.equipement_mere = %s
                 GROUP BY m.id, ec.id, ec.code, ec.label
@@ -441,8 +449,9 @@ class EquipementRepository:
             for equipement in equipements:
                 open_count = equipement.pop('open_interventions_count', 0) or 0
                 urgent_count = equipement.pop('urgent_count', 0) or 0
+                new_requests_count = equipement.pop('new_requests_count', 0) or 0
 
-                equipement['health'] = self._calculate_health(open_count, urgent_count)
+                equipement['health'] = self._calculate_health(open_count, urgent_count, new_requests_count)
                 equipement['parent_id'] = equipement.pop(
                     'equipement_mere', None)
 
@@ -568,9 +577,11 @@ class EquipementRepository:
             query = f"""
                 SELECT
                     COUNT(CASE WHEN i.status_actual != {csq} THEN i.id END) as open_count,
-                    COUNT(CASE WHEN i.status_actual != {csq} AND i.priority = 'urgent' THEN i.id END) as urgent_count
+                    COUNT(CASE WHEN i.status_actual != {csq} AND i.priority = 'urgent' THEN i.id END) as urgent_count,
+                    COUNT(CASE WHEN ir.statut = 'nouvelle' THEN ir.id END) as new_requests_count
                 FROM machine m
                 LEFT JOIN intervention i ON i.machine_id = m.id
+                LEFT JOIN intervention_request ir ON ir.machine_id = m.id
                 WHERE m.id = %s
                 GROUP BY m.id
             """
@@ -591,8 +602,9 @@ class EquipementRepository:
             else:
                 open_count = row[0] or 0
                 urgent_count = row[1] or 0
+                new_requests_count = row[2] or 0
 
-            return self._calculate_health(open_count, urgent_count)
+            return self._calculate_health(open_count, urgent_count, new_requests_count)
         except NotFoundError:
             raise
         except HTTPException:
@@ -602,8 +614,8 @@ class EquipementRepository:
         finally:
             release_connection(conn)
 
-    def _calculate_health(self, open_count: int, urgent_count: int) -> Dict[str, Any]:
-        """Calcule le health d'un équipement selon interventions"""
+    def _calculate_health(self, open_count: int, urgent_count: int, new_requests_count: int = 0) -> Dict[str, Any]:
+        """Calcule le health d'un équipement selon interventions et demandes"""
         rules_triggered = []
         level = 'ok'
         reason = 'Aucune intervention ouverte'
@@ -621,10 +633,17 @@ class EquipementRepository:
             reason = f"{open_count} intervention{'s' if open_count > 1 else ''} ouverte{'s' if open_count > 1 else ''}"
             rules_triggered.append('OPEN_TOTAL > 0')
 
+        if new_requests_count > 0:
+            rules_triggered.append('NEW_REQUESTS > 0')
+            if level == 'ok':
+                level = 'maintenance'
+                reason = f"{new_requests_count} demande{'s' if new_requests_count > 1 else ''} en attente de traitement"
+
         return {
             'level': level,
             'reason': reason,
             'open_interventions_count': open_count,
             'urgent_count': urgent_count,
+            'new_requests_count': new_requests_count,
             'rules_triggered': rules_triggered
         }

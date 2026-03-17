@@ -2,6 +2,22 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [2.12.0] - 17 mars 2026
+
+### Nouveautés
+
+- **`new_requests_count` dans le champ `health` des équipements**
+  - Tous les endpoints retournant un `health` (`GET /equipements`, `GET /equipements/{id}`, `GET /equipements/{id}/health`) incluent désormais le nombre de demandes d'intervention au statut `nouvelle` liées à l'équipement
+  - Si `new_requests_count > 0` et aucune intervention ouverte, le level passe automatiquement en `maintenance`
+  - Nouvelle règle `NEW_REQUESTS > 0` dans `rules_triggered`
+
+- **Lien demande d'achat → action d'intervention sur `POST /purchase-requests`**
+  - Nouveau champ optionnel `intervention_action_id` : permet de lier une demande d'achat directement à une action lors de la création
+
+### Corrections
+
+- **`GET /equipements`** : le champ `equipement_class` était toujours `null` dans la liste (faute de frappe sur le nom de colonne)
+
 ## [2.11.0] - 16 mars 2026
 
 ### Nouveautés

@@ -115,7 +115,6 @@ Détail d'une action avec sous-catégorie et demandes d'achat.
       "intervention_code": "CN001-REA-20260113-QC",
       "requester_name": "Jean Dupont",
       "urgency": "high",
-      "urgent": true,
       "quotes_count": 0,
       "selected_count": 0,
       "suppliers_count": 2,
@@ -131,7 +130,7 @@ Détail d'une action avec sous-catégorie et demandes d'achat.
 > **Schemas imbriqués :**
 >
 > - `tech` : [UserListItem](users.md#userlistitem) (informations du technicien)
-> - `purchase_requests` : tableau de [PurchaseRequestListItem](purchase-requests.md#get-purchase-requestslist-v120) — demandes d'achat liées à cette action (statut dérivé, compteurs, etc.)
+> - `purchase_requests` : tableau de [PurchaseRequestListItem](purchase-requests.md#get-purchase-requestslist-v120) — demandes d'achat liées à cette action via `intervention_action_purchase_request`. `intervention_code` est déduit via la jonction `→ intervention_action → intervention`.
 
 ---
 

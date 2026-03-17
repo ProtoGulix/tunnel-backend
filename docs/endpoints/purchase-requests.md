@@ -1,6 +1,10 @@
 # Purchase Requests
 
-Demandes d'achat de matériel, liées aux interventions et aux commandes fournisseurs. Le statut est **calculé automatiquement** ([DerivedStatus](../shared-schemas.md#derivedstatus)).
+Demandes d'achat de matériel. Le statut est **calculé automatiquement** ([DerivedStatus](../shared-schemas.md#derivedstatus)).
+
+Deux modes de création :
+- **Liée à une action** (`intervention_action_id`) — l'intervention est déduite via la table de jonction `intervention_action_purchase_request`
+- **Autonome** — DA spontanée sans aucune relation (réappro consommable atelier, etc.)
 
 > Voir aussi : [Interventions](interventions.md) | [Stock Items](stock-items.md) | [Supplier Orders](supplier-orders.md) | [Supplier Order Lines](supplier-order-lines.md)
 
@@ -312,7 +316,9 @@ Même structure que `GET /purchase-requests`.
 
 ## `GET /purchase-requests/intervention/{intervention_id}`
 
-Demandes liées à une intervention. Alias de `/intervention/{id}/optimized?view=list`.
+Demandes liées à une intervention, déduites via `intervention_action_purchase_request → intervention_action`. Alias de `/intervention/{id}/optimized?view=list`.
+
+> Seules les DA liées à une action de cette intervention sont retournées. Les DA autonomes ne sont jamais remontées ici.
 
 ### Réponse `200` — `List[PurchaseRequestListItem]`
 
@@ -322,7 +328,7 @@ Même structure que `GET /purchase-requests`.
 
 ## `GET /purchase-requests/intervention/{intervention_id}/optimized`
 
-Filtre par intervention avec choix de granularité.
+Filtre par intervention avec choix de granularité. Liaison déduite via la table de jonction.
 
 ### Query params
 
@@ -334,45 +340,56 @@ Filtre par intervention avec choix de granularité.
 
 ## `POST /purchase-requests`
 
-Crée une demande d'achat.
+Crée une demande d’achat. Deux modes selon le contexte :
 
-### Entrée
-
+**Mode lié à une action** (`intervention_action_id` fourni) — DA générée depuis une action d’intervention (préventif, gestion de stock, kit retrofit) :
 ```json
 {
   "item_label": "Roulement SKF 6205",
   "quantity": 2,
   "stock_item_id": "uuid",
   "unit": "pcs",
-  "requested_by": "Jean Dupont",
   "urgency": "high",
-  "reason": "Remplacement urgent",
-  "notes": null,
-  "workshop": "Atelier 1",
-  "intervention_id": "uuid",
-  "requester_name": "Jean Dupont"
+  "reason": "Remplacement préventif",
+  "intervention_action_id": "uuid"
 }
 ```
 
-| Champ             | Type   | Requis | Défaut   | Description                               |
-| ----------------- | ------ | ------ | -------- | ----------------------------------------- |
-| `item_label`      | string | **oui**| —        | Libellé de l’article                       |
-| `quantity`        | int    | **oui**| —        | Quantité (doit être > 0)                   |
-| `stock_item_id`   | uuid   | non    | null     | Article stock normalisé                   |
-| `unit`            | string | non    | null     | Unité (`pcs`, `m`, `kg`, etc.)            |
-| `intervention_id` | uuid   | non    | null     | Intervention liée                          |
-| `urgency`         | string | non    | `normal` | `normal`, `high`, `critical`              |
-| `requester_name`  | string | non    | null     | Nom du demandeur                          |
-| `reason`          | string | non    | null     | Raison de la demande                      |
-| `notes`           | string | non    | null     | Notes complémentaires                     |
-| `workshop`        | string | non    | null     | Atelier concerné                          |
+**Mode autonome** (`intervention_action_id` absent) — DA spontanée, réappro consommable atelier :
+```json
+{
+  "item_label": "Huile lubrifiante 5L",
+  "quantity": 10,
+  "stock_item_id": "uuid",
+  "unit": "bidon",
+  "urgency": "normal",
+  "workshop": "Atelier 1"
+}
+```
+
+### Champs
+
+| Champ                    | Type   | Requis  | Défaut   | Description                                                                          |
+| ------------------------ | ------ | ------- | -------- | ------------------------------------------------------------------------------------ |
+| `item_label`             | string | **oui** | —        | Libellé de l’article                                                                 |
+| `quantity`               | int    | **oui** | —        | Quantité (doit être > 0)                                                             |
+| `intervention_action_id` | uuid   | non     | null     | Action parente. Si fourni : liaison créée dans `intervention_action_purchase_request` |
+| `stock_item_id`          | uuid   | non     | null     | Article stock normalisé                                                              |
+| `unit`                   | string | non     | null     | Unité (`pcs`, `m`, `kg`, etc.)                                                      |
+| `urgency`                | string | non     | `normal` | `normal`, `high`, `critical`                                                         |
+| `requester_name`         | string | non     | null     | Nom du demandeur                                                                     |
+| `reason`                 | string | non     | null     | Raison de la demande                                                                 |
+| `notes`                  | string | non     | null     | Notes complémentaires                                                                |
+| `workshop`               | string | non     | null     | Atelier concerné                                                                     |
 
 ### Règles métier
 
 - `item_label` et `quantity` sont requis
 - `quantity` doit être > 0
+- Si `intervention_action_id` est fourni : action validée en base, liaison insérée dans `intervention_action_purchase_request`. `intervention_id` reste NULL sur la DA.
+- Si `intervention_action_id` est absent : DA autonome (réappro spontanée), sans aucune relation intervention
 - `derived_status` est calculé automatiquement (voir [DerivedStatus](../shared-schemas.md#derivedstatus))
-- Si `stock_item_id` est `null`, le statut initial est `TO_QUALIFY` — la demande ne peut pas être dispatchée tant qu'un article du catalogue n'est pas associé
+- Si `stock_item_id` est `null`, le statut initial est `TO_QUALIFY` — la demande ne peut pas être dispatchée tant qu’un article du catalogue n’est pas associé
 
 ### Réponse `201` — `PurchaseRequestDetail`
 

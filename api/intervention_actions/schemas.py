@@ -1,8 +1,9 @@
 from pydantic import BaseModel, Field
-from typing import Optional, List, Any
+from typing import Optional, List
 from datetime import datetime, time, date
 from uuid import UUID
 from api.users.schemas import UserListItem
+from api.purchase_requests.schemas import PurchaseRequestListItem
 
 
 class InterventionActionIn(BaseModel):
@@ -86,10 +87,7 @@ class InterventionActionOut(BaseModel):
     complexity_factor: Optional[str] = Field(default=None)
     action_start: Optional[time] = None
     action_end: Optional[time] = None
-    purchase_requests: List[Any] = Field(
-        default_factory=list,
-        description="Demandes d'achat liées (PurchaseRequestOut) via table de jonction"
-    )
+    purchase_requests: List[PurchaseRequestListItem] = Field(default_factory=list)
     created_at: Optional[datetime] = Field(default=None)
     updated_at: Optional[datetime] = Field(default=None)
 

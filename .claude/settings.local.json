@@ -58,7 +58,8 @@
       "Bash(cmd /c \"netstat -ano | findstr :8000\")",
       "Bash(cmd /c \"curl -s http://localhost:8000/health\")",
       "Bash(cmd /c \"curl -v http://localhost:8000/server/ping 2>&1\")",
-      "Bash(cmd /c \"netstat -ano | findstr LISTENING | findstr :8000\")"
+      "Bash(cmd /c \"netstat -ano | findstr LISTENING | findstr :8000\")",
+      "Bash(ls .env*)"
     ]
   }
 }

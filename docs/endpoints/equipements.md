@@ -38,7 +38,8 @@ Tri par défaut : urgents DESC, ouverts DESC, nom ASC.
         "level": "ok",
         "reason": "Aucune intervention ouverte",
         "open_interventions_count": 0,
-        "urgent_count": 0
+        "urgent_count": 0,
+        "new_requests_count": 0
       },
       "parent_id": null,
       "equipement_class": {
@@ -100,7 +101,8 @@ Détail complet d'un équipement avec tous les champs de la base, `children_coun
     "reason": "1 intervention urgente ouverte",
     "open_interventions_count": 3,
     "urgent_count": 1,
-    "rules_triggered": ["URGENT_OPEN >= 1"]
+    "new_requests_count": 2,
+    "rules_triggered": ["URGENT_OPEN >= 1", "NEW_REQUESTS > 0"]
   },
   "parent_id": null,
   "equipement_class": { "id": "uuid", "code": "SCIE", "label": "Scie" },
@@ -209,6 +211,7 @@ Statistiques détaillées pour un équipement.
   "level": "ok",
   "reason": "Aucune intervention ouverte",
   "open_interventions_count": 0,
-  "urgent_count": 0
+  "urgent_count": 0,
+  "new_requests_count": 0
 }
 ```

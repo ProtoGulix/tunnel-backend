@@ -21,6 +21,7 @@ class EquipementHealth(BaseModel):
     reason: str
     open_interventions_count: int = 0
     urgent_count: int = 0
+    new_requests_count: int = 0
     rules_triggered: list[str] | None = None
 
 
@@ -38,7 +39,7 @@ class EquipementListItem(BaseModel):
     name: str
     health: EquipementHealth
     parent_id: UUID | None = None
-    equipment_class: EquipmentClassRef | None = None
+    equipement_class: EquipmentClassRef | None = None
 
     class Config:
         from_attributes = True
