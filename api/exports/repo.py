@@ -140,9 +140,11 @@ class ExportRepository:
                 }
                 status_logs.append(log_dict)
 
-            # Fetch purchase requests linked to this intervention with supplier info
+            # Fetch purchase requests liées à cette intervention — deux sources agrégées :
+            # 1. Nouveau modèle : via table de jonction action↔DA
+            # 2. Ancien modèle (legacy Directus) : via pr.intervention_id direct
             cur.execute("""
-                SELECT
+                SELECT DISTINCT
                     pr.id, pr.item_label, pr.quantity, pr.unit,
                     pr.urgency, pr.requested_by AS requester_name, pr.created_at,
                     si.ref as stock_item_ref, si.name as stock_item_name,
@@ -154,8 +156,14 @@ class ExportRepository:
                 LEFT JOIN supplier s ON sis.supplier_id = s.id
                 LEFT JOIN manufacturer_item mi ON sis.manufacturer_item_id = mi.id
                 WHERE pr.intervention_id = %s
+                   OR pr.id IN (
+                       SELECT iapr.purchase_request_id
+                       FROM intervention_action_purchase_request iapr
+                       JOIN intervention_action ia ON ia.id = iapr.intervention_action_id
+                       WHERE ia.intervention_id = %s
+                   )
                 ORDER BY pr.created_at DESC
-            """, (intervention_id,))
+            """, (intervention_id, intervention_id))
 
             purchase_requests = []
             for pr_row in cur.fetchall():

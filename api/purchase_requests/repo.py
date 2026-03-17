@@ -32,10 +32,32 @@ class PurchaseRequestRepository:
             release_connection(conn)
 
     def add(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        """Crée une nouvelle demande d'achat"""
+        """
+        Crée une nouvelle demande d'achat.
+
+        Deux modes :
+        - Lié à une action (intervention_action_id fourni) : liaison insérée dans
+          intervention_action_purchase_request. intervention_id reste NULL sur la DA.
+        - Autonome (intervention_action_id absent) : DA spontanée sans aucune relation.
+        """
+        from api.errors.exceptions import NotFoundError
+
+        intervention_action_id = data.get('intervention_action_id')
+
         conn = self._get_connection()
         try:
             cur = conn.cursor()
+
+            if intervention_action_id:
+                # Vérifie que l'action existe
+                action_id_str = str(intervention_action_id)
+                cur.execute(
+                    "SELECT id FROM intervention_action WHERE id = %s",
+                    (action_id_str,)
+                )
+                if not cur.fetchone():
+                    raise NotFoundError(f"Action {action_id_str} non trouvée")
+
             request_id = str(uuid4())
             now = datetime.now()
 
@@ -44,8 +66,8 @@ class PurchaseRequestRepository:
                 INSERT INTO purchase_request
                 (id, status, stock_item_id, item_label, quantity, unit,
                  requested_by, urgency, reason, notes, workshop,
-                 intervention_id, created_at, updated_at)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                 created_at, updated_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     request_id,
@@ -59,12 +81,25 @@ class PurchaseRequestRepository:
                     data.get('reason'),
                     data.get('notes'),
                     data.get('workshop'),
-                    data.get('intervention_id'),
                     now,
                     now
                 )
             )
+
+            if intervention_action_id:
+                # Liaison action → DA dans la table de jonction
+                cur.execute(
+                    """
+                    INSERT INTO intervention_action_purchase_request
+                    (intervention_action_id, purchase_request_id)
+                    VALUES (%s, %s)
+                    """,
+                    (str(intervention_action_id), request_id)
+                )
+
             conn.commit()
+        except NotFoundError:
+            raise
         except Exception as e:
             conn.rollback()
             raise DatabaseError(
@@ -283,7 +318,13 @@ class PurchaseRequestRepository:
             params: List[Any] = []
 
             if intervention_id:
-                where_clauses.append("pr.intervention_id = %s")
+                # Agrège les deux modèles :
+                # - Legacy : pr.intervention_id direct (Directus)
+                # - Nouveau : via table de jonction action↔DA
+                where_clauses.append(
+                    "(pr.intervention_id = %s OR ia.intervention_id = %s)"
+                )
+                params.append(intervention_id)
                 params.append(intervention_id)
 
             if urgency:
@@ -327,7 +368,10 @@ class PurchaseRequestRepository:
 
                 FROM purchase_request pr
                 LEFT JOIN stock_item si ON pr.stock_item_id = si.id
-                LEFT JOIN intervention i ON pr.intervention_id = i.id
+                -- Intervention déduite via la table de jonction action↔DA
+                LEFT JOIN intervention_action_purchase_request iapr ON iapr.purchase_request_id = pr.id
+                LEFT JOIN intervention_action ia ON ia.id = iapr.intervention_action_id
+                LEFT JOIN intervention i ON i.id = ia.intervention_id
                 LEFT JOIN LATERAL (
                     SELECT
                         COUNT(DISTINCT CASE WHEN sol.quote_received THEN sol.id END) AS quotes_count,
@@ -447,7 +491,10 @@ class PurchaseRequestRepository:
                     e.id as e_id, e.code as e_code, e.name as e_name
                 FROM purchase_request pr
                 LEFT JOIN stock_item si ON pr.stock_item_id = si.id
-                LEFT JOIN intervention i ON pr.intervention_id = i.id
+                -- Intervention déduite via la table de jonction action↔DA
+                LEFT JOIN intervention_action_purchase_request iapr ON iapr.purchase_request_id = pr.id
+                LEFT JOIN intervention_action ia ON ia.id = iapr.intervention_action_id
+                LEFT JOIN intervention i ON i.id = ia.intervention_id
                 LEFT JOIN machine e ON i.machine_id = e.id
                 WHERE pr.id = %s
                 """,
@@ -615,8 +662,15 @@ class PurchaseRequestRepository:
             try:
                 cur = conn.cursor()
                 cur.execute(
-                    "SELECT id FROM purchase_request WHERE intervention_id = %s ORDER BY created_at DESC",
-                    (intervention_id,)
+                    """
+                    SELECT DISTINCT pr.id FROM purchase_request pr
+                    LEFT JOIN intervention_action_purchase_request iapr ON iapr.purchase_request_id = pr.id
+                    LEFT JOIN intervention_action ia ON ia.id = iapr.intervention_action_id
+                    WHERE pr.intervention_id = %s
+                       OR ia.intervention_id = %s
+                    ORDER BY pr.id
+                    """,
+                    (intervention_id, intervention_id)
                 )
                 rows = cur.fetchall()
             finally:
