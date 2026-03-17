@@ -38,7 +38,7 @@ class EquipementListItem(BaseModel):
     name: str
     health: EquipementHealth
     parent_id: UUID | None = None
-    equipment_class: EquipmentClassRef | None = None
+    equipement_class: EquipmentClassRef | None = None
 
     class Config:
         from_attributes = True
