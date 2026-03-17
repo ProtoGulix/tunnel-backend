@@ -21,6 +21,7 @@ class EquipementHealth(BaseModel):
     reason: str
     open_interventions_count: int = 0
     urgent_count: int = 0
+    new_requests_count: int = 0
     rules_triggered: list[str] | None = None
 
 
