@@ -59,7 +59,19 @@
       "Bash(cmd /c \"curl -s http://localhost:8000/health\")",
       "Bash(cmd /c \"curl -v http://localhost:8000/server/ping 2>&1\")",
       "Bash(cmd /c \"netstat -ano | findstr LISTENING | findstr :8000\")",
-      "Bash(ls .env*)"
+      "Bash(ls .env*)",
+      "Bash(ls *.py *.sh)",
+      "Bash(tasklist /FI \"PID eq 17480\" /FI \"PID eq 105544\")",
+      "Bash(wmic process:*)",
+      "Bash(taskkill /PID 17480 /F)",
+      "Bash(taskkill /PID 105544 /F)",
+      "Bash(taskkill //PID 17480 //F)",
+      "Bash(taskkill //PID 105544 //F)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://192.168.1.137:8000/health)",
+      "Bash(curl -s -I -H \"Origin: http://192.168.1.163:5174\" http://192.168.1.137:8000/health)",
+      "Bash(netsh advfirewall:*)",
+      "Bash(ping -n 3 192.168.1.163)",
+      "Bash(curl -v http://192.168.1.137:8000/health)"
     ]
   }
 }
