@@ -13,7 +13,7 @@ router = APIRouter(prefix="/stock-families",
 
 
 @router.get("/", response_model=List[StockFamilyListItem])
-async def list_stock_families():
+def list_stock_families():
     """
     Liste toutes les familles de stock
 
@@ -25,7 +25,7 @@ async def list_stock_families():
 
 
 @router.get("/{family_code}", response_model=StockFamilyDetail)
-async def get_stock_family(
+def get_stock_family(
     family_code: str,
     search: Optional[str] = Query(
         None, description="Filtre sur code ou label des sous-familles")
@@ -46,14 +46,14 @@ async def get_stock_family(
 
 
 @router.post("/", response_model=StockFamilyDetail, status_code=201)
-async def create_stock_family(data: StockFamilyIn):
+def create_stock_family(data: StockFamilyIn):
     """Crée une nouvelle famille de stock"""
     repo = StockFamilyRepository()
     return repo.create(data)
 
 
 @router.patch("/{family_code}", response_model=StockFamilyDetail)
-async def patch_stock_family(family_code: str, data: StockFamilyPatch):
+def patch_stock_family(family_code: str, data: StockFamilyPatch):
     """Renomme une famille de stock (met à jour family_code sur toutes les sous-familles)"""
     repo = StockFamilyRepository()
     return repo.update(family_code, data.code, data.label)

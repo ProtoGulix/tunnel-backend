@@ -21,6 +21,7 @@ class InterventionRepository:
         self,
         limit: int = 100,
         offset: int = 0,
+        search: str | None = None,
         equipement_id: str | None = None,
         statuses: List[str] | None = None,
         priorities: List[str] | None = None,
@@ -42,6 +43,12 @@ class InterventionRepository:
         where_clauses = []
         params: List[Any] = []
         joins = []
+
+        if search:
+            like = f"%{search}%"
+            where_clauses.append(
+                "(i.code ILIKE %s OR i.title ILIKE %s OR m.code ILIKE %s OR m.name ILIKE %s)")
+            params.extend([like, like, like, like])
 
         if equipement_id:
             where_clauses.append("i.machine_id = %s")

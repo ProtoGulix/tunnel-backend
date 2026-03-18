@@ -22,7 +22,7 @@ class LinkPurchaseRequestBody(BaseModel):
 
 
 @router.get("/", response_model=List[SupplierOrderLineListItem])
-async def list_supplier_order_lines(
+def list_supplier_order_lines(
     skip: int = Query(0, ge=0, description="Nombre d'éléments à sauter"),
     limit: int = Query(100, ge=1, le=1000, description="Nombre max d'éléments"),
     supplier_order_id: Optional[str] = Query(None, description="Filtrer par commande"),
@@ -41,21 +41,21 @@ async def list_supplier_order_lines(
 
 
 @router.get("/order/{supplier_order_id}", response_model=List[SupplierOrderLineOut])
-async def get_lines_by_order(supplier_order_id: str):
+def get_lines_by_order(supplier_order_id: str):
     """Récupère toutes les lignes d'une commande avec détails complets"""
     repo = SupplierOrderLineRepository()
     return repo.get_by_order(supplier_order_id)
 
 
 @router.get("/{line_id}", response_model=SupplierOrderLineOut)
-async def get_supplier_order_line(line_id: str):
+def get_supplier_order_line(line_id: str):
     """Récupère une ligne par ID avec stock_item et purchase_requests"""
     repo = SupplierOrderLineRepository()
     return repo.get_by_id(line_id)
 
 
 @router.post("/", response_model=SupplierOrderLineOut)
-async def create_supplier_order_line(line: SupplierOrderLineIn):
+def create_supplier_order_line(line: SupplierOrderLineIn):
     """Crée une nouvelle ligne de commande fournisseur"""
     repo = SupplierOrderLineRepository()
     data = line.model_dump()
@@ -69,7 +69,7 @@ async def create_supplier_order_line(line: SupplierOrderLineIn):
 
 
 @router.put("/{line_id}", response_model=SupplierOrderLineOut)
-async def update_supplier_order_line(line_id: str, line: SupplierOrderLineIn):
+def update_supplier_order_line(line_id: str, line: SupplierOrderLineIn):
     """Met à jour une ligne de commande existante"""
     repo = SupplierOrderLineRepository()
     data = line.model_dump(exclude_unset=True)
@@ -83,7 +83,7 @@ async def update_supplier_order_line(line_id: str, line: SupplierOrderLineIn):
 
 
 @router.patch("/{line_id}", response_model=SupplierOrderLineOut)
-async def patch_supplier_order_line(line_id: str, line: SupplierOrderLinePatch):
+def patch_supplier_order_line(line_id: str, line: SupplierOrderLinePatch):
     """Met à jour partiellement une ligne (seuls les champs fournis sont modifiés)"""
     repo = SupplierOrderLineRepository()
     data = line.model_dump(exclude_unset=True)
@@ -96,7 +96,7 @@ async def patch_supplier_order_line(line_id: str, line: SupplierOrderLinePatch):
 
 
 @router.delete("/{line_id}")
-async def delete_supplier_order_line(line_id: str):
+def delete_supplier_order_line(line_id: str):
     """Supprime une ligne de commande"""
     repo = SupplierOrderLineRepository()
     repo.delete(line_id)
@@ -104,7 +104,7 @@ async def delete_supplier_order_line(line_id: str):
 
 
 @router.post("/{line_id}/purchase-requests", response_model=SupplierOrderLineOut)
-async def link_purchase_request(line_id: str, body: LinkPurchaseRequestBody):
+def link_purchase_request(line_id: str, body: LinkPurchaseRequestBody):
     """Lie une demande d'achat à une ligne de commande"""
     repo = SupplierOrderLineRepository()
     return repo.link_purchase_request(
@@ -115,7 +115,7 @@ async def link_purchase_request(line_id: str, body: LinkPurchaseRequestBody):
 
 
 @router.delete("/{line_id}/purchase-requests/{purchase_request_id}", response_model=SupplierOrderLineOut)
-async def unlink_purchase_request(line_id: str, purchase_request_id: str):
+def unlink_purchase_request(line_id: str, purchase_request_id: str):
     """Retire le lien avec une demande d'achat"""
     repo = SupplierOrderLineRepository()
     return repo.unlink_purchase_request(line_id, purchase_request_id)

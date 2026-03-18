@@ -22,7 +22,7 @@ router = APIRouter(prefix="/purchase-requests", tags=["purchase-requests"], depe
 # ========== Endpoints optimisés v1.2.0 ==========
 
 @router.get("/statuses")
-async def list_purchase_request_statuses():
+def list_purchase_request_statuses():
     """Retourne tous les statuts dérivés possibles avec leur label et couleur."""
     return [
         {"code": code, "label": cfg["label"], "color": cfg["color"]}
@@ -31,7 +31,7 @@ async def list_purchase_request_statuses():
 
 
 @router.get("/stats", response_model=PurchaseRequestStats)
-async def get_purchase_requests_stats(
+def get_purchase_requests_stats(
     start_date: Optional[date] = Query(
         None, description="Date début (default: -3 mois)"),
     end_date: Optional[date] = Query(
@@ -52,7 +52,7 @@ async def get_purchase_requests_stats(
 
 
 @router.get("/list", response_model=List[PurchaseRequestListItem])
-async def list_purchase_requests_optimized(
+def list_purchase_requests_optimized(
     skip: int = Query(0, ge=0, description="Nombre d'éléments à sauter"),
     limit: int = Query(100, ge=1, le=1000,
                        description="Nombre max d'éléments"),
@@ -84,7 +84,7 @@ async def list_purchase_requests_optimized(
 
 
 @router.get("/detail/{request_id}", response_model=PurchaseRequestDetail)
-async def get_purchase_request_detail(request_id: str):
+def get_purchase_request_detail(request_id: str):
     """
     [v1.2.0] Détail complet avec contexte enrichi.
     - Intervention complète avec équipement
@@ -97,7 +97,7 @@ async def get_purchase_request_detail(request_id: str):
 
 
 @router.get("/status/{status}", response_model=List[PurchaseRequestListItem])
-async def list_purchase_requests_by_status(
+def list_purchase_requests_by_status(
     status: str,
     skip: int = Query(0, ge=0, description="Nombre d'éléments à sauter"),
     limit: int = Query(100, ge=1, le=1000, description="Nombre max d'éléments"),
@@ -115,7 +115,7 @@ async def list_purchase_requests_by_status(
 
 
 @router.get("/intervention/{intervention_id}/optimized")
-async def get_purchase_requests_by_intervention_optimized(
+def get_purchase_requests_by_intervention_optimized(
     intervention_id: str,
     view: Literal['list', 'full'] = Query(
         'list', description="Niveau de détail (list=léger, full=complet)")
@@ -130,7 +130,7 @@ async def get_purchase_requests_by_intervention_optimized(
 
 
 @router.post("/dispatch", response_model=DispatchResult)
-async def dispatch_pending_requests():
+def dispatch_pending_requests():
     """
     [v1.2.12] Dispatch automatique des demandes PENDING_DISPATCH.
 
@@ -148,7 +148,7 @@ async def dispatch_pending_requests():
 # ========== Endpoints CRUD ==========
 
 @router.get("/", response_model=List[PurchaseRequestListItem])
-async def list_purchase_requests(
+def list_purchase_requests(
     skip: int = Query(0, ge=0, description="Nombre d'éléments à sauter"),
     limit: int = Query(100, ge=1, le=1000, description="Nombre max d'éléments"),
     status: Optional[str] = Query(None, description="Filtrer par statut dérivé"),
@@ -171,21 +171,21 @@ async def list_purchase_requests(
 
 
 @router.get("/intervention/{intervention_id}", response_model=List[PurchaseRequestListItem])
-async def get_purchase_requests_by_intervention(intervention_id: str):
+def get_purchase_requests_by_intervention(intervention_id: str):
     """Demandes liées à une intervention. Alias de /intervention/{id}/optimized?view=list."""
     repo = PurchaseRequestRepository()
     return repo.get_list(limit=1000, offset=0, intervention_id=intervention_id)
 
 
 @router.get("/{request_id}", response_model=PurchaseRequestDetail)
-async def get_purchase_request(request_id: str):
+def get_purchase_request(request_id: str):
     """Détail d'une demande d'achat. Alias de /detail/{id}."""
     repo = PurchaseRequestRepository()
     return repo.get_detail(request_id)
 
 
 @router.post("/", response_model=PurchaseRequestDetail)
-async def create_purchase_request(purchase_request: PurchaseRequestIn):
+def create_purchase_request(purchase_request: PurchaseRequestIn):
     """Crée une nouvelle demande d'achat"""
     repo = PurchaseRequestRepository()
     return repo.add(purchase_request.model_dump())
@@ -194,7 +194,7 @@ async def create_purchase_request(purchase_request: PurchaseRequestIn):
 EDITABLE_STATUSES = {'TO_QUALIFY', 'NO_SUPPLIER_REF', 'PENDING_DISPATCH'}
 
 @router.put("/{request_id}", response_model=PurchaseRequestDetail)
-async def update_purchase_request(request_id: str, purchase_request: PurchaseRequestIn):
+def update_purchase_request(request_id: str, purchase_request: PurchaseRequestIn):
     """Met à jour une demande d'achat existante"""
     repo = PurchaseRequestRepository()
     current = repo.get_detail(request_id)
@@ -208,7 +208,7 @@ async def update_purchase_request(request_id: str, purchase_request: PurchaseReq
 
 
 @router.delete("/{request_id}")
-async def delete_purchase_request(request_id: str):
+def delete_purchase_request(request_id: str):
     """Supprime une demande d'achat"""
     repo = PurchaseRequestRepository()
     repo.delete(request_id)

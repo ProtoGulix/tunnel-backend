@@ -19,7 +19,7 @@ router = APIRouter(prefix="/equipements",
 
 @router.get("", response_model=EquipementListPaginated)
 @router.get("/", response_model=EquipementListPaginated)
-async def list_equipements(
+def list_equipements(
     search: str | None = Query(
         None, description="Recherche insensible à la casse sur code, nom ou affectation"),
     skip: int = Query(0, ge=0),
@@ -53,7 +53,7 @@ async def list_equipements(
 
 
 @router.get("/{equipement_id}", response_model=EquipementDetail)
-async def get_equipement(
+def get_equipement(
     equipement_id: str,
     interventions_page: int = Query(
         1, ge=1, description="Page des interventions"),
@@ -71,21 +71,21 @@ async def get_equipement(
 
 @router.post("", response_model=EquipementDetail, status_code=status.HTTP_201_CREATED)
 @router.post("/", response_model=EquipementDetail, status_code=status.HTTP_201_CREATED)
-async def create_equipement(data: EquipementCreate):
+def create_equipement(data: EquipementCreate):
     """Crée un nouvel équipement"""
     repo = EquipementRepository()
     return repo.add(data.model_dump(exclude_unset=True))
 
 
 @router.put("/{equipement_id}", response_model=EquipementDetail)
-async def update_equipement(equipement_id: str, data: EquipementUpdate):
+def update_equipement(equipement_id: str, data: EquipementUpdate):
     """Met à jour un équipement existant"""
     repo = EquipementRepository()
     return repo.update(equipement_id, data.model_dump(exclude_unset=True))
 
 
 @router.delete("/{equipement_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_equipement(equipement_id: str):
+def delete_equipement(equipement_id: str):
     """Supprime un équipement"""
     repo = EquipementRepository()
     repo.delete(equipement_id)
@@ -93,7 +93,7 @@ async def delete_equipement(equipement_id: str):
 
 
 @router.get("/{equipement_id}/stats", response_model=EquipementStatsDetailed)
-async def get_equipement_stats(
+def get_equipement_stats(
     equipement_id: str,
     start_date: str | None = Query(
         None, description="Date de début (YYYY-MM-DD), optionnel"),
@@ -106,7 +106,7 @@ async def get_equipement_stats(
 
 
 @router.get("/{equipement_id}/health", response_model=EquipementHealthOnly)
-async def get_equipement_health(equipement_id: str):
+def get_equipement_health(equipement_id: str):
     """Récupère uniquement le health d'un équipement (ultra-léger)"""
     repo = EquipementRepository()
     return repo.get_health_by_id(equipement_id)

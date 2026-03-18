@@ -11,7 +11,7 @@ router = APIRouter(prefix="/intervention-status-log", tags=["intervention-status
 
 
 @router.get("/", response_model=List[InterventionStatusLogOut])
-async def list_status_logs(
+def list_status_logs(
     intervention_id: str | None = Query(None, description="Filtrer par intervention_id"),
     skip: int = Query(0, ge=0, description="Nombre d'éléments à ignorer"),
     limit: int = Query(100, ge=1, le=1000, description="Nombre maximum d'éléments à retourner")
@@ -22,14 +22,14 @@ async def list_status_logs(
 
 
 @router.get("/{log_id}", response_model=InterventionStatusLogOut)
-async def get_status_log(log_id: str):
+def get_status_log(log_id: str):
     """Récupère un log de changement de statut par ID"""
     repo = InterventionStatusLogRepository()
     return repo.get_by_id(log_id)
 
 
 @router.post("/", response_model=InterventionStatusLogOut, status_code=201)
-async def create_status_log(log: InterventionStatusLogIn, request: Request):
+def create_status_log(log: InterventionStatusLogIn, request: Request):
     """
     Crée un nouveau log de changement de statut
 

@@ -4,6 +4,7 @@ from api.interventions.repo import InterventionRepository
 from api.intervention_actions.repo import InterventionActionRepository
 from api.interventions.schemas import InterventionOut, InterventionIn, InterventionCreate
 from api.intervention_actions.schemas import InterventionActionOut
+from api.constants import INTERVENTION_TYPES
 
 from api.auth.permissions import require_authenticated
 
@@ -22,11 +23,19 @@ def add_stats_to_intervention(intervention: Dict[str, Any], actions: List[Dict[s
         sum(complexities) / len(complexities), 2) if complexities else None
 
 
+@router.get("/types", response_model=List[Dict[str, Any]])
+def list_intervention_types():
+    """Liste tous les types d'intervention disponibles (id, title, color)"""
+    return INTERVENTION_TYPES
+
+
 @router.get("/")
-async def list_interventions(
+def list_interventions(
     request: Request,
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
+    search: str | None = Query(
+        None, description="Recherche insensible à la casse sur code, titre, code équipement ou nom équipement"),
     equipement_id: str | None = Query(
         None, description="Filtre intervention.machine_id"),
     status: str | None = Query(
@@ -50,6 +59,7 @@ async def list_interventions(
     return intervention_repo.get_all(
         limit=limit,
         offset=skip,
+        search=search,
         equipement_id=equipement_id,
         statuses=statuses,
         priorities=priorities,
@@ -60,35 +70,35 @@ async def list_interventions(
 
 
 @router.get("/{intervention_id}", response_model=InterventionOut)
-async def get_intervention(intervention_id: str, request: Request):
+def get_intervention(intervention_id: str, request: Request):
     """Récupère une intervention par ID avec ses actions et stats (calculées en SQL)"""
     intervention_repo = InterventionRepository()
     return intervention_repo.get_by_id(intervention_id)
 
 
 @router.get("/{intervention_id}/actions", response_model=List[InterventionActionOut])
-async def get_intervention_actions(intervention_id: str, request: Request):
+def get_intervention_actions(intervention_id: str, request: Request):
     """Récupère les actions d'une intervention"""
     repo = InterventionActionRepository()
     return repo.get_by_intervention(intervention_id)
 
 
 @router.post("/", response_model=InterventionOut)
-async def create_intervention(data: InterventionCreate, request: Request):
+def create_intervention(data: InterventionCreate, request: Request):
     """Crée une nouvelle intervention"""
     repo = InterventionRepository()
     return repo.add(data.model_dump(exclude_none=True))
 
 
 @router.put("/{intervention_id}", response_model=InterventionOut)
-async def update_intervention(intervention_id: str, data: InterventionIn, request: Request):
+def update_intervention(intervention_id: str, data: InterventionIn, request: Request):
     """Met à jour une intervention existante"""
     repo = InterventionRepository()
     return repo.update(intervention_id, data.model_dump(exclude_none=True))
 
 
 @router.delete("/{intervention_id}")
-async def delete_intervention(intervention_id: str, request: Request):
+def delete_intervention(intervention_id: str, request: Request):
     """Supprime une intervention"""
     repo = InterventionRepository()
     repo.delete(intervention_id)

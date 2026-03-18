@@ -27,13 +27,13 @@ repo = InterventionRequestRepository()
 
 
 @router.get("/statuses", response_model=List[RequestStatusRef])
-async def list_statuses():
+def list_statuses():
     """Référentiel des statuts de demande d'intervention"""
     return repo.get_statuses()
 
 
 @router.get("", response_model=dict)
-async def list_requests(
+def list_requests(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=500),
     statut: Optional[str] = Query(None),
@@ -64,13 +64,13 @@ async def list_requests(
 
 
 @router.get("/{request_id}", response_model=InterventionRequestDetail)
-async def get_request(request_id: UUID):
+def get_request(request_id: UUID):
     """Détail d'une demande d'intervention avec son historique de statuts"""
     return repo.get_by_id(str(request_id))
 
 
 @router.post("", response_model=InterventionRequestDetail, status_code=201)
-async def create_request(data: InterventionRequestIn):
+def create_request(data: InterventionRequestIn):
     """
     Crée une nouvelle demande d'intervention.
     Le code DI-YYYY-NNNN et le statut initial (nouvelle) sont générés automatiquement.
@@ -79,7 +79,7 @@ async def create_request(data: InterventionRequestIn):
 
 
 @router.post("/{request_id}/transition", response_model=InterventionRequestDetail)
-async def transition_request_status(request_id: UUID, body: StatusTransitionIn):
+def transition_request_status(request_id: UUID, body: StatusTransitionIn):
     """
     Effectue une transition de statut sur une demande.
 
