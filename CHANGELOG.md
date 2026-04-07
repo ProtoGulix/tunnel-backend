@@ -2,6 +2,12 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [2.12.2] - 7 avril 2026
+
+### Corrections
+
+- **Clôture automatique des demandes d'intervention** : lorsqu'une intervention passe en statut fermé, la demande d'intervention liée (si en statut `acceptee`) est désormais effectivement passée en `cloturee`. Le statut n'était pas mis à jour en base de données malgré l'entrée dans l'historique.
+
 ## [2.12.1] - 7 avril 2026
 
 ### Corrections
