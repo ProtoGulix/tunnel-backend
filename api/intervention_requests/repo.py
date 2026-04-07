@@ -550,6 +550,10 @@ class InterventionRequestRepository:
 
             cur.execute("SET LOCAL app.skip_request_status_log = 'true'")
             cur.execute(
+                "UPDATE intervention_request SET statut = 'cloturee' WHERE id = %s",
+                (str(request_id),),
+            )
+            cur.execute(
                 """
                 INSERT INTO request_status_log (request_id, status_from, status_to, changed_by, notes)
                 VALUES (%s, %s, %s, NULL, %s)
