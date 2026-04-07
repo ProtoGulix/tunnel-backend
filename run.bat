@@ -5,10 +5,13 @@ echo.
 echo Démarrage API GMAO...
 echo.
 
+REM Tuer toute instance uvicorn déjà sur le port 8000
+powershell -NoProfile -Command "Get-NetTCPConnection -LocalPort 8000 -State Listen -ErrorAction SilentlyContinue | ForEach-Object { Write-Host 'Port 8000 occupe (PID' $_.OwningProcess') - arret en cours...'; Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }"
+
 REM Vérifier Python 3.12
 python3.12 --version >nul 2>&1
 if errorlevel 1 (
-    echo  Python 3.12 n'est pas installé
+    echo Python 3.12 non trouve. Installer depuis python.org
     exit /b 1
 )
 
@@ -22,7 +25,7 @@ REM Activer venv
 call .venv\Scripts\activate.bat
 
 REM Installer dépendances
-echo 📥 Installation des dépendances...
+echo Installation des dependances...
 pip install -r requirements.txt --quiet
 
 REM Démarrer l'API

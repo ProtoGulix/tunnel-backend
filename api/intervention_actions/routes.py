@@ -12,7 +12,7 @@ router = APIRouter(prefix="/intervention-actions",
 
 
 @router.get("", response_model=List[InterventionActionsByDate])
-async def list_actions(
+def list_actions(
     start_date: Optional[date] = Query(None, description="Date de début incluse (YYYY-MM-DD). Défaut : aujourd'hui"),
     end_date: Optional[date] = Query(None, description="Date de fin incluse (YYYY-MM-DD). Défaut : aujourd'hui"),
     tech_id: Optional[UUID] = Query(None, description="Filtre sur l'UUID du technicien"),
@@ -31,21 +31,21 @@ async def list_actions(
 
 
 @router.get("/{action_id}", response_model=InterventionActionOut)
-async def get_action(action_id: str):
+def get_action(action_id: str):
     """Récupère une action par ID"""
     repo = InterventionActionRepository()
     return repo.get_by_id(action_id)
 
 
 @router.post("", response_model=InterventionActionOut)
-async def add_action(action: InterventionActionIn):
+def add_action(action: InterventionActionIn):
     """Ajoute une action à une intervention"""
     repo = InterventionActionRepository()
     return repo.add(action.model_dump())
 
 
 @router.patch("/{action_id}", response_model=InterventionActionOut)
-async def patch_action(action_id: str, patch: InterventionActionPatch):
+def patch_action(action_id: str, patch: InterventionActionPatch):
     """Met à jour partiellement une action d'intervention"""
     repo = InterventionActionRepository()
     return repo.update(action_id, patch.model_dump(exclude_none=True))

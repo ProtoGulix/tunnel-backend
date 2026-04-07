@@ -18,7 +18,7 @@ router = APIRouter(prefix="/exports", tags=["exports"], dependencies=[Depends(re
 
 @router.get("/interventions/{intervention_id}/pdf")
 @limiter.limit("5/minute")
-async def export_intervention_pdf(intervention_id: str, request: Request):
+def export_intervention_pdf(intervention_id: str, request: Request):
     """
     Export PDF d'une intervention (authentification requise)
 
@@ -60,7 +60,7 @@ async def export_intervention_pdf(intervention_id: str, request: Request):
 
 
 @router.get("/interventions/{intervention_id}/qrcode")
-async def export_intervention_qrcode(intervention_id: str):
+def export_intervention_qrcode(intervention_id: str):
     """
     Génère QR code pour intervention (public, pas d'authentification)
 

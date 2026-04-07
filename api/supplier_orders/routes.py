@@ -25,7 +25,7 @@ router = APIRouter(prefix="/supplier-orders", tags=["supplier-orders"], dependen
 
 
 @router.get("/statuses")
-async def list_supplier_order_statuses():
+def list_supplier_order_statuses():
     """Retourne tous les statuts possibles avec leur label et couleur."""
     return [
         {
@@ -40,7 +40,7 @@ async def list_supplier_order_statuses():
 
 
 @router.get("", response_model=SupplierOrderListResponse)
-async def list_supplier_orders(
+def list_supplier_orders(
     skip: int = Query(0, ge=0, description="Nombre d'éléments à sauter"),
     limit: int = Query(100, ge=1, le=1000, description="Nombre max d'éléments"),
     status: Optional[str] = Query(None, description="Filtrer par statut : OPEN, SENT, ACK, RECEIVED, CLOSED, CANCELLED"),
@@ -70,7 +70,7 @@ async def list_supplier_orders(
 
 
 @router.get("/{order_id}/transitions")
-async def get_supplier_order_transitions(order_id: str):
+def get_supplier_order_transitions(order_id: str):
     """Retourne les transitions de statut autorisées depuis le statut actuel de la commande."""
     repo = SupplierOrderRepository()
     order = repo.get_by_id(order_id)
@@ -81,35 +81,35 @@ async def get_supplier_order_transitions(order_id: str):
 
 
 @router.get("/{order_id}", response_model=SupplierOrderOut)
-async def get_supplier_order(order_id: str):
+def get_supplier_order(order_id: str):
     """Récupère une commande fournisseur par ID avec ses lignes"""
     repo = SupplierOrderRepository()
     return repo.get_by_id(order_id)
 
 
 @router.get("/number/{order_number}", response_model=SupplierOrderOut)
-async def get_supplier_order_by_number(order_number: str):
+def get_supplier_order_by_number(order_number: str):
     """Récupère une commande fournisseur par numéro"""
     repo = SupplierOrderRepository()
     return repo.get_by_order_number(order_number)
 
 
 @router.post("", response_model=SupplierOrderOut)
-async def create_supplier_order(supplier_order: SupplierOrderIn):
+def create_supplier_order(supplier_order: SupplierOrderIn):
     """Crée une nouvelle commande fournisseur"""
     repo = SupplierOrderRepository()
     return repo.add(supplier_order.model_dump())
 
 
 @router.put("/{order_id}", response_model=SupplierOrderOut)
-async def update_supplier_order(order_id: str, supplier_order: SupplierOrderUpdate):
+def update_supplier_order(order_id: str, supplier_order: SupplierOrderUpdate):
     """Met à jour une commande fournisseur existante"""
     repo = SupplierOrderRepository()
     return repo.update(order_id, supplier_order.model_dump(exclude_unset=True))
 
 
 @router.delete("/{order_id}")
-async def delete_supplier_order(order_id: str):
+def delete_supplier_order(order_id: str):
     """Supprime une commande fournisseur"""
     repo = SupplierOrderRepository()
     repo.delete(order_id)
@@ -117,7 +117,7 @@ async def delete_supplier_order(order_id: str):
 
 
 @router.post("/{order_id}/export/csv")
-async def export_supplier_order_csv(order_id: str):
+def export_supplier_order_csv(order_id: str):
     """
     Exporte une commande fournisseur en CSV (lignes sélectionnées uniquement).
 
@@ -150,7 +150,7 @@ async def export_supplier_order_csv(order_id: str):
 
 
 @router.post("/{order_id}/export/email", response_model=EmailExportOut)
-async def export_supplier_order_email(order_id: str):
+def export_supplier_order_email(order_id: str):
     """
     Génère le contenu d'un email de commande fournisseur.
 
