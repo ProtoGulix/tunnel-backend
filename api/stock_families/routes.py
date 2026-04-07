@@ -12,7 +12,7 @@ router = APIRouter(prefix="/stock-families",
                    tags=["stock-families"], dependencies=[Depends(require_authenticated)])
 
 
-@router.get("/", response_model=List[StockFamilyListItem])
+@router.get("", response_model=List[StockFamilyListItem])
 async def list_stock_families():
     """
     Liste toutes les familles de stock
@@ -45,7 +45,7 @@ async def get_stock_family(
     return repo.get_by_code(family_code, search=search)
 
 
-@router.post("/", response_model=StockFamilyDetail, status_code=201)
+@router.post("", response_model=StockFamilyDetail, status_code=201)
 async def create_stock_family(data: StockFamilyIn):
     """Crée une nouvelle famille de stock"""
     repo = StockFamilyRepository()

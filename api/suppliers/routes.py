@@ -8,7 +8,7 @@ from api.auth.permissions import require_authenticated
 router = APIRouter(prefix="/suppliers", tags=["suppliers"], dependencies=[Depends(require_authenticated)])
 
 
-@router.get("/", response_model=List[SupplierListItem])
+@router.get("", response_model=List[SupplierListItem])
 async def list_suppliers(
     skip: int = Query(0, ge=0, description="Nombre d'éléments à sauter"),
     limit: int = Query(100, ge=1, le=1000, description="Nombre max d'éléments"),
@@ -39,7 +39,7 @@ async def get_supplier_by_code(code: str):
     return repo.get_by_code(code)
 
 
-@router.post("/", response_model=SupplierOut)
+@router.post("", response_model=SupplierOut)
 async def create_supplier(supplier: SupplierIn):
     """Crée un nouveau fournisseur"""
     repo = SupplierRepository()

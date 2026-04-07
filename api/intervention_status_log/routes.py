@@ -10,7 +10,7 @@ from api.auth.permissions import require_authenticated
 router = APIRouter(prefix="/intervention-status-log", tags=["intervention-status-log"], dependencies=[Depends(require_authenticated)])
 
 
-@router.get("/", response_model=List[InterventionStatusLogOut])
+@router.get("", response_model=List[InterventionStatusLogOut])
 async def list_status_logs(
     intervention_id: str | None = Query(None, description="Filtrer par intervention_id"),
     skip: int = Query(0, ge=0, description="Nombre d'éléments à ignorer"),
@@ -28,7 +28,7 @@ async def get_status_log(log_id: str):
     return repo.get_by_id(log_id)
 
 
-@router.post("/", response_model=InterventionStatusLogOut, status_code=201)
+@router.post("", response_model=InterventionStatusLogOut, status_code=201)
 async def create_status_log(log: InterventionStatusLogIn, request: Request):
     """
     Crée un nouveau log de changement de statut

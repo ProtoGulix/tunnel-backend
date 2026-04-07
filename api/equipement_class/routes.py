@@ -11,7 +11,6 @@ repo = EquipementClassRepository()
 
 
 @router.get("", response_model=list[EquipementClass])
-@router.get("/", response_model=list[EquipementClass])
 async def list_equipement_classes():
     """Liste toutes les classes d'équipement"""
     return repo.get_all()
@@ -24,7 +23,6 @@ async def get_equipement_class(class_id: str):
 
 
 @router.post("", response_model=EquipementClass, status_code=status.HTTP_201_CREATED)
-@router.post("/", response_model=EquipementClass, status_code=status.HTTP_201_CREATED)
 async def create_equipement_class(data: EquipementClassCreate):
     """Crée une nouvelle classe d'équipement"""
     return repo.create(

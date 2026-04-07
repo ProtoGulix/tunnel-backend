@@ -39,7 +39,7 @@ async def list_supplier_order_statuses():
     ]
 
 
-@router.get("/", response_model=SupplierOrderListResponse)
+@router.get("", response_model=SupplierOrderListResponse)
 async def list_supplier_orders(
     skip: int = Query(0, ge=0, description="Nombre d'éléments à sauter"),
     limit: int = Query(100, ge=1, le=1000, description="Nombre max d'éléments"),
@@ -94,7 +94,7 @@ async def get_supplier_order_by_number(order_number: str):
     return repo.get_by_order_number(order_number)
 
 
-@router.post("/", response_model=SupplierOrderOut)
+@router.post("", response_model=SupplierOrderOut)
 async def create_supplier_order(supplier_order: SupplierOrderIn):
     """Crée une nouvelle commande fournisseur"""
     repo = SupplierOrderRepository()

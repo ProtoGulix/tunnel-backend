@@ -11,7 +11,7 @@ router = APIRouter(prefix="/stock-item-suppliers",
                    tags=["stock-item-suppliers"], dependencies=[Depends(require_authenticated)])
 
 
-@router.get("/", response_model=List[StockItemSupplierListItem])
+@router.get("", response_model=List[StockItemSupplierListItem])
 async def list_stock_item_suppliers(
     skip: int = Query(0, ge=0, description="Nombre d'éléments à sauter"),
     limit: int = Query(100, ge=1, le=1000,
@@ -55,7 +55,7 @@ async def get_stock_items_by_supplier(supplier_id: str):
     return repo.get_by_supplier(supplier_id)
 
 
-@router.post("/", response_model=StockItemSupplierOut)
+@router.post("", response_model=StockItemSupplierOut)
 async def create_stock_item_supplier(ref: StockItemSupplierIn):
     """Crée une nouvelle référence fournisseur"""
     repo = StockItemSupplierRepository()

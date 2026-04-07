@@ -17,7 +17,7 @@ class QuantityUpdate(BaseModel):
     quantity: int
 
 
-@router.get("/")
+@router.get("")
 async def list_stock_items(
     skip: int = Query(0, ge=0, description="Nombre d'éléments à sauter"),
     limit: int = Query(50, ge=1, le=1000,
@@ -83,7 +83,7 @@ async def get_stock_item(item_id: str):
     return repo.get_by_id(item_id)
 
 
-@router.post("/", response_model=StockItemOut)
+@router.post("", response_model=StockItemOut)
 async def create_stock_item(item: StockItemIn):
     """Crée un nouvel article en stock (legacy ou template-based)"""
     service = StockItemService()

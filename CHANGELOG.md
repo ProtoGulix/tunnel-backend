@@ -2,6 +2,13 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [2.12.1] - 7 avril 2026
+
+### Corrections
+
+- **Redirections 307 sur iOS/Safari** : les routes de liste n'effectuent plus de redirection de type trailing slash (exemple : `/intervention-actions` ne redirige plus vers `/intervention-actions/`). Sur iOS/Safari, ces redirections 307 supprimaient silencieusement le header `Authorization Bearer`, cassant l'authentification.
+- **Requêtes preflight CORS OPTIONS** : vérification que le bypass `OPTIONS` est bien en première position dans le middleware d'authentification, garantissant une réponse 200 systématique aux preflight.
+
 ## [2.12.0] - 17 mars 2026
 
 ### Nouveautés

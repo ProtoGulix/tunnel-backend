@@ -18,7 +18,6 @@ router = APIRouter(prefix="/equipements",
 
 
 @router.get("", response_model=EquipementListPaginated)
-@router.get("/", response_model=EquipementListPaginated)
 async def list_equipements(
     search: str | None = Query(
         None, description="Recherche insensible à la casse sur code, nom ou affectation"),
@@ -70,7 +69,6 @@ async def get_equipement(
 
 
 @router.post("", response_model=EquipementDetail, status_code=status.HTTP_201_CREATED)
-@router.post("/", response_model=EquipementDetail, status_code=status.HTTP_201_CREATED)
 async def create_equipement(data: EquipementCreate):
     """Crée un nouvel équipement"""
     repo = EquipementRepository()

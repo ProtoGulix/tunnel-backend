@@ -25,7 +25,7 @@ async def get_current_user(request: Request):
     return repo.get_by_id(str(user_id))
 
 
-@router.get("/", response_model=List[UserListItem])
+@router.get("", response_model=List[UserListItem])
 async def list_users(
     skip: int = Query(0, ge=0, description="Offset de pagination"),
     limit: int = Query(100, ge=1, le=1000,

@@ -22,7 +22,7 @@ def add_stats_to_intervention(intervention: Dict[str, Any], actions: List[Dict[s
         sum(complexities) / len(complexities), 2) if complexities else None
 
 
-@router.get("/")
+@router.get("")
 async def list_interventions(
     request: Request,
     skip: int = Query(0, ge=0),
@@ -73,7 +73,7 @@ async def get_intervention_actions(intervention_id: str, request: Request):
     return repo.get_by_intervention(intervention_id)
 
 
-@router.post("/", response_model=InterventionOut)
+@router.post("", response_model=InterventionOut)
 async def create_intervention(data: InterventionCreate, request: Request):
     """Crée une nouvelle intervention"""
     repo = InterventionRepository()

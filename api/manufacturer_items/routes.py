@@ -11,7 +11,7 @@ from api.auth.permissions import require_authenticated
 router = APIRouter(prefix="/manufacturer-items", tags=["manufacturer-items"], dependencies=[Depends(require_authenticated)])
 
 
-@router.get("/")
+@router.get("")
 async def list_manufacturer_items(
     skip: int = Query(0, ge=0, description="Offset de pagination"),
     limit: int = Query(100, ge=1, le=1000,
@@ -36,7 +36,7 @@ async def get_manufacturer_item(item_id: str):
     return repo.get_by_id_with_suppliers(item_id)
 
 
-@router.post("/", response_model=ManufacturerItemOut, status_code=201)
+@router.post("", response_model=ManufacturerItemOut, status_code=201)
 async def create_manufacturer_item(data: ManufacturerItemIn):
     """Crée une nouvelle référence fabricant"""
     repo = ManufacturerItemRepository()

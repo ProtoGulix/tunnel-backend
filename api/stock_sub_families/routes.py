@@ -12,7 +12,7 @@ router = APIRouter(prefix="/stock-sub-families",
                    tags=["stock-sub-families"], dependencies=[Depends(require_authenticated)])
 
 
-@router.get("/", response_model=List[StockSubFamily])
+@router.get("", response_model=List[StockSubFamily])
 async def list_stock_sub_families():
     """
     Liste toutes les sous-familles avec leurs templates associés
@@ -26,7 +26,7 @@ async def list_stock_sub_families():
     return repo.get_all_with_templates()
 
 
-@router.post("/", response_model=StockSubFamily, status_code=201)
+@router.post("", response_model=StockSubFamily, status_code=201)
 async def create_stock_sub_family(data: StockSubFamilyCreate):
     """Crée une nouvelle sous-famille de stock (family_code dans le body)"""
     repo = StockSubFamilyRepository()

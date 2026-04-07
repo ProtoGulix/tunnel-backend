@@ -8,7 +8,7 @@ from api.auth.permissions import require_authenticated
 router = APIRouter(prefix="/action-subcategories", tags=["action-subcategories"], dependencies=[Depends(require_authenticated)])
 
 
-@router.get("/", response_model=List[ActionSubcategoryOut])
+@router.get("", response_model=List[ActionSubcategoryOut])
 async def list_subcategories(request: Request):
     """Liste toutes les sous-catégories d'actions"""
     repo = ActionSubcategoryRepository()

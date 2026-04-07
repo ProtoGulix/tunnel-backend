@@ -147,7 +147,7 @@ async def dispatch_pending_requests():
 
 # ========== Endpoints CRUD ==========
 
-@router.get("/", response_model=List[PurchaseRequestListItem])
+@router.get("", response_model=List[PurchaseRequestListItem])
 async def list_purchase_requests(
     skip: int = Query(0, ge=0, description="Nombre d'éléments à sauter"),
     limit: int = Query(100, ge=1, le=1000, description="Nombre max d'éléments"),
@@ -184,7 +184,7 @@ async def get_purchase_request(request_id: str):
     return repo.get_detail(request_id)
 
 
-@router.post("/", response_model=PurchaseRequestDetail)
+@router.post("", response_model=PurchaseRequestDetail)
 async def create_purchase_request(purchase_request: PurchaseRequestIn):
     """Crée une nouvelle demande d'achat"""
     repo = PurchaseRequestRepository()

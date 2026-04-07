@@ -11,7 +11,7 @@ router = APIRouter(prefix="/intervention-actions",
                    tags=["intervention-actions"], dependencies=[Depends(require_authenticated)])
 
 
-@router.get("/", response_model=List[InterventionActionsByDate])
+@router.get("", response_model=List[InterventionActionsByDate])
 async def list_actions(
     start_date: Optional[date] = Query(None, description="Date de début incluse (YYYY-MM-DD). Défaut : aujourd'hui"),
     end_date: Optional[date] = Query(None, description="Date de fin incluse (YYYY-MM-DD). Défaut : aujourd'hui"),
@@ -37,7 +37,7 @@ async def get_action(action_id: str):
     return repo.get_by_id(action_id)
 
 
-@router.post("/", response_model=InterventionActionOut)
+@router.post("", response_model=InterventionActionOut)
 async def add_action(action: InterventionActionIn):
     """Ajoute une action à une intervention"""
     repo = InterventionActionRepository()

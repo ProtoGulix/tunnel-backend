@@ -21,7 +21,7 @@ class LinkPurchaseRequestBody(BaseModel):
     quantity: int
 
 
-@router.get("/", response_model=List[SupplierOrderLineListItem])
+@router.get("", response_model=List[SupplierOrderLineListItem])
 async def list_supplier_order_lines(
     skip: int = Query(0, ge=0, description="Nombre d'éléments à sauter"),
     limit: int = Query(100, ge=1, le=1000, description="Nombre max d'éléments"),
@@ -54,7 +54,7 @@ async def get_supplier_order_line(line_id: str):
     return repo.get_by_id(line_id)
 
 
-@router.post("/", response_model=SupplierOrderLineOut)
+@router.post("", response_model=SupplierOrderLineOut)
 async def create_supplier_order_line(line: SupplierOrderLineIn):
     """Crée une nouvelle ligne de commande fournisseur"""
     repo = SupplierOrderLineRepository()

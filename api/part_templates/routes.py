@@ -12,7 +12,7 @@ from api.auth.permissions import require_authenticated
 router = APIRouter(prefix="/part-templates", tags=["part-templates"], dependencies=[Depends(require_authenticated)])
 
 
-@router.get("/", response_model=List[PartTemplate])
+@router.get("", response_model=List[PartTemplate])
 async def list_templates():
     """
     Liste tous les templates (dernière version de chaque) avec leurs champs
@@ -49,7 +49,7 @@ async def get_template(
     return service.load_template(template_id, version)
 
 
-@router.post("/", response_model=dict, status_code=201)
+@router.post("", response_model=dict, status_code=201)
 async def create_template(data: PartTemplateIn):
     """
     Crée un nouveau template (version 1)

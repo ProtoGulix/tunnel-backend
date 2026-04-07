@@ -8,7 +8,7 @@ from api.auth.permissions import require_authenticated
 router = APIRouter(prefix="/complexity-factors", tags=["complexity-factors"], dependencies=[Depends(require_authenticated)])
 
 
-@router.get("/", response_model=List[ComplexityFactorOut])
+@router.get("", response_model=List[ComplexityFactorOut])
 async def list_factors():
     """Liste tous les facteurs de complexité"""
     repo = ComplexityFactorRepository()
