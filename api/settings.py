@@ -27,7 +27,7 @@ class Settings(BaseSettings):
 
     # API
     API_TITLE: str = "GMAO API"
-    API_VERSION: str = "2.12.0"
+    API_VERSION: str = "2.12.1"
     API_ENV: str = os.getenv("API_ENV", "development")
     AUTH_DISABLED: bool = os.getenv("AUTH_DISABLED", "false").lower() == "true"
     FRONTEND_URL: str = os.getenv("FRONTEND_URL", "http://localhost:5173")
@@ -80,6 +80,7 @@ class Settings(BaseSettings):
                 "http://localhost:3000",
                 "http://127.0.0.1:5173",
                 "http://127.0.0.1:3000",
+                "http://192.168.1.137:5174",
                 frontend_origin
             ]
         # En prod: uniquement l'origine configurée

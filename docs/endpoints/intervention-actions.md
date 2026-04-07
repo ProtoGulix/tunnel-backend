@@ -209,10 +209,13 @@ Met à jour partiellement une action existante. Seuls les champs fournis sont mo
 
 ### Entrée
 
+Mêmes deux modes exclusifs que le POST pour le temps (bornes ou direct) :
+
 ```json
 {
   "description": "Remplacement roulement + graissage",
-  "time_spent": 2.0,
+  "action_start": "08:00:00",
+  "action_end": "09:30:00",
   "action_subcategory": 30,
   "tech": "a1b2c3d4-...",
   "complexity_score": 6,
@@ -220,16 +223,20 @@ Met à jour partiellement une action existante. Seuls les champs fournis sont mo
 }
 ```
 
-| Champ                | Type   | Requis | Description                                                                                      |
-| -------------------- | ------ | ------ | ------------------------------------------------------------------------------------------------ |
-| `description`        | string | non    | Description (HTML nettoyé)                                                                       |
-| `time_spent`         | float  | non    | Quarts d'heure uniquement : 0.25, 0.5, 0.75, 1.0… Min: 0.25                                      |
-| `action_subcategory` | int    | non    | ID de la sous-catégorie                                                                          |
-| `tech`               | uuid   | non    | Technicien                                                                                       |
-| `complexity_score`   | int    | non    | Score 1-10                                                                                       |
-| `complexity_factor`  | string | non    | **Obligatoire si le score résultant > 5**. Code dans [complexity_factors](complexity-factors.md) |
+| Champ                | Type   | Requis       | Description                                                                                                              |
+| -------------------- | ------ | ------------ | ------------------------------------------------------------------------------------------------------------------------ |
+| `description`        | string | non          | Description (HTML nettoyé)                                                                                               |
+| `time_spent`         | float  | conditionnel | Mode direct : quarts d'heure uniquement (0.25, 0.5…). Mutuellement exclusif avec `action_start`/`action_end`             |
+| `action_start`       | time   | conditionnel | Mode bornes : heure de début (HH:MM:SS). Mutuellement exclusif avec `time_spent`                                         |
+| `action_end`         | time   | conditionnel | Mode bornes : heure de fin (HH:MM:SS). Doit être > `action_start`                                                        |
+| `action_subcategory` | int    | non          | ID de la sous-catégorie                                                                                                  |
+| `tech`               | uuid   | non          | Technicien                                                                                                               |
+| `complexity_score`   | int    | non          | Score 1-10                                                                                                               |
+| `complexity_factor`  | string | non          | **Obligatoire si le score résultant > 5**. Code dans [complexity_factors](complexity-factors.md)                         |
 
 > Les règles métier s'appliquent également sur les champs partiels : si `complexity_score > 5` (valeur finale), `complexity_factor` doit être renseigné (valeur courante ou fournie).
+>
+> `intervention_id` et `created_at` ne sont **pas modifiables** via PATCH.
 
 ### Réponse `200`
 

@@ -12,8 +12,8 @@ router = APIRouter(prefix="/stock-sub-families",
                    tags=["stock-sub-families"], dependencies=[Depends(require_authenticated)])
 
 
-@router.get("/", response_model=List[StockSubFamily])
-async def list_stock_sub_families():
+@router.get("", response_model=List[StockSubFamily])
+def list_stock_sub_families():
     """
     Liste toutes les sous-familles avec leurs templates associés
 
@@ -26,8 +26,8 @@ async def list_stock_sub_families():
     return repo.get_all_with_templates()
 
 
-@router.post("/", response_model=StockSubFamily, status_code=201)
-async def create_stock_sub_family(data: StockSubFamilyCreate):
+@router.post("", response_model=StockSubFamily, status_code=201)
+def create_stock_sub_family(data: StockSubFamilyCreate):
     """Crée une nouvelle sous-famille de stock (family_code dans le body)"""
     repo = StockSubFamilyRepository()
     return repo.create(
@@ -39,7 +39,7 @@ async def create_stock_sub_family(data: StockSubFamilyCreate):
 
 
 @router.post("/{family_code}", response_model=StockSubFamily, status_code=201)
-async def create_stock_sub_family_in_family(family_code: str, data: StockSubFamilyCreateInFamily):
+def create_stock_sub_family_in_family(family_code: str, data: StockSubFamilyCreateInFamily):
     """Crée une nouvelle sous-famille sous la famille donnée dans l'URL"""
     repo = StockSubFamilyRepository()
     return repo.create(
@@ -51,7 +51,7 @@ async def create_stock_sub_family_in_family(family_code: str, data: StockSubFami
 
 
 @router.get("/{family_code}/{sub_family_code}", response_model=StockSubFamily)
-async def get_stock_sub_family(family_code: str, sub_family_code: str):
+def get_stock_sub_family(family_code: str, sub_family_code: str):
     """
     Récupère une sous-famille par ses codes avec son template associé
     """
@@ -60,7 +60,7 @@ async def get_stock_sub_family(family_code: str, sub_family_code: str):
 
 
 @router.patch("/{family_code}/{sub_family_code}", response_model=StockSubFamily)
-async def update_stock_sub_family(
+def update_stock_sub_family(
     family_code: str,
     sub_family_code: str,
     data: StockSubFamilyUpdate

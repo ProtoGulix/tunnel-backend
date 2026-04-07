@@ -11,8 +11,8 @@ from api.auth.permissions import require_authenticated
 router = APIRouter(prefix="/manufacturer-items", tags=["manufacturer-items"], dependencies=[Depends(require_authenticated)])
 
 
-@router.get("/")
-async def list_manufacturer_items(
+@router.get("")
+def list_manufacturer_items(
     skip: int = Query(0, ge=0, description="Offset de pagination"),
     limit: int = Query(100, ge=1, le=1000,
                        description="Nombre max d'éléments par page"),
@@ -30,28 +30,28 @@ async def list_manufacturer_items(
 
 
 @router.get("/{item_id}", response_model=ManufacturerItemDetail)
-async def get_manufacturer_item(item_id: str):
+def get_manufacturer_item(item_id: str):
     """Récupère une référence fabricant avec ses références fournisseurs liées"""
     repo = ManufacturerItemRepository()
     return repo.get_by_id_with_suppliers(item_id)
 
 
-@router.post("/", response_model=ManufacturerItemOut, status_code=201)
-async def create_manufacturer_item(data: ManufacturerItemIn):
+@router.post("", response_model=ManufacturerItemOut, status_code=201)
+def create_manufacturer_item(data: ManufacturerItemIn):
     """Crée une nouvelle référence fabricant"""
     repo = ManufacturerItemRepository()
     return repo.add(data.model_dump())
 
 
 @router.patch("/{item_id}", response_model=ManufacturerItemOut)
-async def patch_manufacturer_item(item_id: str, data: ManufacturerItemIn):
+def patch_manufacturer_item(item_id: str, data: ManufacturerItemIn):
     """Met à jour une référence fabricant"""
     repo = ManufacturerItemRepository()
     return repo.update(item_id, data.model_dump(exclude_none=True))
 
 
 @router.delete("/{item_id}", status_code=204)
-async def delete_manufacturer_item(item_id: str):
+def delete_manufacturer_item(item_id: str):
     """Supprime une référence fabricant"""
     repo = ManufacturerItemRepository()
     repo.delete(item_id)

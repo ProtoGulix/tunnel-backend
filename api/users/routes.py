@@ -11,7 +11,7 @@ router = APIRouter(prefix="/users", tags=["users"], dependencies=[Depends(requir
 
 
 @router.get("/me", response_model=UserOut)
-async def get_current_user(request: Request):
+def get_current_user(request: Request):
     """Retourne l'utilisateur courant (extrait du JWT)"""
     user_id = getattr(request.state, 'user_id', None)
 
@@ -25,8 +25,8 @@ async def get_current_user(request: Request):
     return repo.get_by_id(str(user_id))
 
 
-@router.get("/", response_model=List[UserListItem])
-async def list_users(
+@router.get("", response_model=List[UserListItem])
+def list_users(
     skip: int = Query(0, ge=0, description="Offset de pagination"),
     limit: int = Query(100, ge=1, le=1000,
                        description="Nombre max de résultats"),
@@ -41,7 +41,7 @@ async def list_users(
 
 
 @router.get("/{user_id}", response_model=UserOut)
-async def get_user(user_id: str):
+def get_user(user_id: str):
     """Détail d'un utilisateur par ID"""
     repo = UserRepository()
     return repo.get_by_id(user_id)

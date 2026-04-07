@@ -12,6 +12,6 @@ repo = InterventionStatusRepository()
 
 
 @router.get("", response_model=List[Dict[str, Any]])
-async def list_intervention_status():
+def list_intervention_status():
     """Liste tous les statuts d'intervention disponibles"""
     return repo.get_all()

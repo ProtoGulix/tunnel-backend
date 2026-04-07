@@ -12,8 +12,8 @@ from api.auth.permissions import require_authenticated
 router = APIRouter(prefix="/part-templates", tags=["part-templates"], dependencies=[Depends(require_authenticated)])
 
 
-@router.get("/", response_model=List[PartTemplate])
-async def list_templates():
+@router.get("", response_model=List[PartTemplate])
+def list_templates():
     """
     Liste tous les templates (dernière version de chaque) avec leurs champs
     Retourne les données complètes (optimisé pour pages de gestion)
@@ -23,7 +23,7 @@ async def list_templates():
 
 
 @router.get("/code/{code}", response_model=List[dict])
-async def get_template_versions_by_code(code: str):
+def get_template_versions_by_code(code: str):
     """
     Récupère toutes les versions d'un template par code
     """
@@ -36,7 +36,7 @@ async def get_template_versions_by_code(code: str):
 
 
 @router.get("/{template_id}", response_model=PartTemplate)
-async def get_template(
+def get_template(
     template_id: str,
     version: Optional[int] = Query(
         None, description="Version spécifique (dernière si omis)")
@@ -49,8 +49,8 @@ async def get_template(
     return service.load_template(template_id, version)
 
 
-@router.post("/", response_model=dict, status_code=201)
-async def create_template(data: PartTemplateIn):
+@router.post("", response_model=dict, status_code=201)
+def create_template(data: PartTemplateIn):
     """
     Crée un nouveau template (version 1)
 
@@ -65,7 +65,7 @@ async def create_template(data: PartTemplateIn):
 
 
 @router.post("/{template_id}/versions", response_model=dict, status_code=201)
-async def create_template_version(template_id: str, data: PartTemplateUpdate):
+def create_template_version(template_id: str, data: PartTemplateUpdate):
     """
     Crée une nouvelle version d'un template existant
 
@@ -77,7 +77,7 @@ async def create_template_version(template_id: str, data: PartTemplateUpdate):
 
 
 @router.delete("/{template_id}")
-async def delete_template(
+def delete_template(
     template_id: str,
     version: Optional[int] = Query(
         None, description="Version à supprimer (toutes si omis)")

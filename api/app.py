@@ -83,6 +83,7 @@ app = FastAPI(
     title=settings.API_TITLE,
     version=settings.API_VERSION,
     lifespan=lifespan,
+    redirect_slashes=False,
     description="API Proxy - Gateway entre frontend et données"
 )
 
@@ -157,6 +158,7 @@ app.add_middleware(JWTMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
+    allow_origin_regex=r"^https?://192\.168\.1\.\d{1,3}(:\d+)?$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

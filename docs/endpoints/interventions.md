@@ -14,16 +14,17 @@ Liste les interventions avec filtres, tri et pagination.
 
 ### Query params
 
-| Param           | Type | Défaut | Description                                                |
-| --------------- | ---- | ------ | ---------------------------------------------------------- |
-| `skip`          | int  | 0      | Offset de pagination                                       |
-| `limit`         | int  | 100    | Nombre max (max: 1000)                                     |
-| `equipement_id` | uuid | —      | Filtrer par équipement (`machine_id`)                      |
-| `status`        | csv  | —      | Filtrer par codes statut (ex: `ouvert,ferme,en_cours`)     |
-| `priority`      | csv  | —      | Filtrer par priorité (`faible,normale,important,urgent`)   |
-| `printed`       | bool | —      | `true` : imprimées, `false` : non imprimées, omis : toutes |
-| `sort`          | csv  | —      | Tri avec `-` pour DESC (ex: `-priority,-reported_date`)    |
-| `include`       | csv  | —      | Données optionnelles (`stats`). Stats incluses par défaut  |
+| Param           | Type   | Défaut | Description                                                             |
+| --------------- | ------ | ------ | ----------------------------------------------------------------------- |
+| `skip`          | int    | 0      | Offset de pagination                                                    |
+| `limit`         | int    | 100    | Nombre max (max: 1000)                                                  |
+| `search`        | string | —      | Recherche insensible à la casse sur code, titre, code et nom équipement |
+| `equipement_id` | uuid   | —      | Filtrer par équipement (`machine_id`)                                   |
+| `status`        | csv    | —      | Filtrer par codes statut (ex: `ouvert,ferme,en_cours`)                  |
+| `priority`      | csv    | —      | Filtrer par priorité (`faible,normale,important,urgent`)                |
+| `printed`       | bool   | —      | `true` : imprimées, `false` : non imprimées, omis : toutes              |
+| `sort`          | csv    | —      | Tri avec `-` pour DESC (ex: `-priority,-reported_date`)                 |
+| `include`       | csv    | —      | Données optionnelles (`stats`). Stats incluses par défaut               |
 
 > Pour lister les interventions ouvertes d'un équipement (ex: sélecteur planning) : `GET /interventions?equipement_id=<uuid>&status=ouvert,en_cours`
 
@@ -94,6 +95,29 @@ Liste les interventions avec filtres, tri et pagination.
 | `health`           | Calculé depuis le compte réel des interventions ouvertes sur l'équipement (toutes, pas seulement filtrées) |
 | `health.level`     | `ok`, `maintenance` (≥ 1 ouverte), `critical` (≥ 1 urgente)                                                |
 | `equipement_class` | Classe d'équipement (`null` si non renseignée)                                                             |
+
+---
+
+## `GET /interventions/types`
+
+Retourne la liste des types d'intervention disponibles.
+
+### Réponse `200`
+
+```json
+[
+  { "id": "CUR", "title": "Curatif", "color": "red" },
+  { "id": "PRE", "title": "Préventif", "color": "green" },
+  { "id": "REA", "title": "Réapprovisionnement", "color": "blue" },
+  { "id": "BAT", "title": "Batiment", "color": "gray" },
+  { "id": "PRO", "title": "Projet", "color": "blue" },
+  { "id": "COF", "title": "Remise en conformité", "color": "amber" },
+  { "id": "PIL", "title": "Pilotage", "color": "blue" },
+  { "id": "MES", "title": "Mise en service", "color": "amber" }
+]
+```
+
+> Utiliser `id` comme valeur du champ `type_inter` lors de la création d'une intervention.
 
 ---
 
@@ -280,7 +304,7 @@ Crée une nouvelle intervention.
 | Champ           | Type   | Requis  | Défaut   | Description                                                                                                                                                                                                                                                 |
 | --------------- | ------ | ------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `machine_id`    | uuid   | **oui** | —        | Équipement concerné (trigger exige une machine existante)                                                                                                                                                                                                   |
-| `type_inter`    | string | **oui** | —        | Type d'intervention (ex: `curatif`, `preventif`) — intégré dans le code                                                                                                                                                                                     |
+| `type_inter`    | string | **oui** | —        | Type d'intervention (`CUR`, `PRE`, `REA`, `BAT`, `PRO`, `COF`, `PIL`, `MES`) — voir `GET /interventions/types`                                                                                                                                              |
 | `tech_initials` | string | **oui** | —        | Initiales du technicien — intégrées dans le code                                                                                                                                                                                                            |
 | `title`         | string | non     | null     | Titre de l'intervention                                                                                                                                                                                                                                     |
 | `priority`      | string | non     | null     | `faible`, `normale`, `important`, `urgent`                                                                                                                                                                                                                  |
