@@ -205,11 +205,9 @@ Action complète avec sous-catégorie enrichie.
 
 ## `PATCH /intervention-actions/{id}`
 
-Met à jour partiellement une action existante. Seuls les champs fournis sont modifiés.
+Met à jour partiellement une action existante. Seuls les champs fournis sont modifiés. Tous les champs de saisie sont modifiables, y compris la date (`created_at`) en cas d'erreur.
 
 ### Entrée
-
-Mêmes deux modes exclusifs que le POST pour le temps (bornes ou direct) :
 
 ```json
 {
@@ -219,24 +217,26 @@ Mêmes deux modes exclusifs que le POST pour le temps (bornes ou direct) :
   "action_subcategory": 30,
   "tech": "a1b2c3d4-...",
   "complexity_score": 6,
-  "complexity_factor": "PCE"
+  "complexity_factor": "PCE",
+  "created_at": "2026-03-14T08:00:00"
 }
 ```
 
-| Champ                | Type   | Requis       | Description                                                                                                              |
-| -------------------- | ------ | ------------ | ------------------------------------------------------------------------------------------------------------------------ |
-| `description`        | string | non          | Description (HTML nettoyé)                                                                                               |
-| `time_spent`         | float  | conditionnel | Mode direct : quarts d'heure uniquement (0.25, 0.5…). Mutuellement exclusif avec `action_start`/`action_end`             |
-| `action_start`       | time   | conditionnel | Mode bornes : heure de début (HH:MM:SS). Mutuellement exclusif avec `time_spent`                                         |
-| `action_end`         | time   | conditionnel | Mode bornes : heure de fin (HH:MM:SS). Doit être > `action_start`                                                        |
-| `action_subcategory` | int    | non          | ID de la sous-catégorie                                                                                                  |
-| `tech`               | uuid   | non          | Technicien                                                                                                               |
-| `complexity_score`   | int    | non          | Score 1-10                                                                                                               |
-| `complexity_factor`  | string | non          | **Obligatoire si le score résultant > 5**. Code dans [complexity_factors](complexity-factors.md)                         |
+| Champ                | Type     | Requis       | Description                                                                                                              |
+| -------------------- | -------- | ------------ | ------------------------------------------------------------------------------------------------------------------------ |
+| `description`        | string   | non          | Description (HTML nettoyé)                                                                                               |
+| `time_spent`         | float    | conditionnel | Mode direct : quarts d'heure uniquement (0.25, 0.5…). Mutuellement exclusif avec `action_start`/`action_end`             |
+| `action_start`       | time     | conditionnel | Mode bornes : heure de début (HH:MM:SS). Mutuellement exclusif avec `time_spent`                                         |
+| `action_end`         | time     | conditionnel | Mode bornes : heure de fin (HH:MM:SS). Doit être > `action_start`                                                        |
+| `action_subcategory` | int      | non          | ID de la sous-catégorie                                                                                                  |
+| `tech`               | uuid     | non          | Technicien                                                                                                               |
+| `complexity_score`   | int      | non          | Score 1-10                                                                                                               |
+| `complexity_factor`  | string   | non          | **Obligatoire si le score résultant > 5**. Code dans [complexity_factors](complexity-factors.md)                         |
+| `created_at`         | datetime | non          | Date de l'action. Modifiable pour corriger une erreur de saisie (backdating)                                             |
 
 > Les règles métier s'appliquent également sur les champs partiels : si `complexity_score > 5` (valeur finale), `complexity_factor` doit être renseigné (valeur courante ou fournie).
 >
-> `intervention_id` et `created_at` ne sont **pas modifiables** via PATCH.
+> `intervention_id` n'est **pas modifiable** via PATCH.
 
 ### Réponse `200`
 

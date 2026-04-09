@@ -2,6 +2,12 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [2.13.0] - 9 avril 2026
+
+### Nouveautés
+
+- **Correction de date sur `PATCH /intervention-actions/{id}`** : le champ `created_at` est désormais modifiable via PATCH. Permet à un technicien de corriger la date d'une action saisie par erreur (backdating).
+
 ## [2.12.2] - 7 avril 2026
 
 ### Corrections
