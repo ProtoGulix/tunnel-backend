@@ -55,6 +55,7 @@ class InterventionActionPatch(BaseModel):
     complexity_factor: Optional[str] = Field(default=None)
     action_start: Optional[time] = Field(default=None)
     action_end: Optional[time] = Field(default=None)
+    created_at: Optional[str] = Field(default=None)
 
     class Config:
         from_attributes = True

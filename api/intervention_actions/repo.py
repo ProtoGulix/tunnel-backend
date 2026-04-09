@@ -465,6 +465,7 @@ class InterventionActionRepository:
         updatable_fields = {
             'description', 'time_spent', 'action_subcategory', 'tech',
             'complexity_score', 'complexity_factor', 'action_start', 'action_end',
+            'created_at',
         }
 
         updates = {k: v for k, v in patch_data.items()
