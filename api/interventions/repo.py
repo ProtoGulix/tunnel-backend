@@ -510,25 +510,16 @@ class InterventionRepository:
 
         return result
 
-    def _notify_if_closed(self, intervention_id: str, status_actual_id: Any) -> None:
+    def _notify_if_closed(self, intervention_id: str, status_actual: Any) -> None:
         """Notifie le repo des demandes si l'intervention vient d'être fermée."""
-        if not status_actual_id:
+        if not status_actual:
             return
-        conn = self._get_connection()
         try:
-            cur = conn.cursor()
-            cur.execute(
-                "SELECT code FROM intervention_status_ref WHERE id = %s LIMIT 1",
-                (str(status_actual_id),),
-            )
-            row = cur.fetchone()
-            if row and row[0] == CLOSED_STATUS_CODE:
+            if str(status_actual) == CLOSED_STATUS_CODE:
                 from api.intervention_requests.repo import InterventionRequestRepository
                 InterventionRequestRepository().on_intervention_closed(intervention_id)
         except Exception:
             pass  # Ne pas bloquer la mise à jour de l'intervention
-        finally:
-            release_connection(conn)
 
     def delete(self, intervention_id: str) -> bool:
         """Supprime une intervention (interdit si actions ou demandes d'achat liées)"""
