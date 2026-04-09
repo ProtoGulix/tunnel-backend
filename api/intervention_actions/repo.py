@@ -112,7 +112,8 @@ class InterventionActionRepository:
                 where_clauses.append("ia.tech = %s")
                 params.append(tech_id)
 
-            where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
+            where_sql = ("WHERE " + " AND ".join(where_clauses)
+                         ) if where_clauses else ""
 
             cur.execute(f"""
                 SELECT
@@ -140,10 +141,11 @@ class InterventionActionRepository:
             rows = cur.fetchall()
             cols = [desc[0] for desc in cur.description]
 
-            # Groupement par date
-            groups: Dict[date, List[Dict[str, Any]]] = {}
+            # Première passe : mapper toutes les actions
+            all_actions = []
             for row in rows:
-                action = self._map_action_with_subcategory(dict(zip(cols, row)))
+                action = self._map_action_with_subcategory(
+                    dict(zip(cols, row)))
                 action = self._map_tech_user(action)
                 action['intervention'] = {
                     'id': action['intervention_id'],
@@ -154,9 +156,42 @@ class InterventionActionRepository:
                     'equipement_code': action.pop('interv_equipement_code', None),
                     'equipement_name': action.pop('interv_equipement_name', None),
                 } if action.get('intervention_id') else None
-                action['purchase_requests'] = self._get_linked_purchase_requests(
-                    str(action['id']), conn)
-                day = action['created_at'].date() if action.get('created_at') else None
+                action['purchase_requests'] = []
+                all_actions.append(action)
+
+            # Batch PR : 2 requêtes pour toutes les actions
+            if all_actions:
+                action_ids = [str(a['id']) for a in all_actions]
+                placeholders = ','.join(['%s'] * len(action_ids))
+                cur.execute(
+                    f"""
+                    SELECT intervention_action_id, purchase_request_id
+                    FROM intervention_action_purchase_request
+                    WHERE intervention_action_id IN ({placeholders})
+                    """,
+                    action_ids
+                )
+                links = cur.fetchall()
+                if links:
+                    pr_ids = list({str(row[1]) for row in links if row[1]})
+                    from api.purchase_requests.repo import PurchaseRequestRepository
+                    all_prs = PurchaseRequestRepository().get_list(ids=pr_ids)
+                    pr_by_id = {str(pr['id']): pr for pr in all_prs}
+                    action_pr_map: Dict[str, List] = {}
+                    for action_id, pr_id in links:
+                        action_pr_map.setdefault(
+                            str(action_id), []).append(str(pr_id))
+                    for action in all_actions:
+                        action['purchase_requests'] = [
+                            pr_by_id[pid] for pid in action_pr_map.get(str(action['id']), [])
+                            if pid in pr_by_id
+                        ]
+
+            # Groupement par date
+            groups: Dict[date, List[Dict[str, Any]]] = {}
+            for action in all_actions:
+                day = action['created_at'].date() if action.get(
+                    'created_at') else None
                 if day is not None:
                     groups.setdefault(day, []).append(action)
 
@@ -173,18 +208,30 @@ class InterventionActionRepository:
             release_connection(conn)
 
     def get_by_id(self, action_id: str) -> Dict[str, Any]:
-        """Récupère une action par ID avec tech hydraté"""
+        """Récupère une action par ID avec tech, subcategory et intervention hydratés"""
         conn = self._get_connection()
         try:
             cur = conn.cursor()
             cur.execute("""
-                SELECT ia.*,
+                SELECT
+                    ia.id, ia.intervention_id, ia.description, ia.time_spent,
+                    ia.tech, ia.complexity_score, ia.complexity_factor,
+                    ia.action_start, ia.action_end,
+                    ia.created_at, ia.updated_at,
+                    sc.id as subcategory_id, sc.name as subcategory_name, sc.code as subcategory_code,
+                    ac.id as category_id, ac.name as category_name, ac.code as category_code, ac.color,
                     u.id as tech_id, u.first_name as tech_first_name,
                     u.last_name as tech_last_name, u.email as tech_email,
                     u.initial as tech_initial, u.status as tech_status,
-                    u.role as tech_role
+                    u.role as tech_role,
+                    i.code as interv_code, i.title as interv_title, i.status_actual as interv_status,
+                    m.id as interv_equipement_id, m.code as interv_equipement_code, m.name as interv_equipement_name
                 FROM intervention_action ia
+                LEFT JOIN action_subcategory sc ON ia.action_subcategory = sc.id
+                LEFT JOIN action_category ac ON sc.category_id = ac.id
                 LEFT JOIN directus_users u ON ia.tech = u.id
+                LEFT JOIN intervention i ON ia.intervention_id = i.id
+                LEFT JOIN machine m ON i.machine_id = m.id
                 WHERE ia.id = %s
             """, (action_id,))
             row = cur.fetchone()
@@ -193,7 +240,20 @@ class InterventionActionRepository:
                 raise NotFoundError(f"Action {action_id} non trouvée")
 
             cols = [desc[0] for desc in cur.description]
-            return self._map_tech_user(dict(zip(cols, row)))
+            action = self._map_action_with_subcategory(dict(zip(cols, row)))
+            action = self._map_tech_user(action)
+            action['intervention'] = {
+                'id': action['intervention_id'],
+                'code': action.pop('interv_code', None),
+                'title': action.pop('interv_title', None),
+                'status_actual': action.pop('interv_status', None),
+                'equipement_id': action.pop('interv_equipement_id', None),
+                'equipement_code': action.pop('interv_equipement_code', None),
+                'equipement_name': action.pop('interv_equipement_name', None),
+            } if action.get('intervention_id') else None
+            action['purchase_requests'] = self._get_linked_purchase_requests(
+                str(action['id']), conn)
+            return action
         except NotFoundError:
             raise
         except HTTPException:
@@ -213,6 +273,7 @@ class InterventionActionRepository:
                 SELECT
                     ia.id, ia.intervention_id, ia.description, ia.time_spent,
                     ia.tech, ia.complexity_score, ia.complexity_factor,
+                    ia.action_start, ia.action_end,
                     ia.created_at, ia.updated_at,
                     sc.id as subcategory_id, sc.name as subcategory_name, sc.code as subcategory_code,
                     ac.id as category_id, ac.name as category_name, ac.code as category_code, ac.color,
@@ -237,9 +298,43 @@ class InterventionActionRepository:
                 action = self._map_action_with_subcategory(
                     dict(zip(cols, row)))
                 action = self._map_tech_user(action)
-                action['purchase_requests'] = self._get_linked_purchase_requests(
-                    str(action['id']), conn)
+                action['purchase_requests'] = []
                 results.append(action)
+
+            if not results:
+                return results
+
+            # Batch : récupère tous les PR liés à toutes les actions en 2 requêtes
+            action_ids = [str(a['id']) for a in results]
+            placeholders = ','.join(['%s'] * len(action_ids))
+            cur.execute(
+                f"""
+                SELECT intervention_action_id, purchase_request_id
+                FROM intervention_action_purchase_request
+                WHERE intervention_action_id IN ({placeholders})
+                """,
+                action_ids
+            )
+            links = cur.fetchall()
+
+            if links:
+                pr_ids = list({str(row[1]) for row in links if row[1]})
+                from api.purchase_requests.repo import PurchaseRequestRepository
+                all_prs = PurchaseRequestRepository().get_list(ids=pr_ids)
+                pr_by_id = {str(pr['id']): pr for pr in all_prs}
+
+                # Index : action_id → [pr_id, ...]
+                action_pr_map: Dict[str, List] = {}
+                for action_id, pr_id in links:
+                    action_pr_map.setdefault(
+                        str(action_id), []).append(str(pr_id))
+
+                for action in results:
+                    action['purchase_requests'] = [
+                        pr_by_id[pid] for pid in action_pr_map.get(str(action['id']), [])
+                        if pid in pr_by_id
+                    ]
+
             return results
         except HTTPException:
             raise
@@ -294,7 +389,10 @@ class InterventionActionRepository:
     def add(self, action_data: Dict[str, Any]) -> Dict[str, Any]:
         """Ajoute une nouvelle action à une intervention"""
         # Validation et préparation des données — lève ValidationError (400) si invalide
-        validated_data = InterventionActionValidator.validate_and_prepare(action_data)
+        validated_data = InterventionActionValidator.validate_and_prepare(
+            action_data)
+
+        import uuid as _uuid
 
         conn = self._get_connection()
         try:
@@ -316,11 +414,13 @@ class InterventionActionRepository:
                 """,
                 (
                     action_id,
-                    validated_data['intervention_id'],
+                    str(validated_data['intervention_id']) if isinstance(
+                        validated_data['intervention_id'], _uuid.UUID) else validated_data['intervention_id'],
                     validated_data['description'],
                     validated_data.get('time_spent'),
                     validated_data['action_subcategory'],
-                    validated_data['tech'],
+                    str(validated_data['tech']) if isinstance(
+                        validated_data['tech'], _uuid.UUID) else validated_data['tech'],
                     validated_data['complexity_score'],
                     validated_data.get('complexity_factor'),
                     validated_data.get('action_start'),
@@ -330,8 +430,7 @@ class InterventionActionRepository:
                 )
             )
             conn.commit()
-            # Renvoie l'action avec les informations de sous-catégorie
-            return self.get_by_id_with_subcategory(action_id)
+            return self.get_by_id(action_id)
         except HTTPException:
             conn.rollback()
             raise
@@ -343,24 +442,36 @@ class InterventionActionRepository:
 
     def update(self, action_id: str, patch_data: Dict[str, Any]) -> Dict[str, Any]:
         """Met à jour partiellement une action existante"""
-        self.get_by_id_with_subcategory(action_id)
+        # Vérification d'existence (légère)
+        conn = self._get_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT complexity_score, complexity_factor FROM intervention_action WHERE id = %s", (action_id,))
+            row = cur.fetchone()
+            if not row:
+                raise NotFoundError(f"Action {action_id} non trouvée")
+            cols = [desc[0] for desc in cur.description]
+            current = dict(zip(cols, row))
+        except NotFoundError:
+            raise
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise_db_error(e, "opération")
+        finally:
+            release_connection(conn)
 
         updatable_fields = {
-            'description': None,
-            'time_spent': None,
-            'action_subcategory': None,
-            'tech': None,
-            'complexity_score': None,
-            'complexity_factor': None,
-            'action_start': None,
-            'action_end': None,
+            'description', 'time_spent', 'action_subcategory', 'tech',
+            'complexity_score', 'complexity_factor', 'action_start', 'action_end',
         }
 
-        updates = {k: v for k, v in patch_data.items(
-        ) if k in updatable_fields and v is not None}
+        updates = {k: v for k, v in patch_data.items()
+                   if k in updatable_fields and v is not None}
 
         if not updates:
-            return self.get_by_id_with_subcategory(action_id)
+            return self.get_by_id(action_id)
 
         # Validation partielle des champs fournis
         if 'description' in updates:
@@ -377,19 +488,39 @@ class InterventionActionRepository:
                 updates['complexity_factor'])
 
         # Valide la règle score > 5 → complexity_factor obligatoire (valeurs fusionnées)
-        current = self.get_by_id_with_subcategory(action_id)
-        score = updates.get('complexity_score', current.get('complexity_score'))
-        factor = updates.get('complexity_factor', current.get('complexity_factor'))
+        score = updates.get('complexity_score',
+                            current.get('complexity_score'))
+        factor = updates.get('complexity_factor',
+                             current.get('complexity_factor'))
         if isinstance(score, int) and score > 5 and (not factor or not str(factor).strip()):
             raise ValidationError(
                 "complexity_factor est obligatoire quand complexity_score > 5"
             )
 
+        # Respect de l'exclusivité bornes/time_spent imposée par le trigger PostgreSQL :
+        # si le PATCH passe en mode bornes (action_start+action_end), on efface time_spent,
+        # et inversement.
+        has_bounds = 'action_start' in updates or 'action_end' in updates
+        has_direct = 'time_spent' in updates
+        if has_bounds and not has_direct:
+            # forcer NULL pour satisfaire le trigger
+            updates['time_spent'] = None
+        elif has_direct and not has_bounds:
+            updates['action_start'] = None
+            updates['action_end'] = None
+
+        # Normalise les UUID en str pour psycopg2 (compatibilité avec ou sans register_uuid)
+        import uuid as _uuid
+        params_updates = {
+            k: str(v) if isinstance(v, _uuid.UUID) else v
+            for k, v in updates.items()
+        }
+
         conn = self._get_connection()
         try:
             cur = conn.cursor()
-            set_clauses = [f"{field} = %s" for field in updates]
-            params = list(updates.values())
+            set_clauses = [f"{field} = %s" for field in params_updates]
+            params = list(params_updates.values())
             set_clauses.append("updated_at = %s")
             params.append(datetime.now())
             params.append(action_id)
@@ -408,4 +539,4 @@ class InterventionActionRepository:
         finally:
             release_connection(conn)
 
-        return self.get_by_id_with_subcategory(action_id)
+        return self.get_by_id(action_id)
