@@ -2,6 +2,32 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [2.15.0] - 10 avril 2026
+
+### Nouveautés
+
+- **`POST /equipements` enrichi** : la création d'équipement accepte désormais tous les champs métier (`no_machine`, `affectation`, `is_mere`, `fabricant`, `numero_serie`, `date_mise_service`, `notes`, `statut_id`) ainsi que `children_ids` pour rattacher des sous-équipements en une seule opération.
+- **`PATCH /equipements/{id}`** : nouvel endpoint de mise à jour partielle. Seuls les champs envoyés sont modifiés.
+- **`PUT /equipements/{id}` en remplacement complet** : les champs non envoyés passent à `null`, conforme à la sémantique REST.
+- **Règles métier de création dans le validator** : les validations à la création d'une demande d'intervention (`demandeur_nom`, `description`, `machine_id`, statut équipement) sont désormais centralisées dans `InterventionRequestValidator.validate_create()`, conforme au pattern du module interventions.
+
+### Corrections
+
+- **`GET /intervention-requests`** : requête SQL corrigée (clause `GROUP BY` étendue aux colonnes de la machine parent), évitant une erreur 500 introduite lors de l'ajout du champ `parent`.
+
+### Changements incompatibles
+
+- **Champ `parent_id` supprimé** dans les réponses `GET /equipements`, `GET /equipements/{id}`, et partout où un objet équipement est imbriqué (`GET /interventions`, `GET /intervention-requests`). Remplacer par l'objet `parent : { id, code, name }` qui est `null` si l'équipement n'a pas de parent.
+
+## [2.14.0] - 10 avril 2026
+
+### Nouveautés
+
+- **Statuts d'équipement (`equipement_statuts`)** : nouvelle table de référence représentant le cycle de vie d'un équipement (En projet, En service, À l'arrêt, etc.). Chaque statut porte une couleur, un ordre d'affichage et un indicateur indiquant si des interventions peuvent être créées.
+- **`GET /equipement-statuts`** : retourne la liste des statuts actifs triés par ordre d'affichage. Auth JWT requise.
+- **Champ `statut` dans `GET /equipements` et `GET /equipements/{id}`** : les réponses incluent désormais l'objet `statut` (id, code, label, interventions, couleur). Le champ est `null` si l'équipement n'a pas encore de statut assigné.
+- **Règle métier — création bloquée sur statut interdit** : `POST /interventions` et `POST /intervention-requests` retournent désormais une erreur `422 equipement_statut_bloque` si l'équipement cible a un statut dont le champ `interventions` vaut `false` (ex : En projet, Rebut).
+
 ## [2.13.0] - 9 avril 2026
 
 ### Nouveautés

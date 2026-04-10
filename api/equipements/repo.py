@@ -70,10 +70,17 @@ class EquipementRepository:
                     m.id,
                     m.code,
                     m.name,
-                    m.equipement_mere,
+                    pm.id   AS parent_id,
+                    pm.code AS parent_code,
+                    pm.name AS parent_name,
                     ec.id as equipement_class_id,
                     ec.code as equipement_class_code,
                     ec.label as equipement_class_label,
+                    es.id as statut_id,
+                    es.code as statut_code,
+                    es.libelle as statut_label,
+                    es.interventions as statut_interventions,
+                    es.couleur as statut_couleur,
                     COUNT(CASE WHEN i.status_actual != {csq} THEN i.id END) as open_interventions_count,
                     COUNT(CASE WHEN i.status_actual != {csq} AND i.priority = 'urgent' THEN i.id END) as urgent_count,
                     COUNT(CASE WHEN ir.statut = 'nouvelle' THEN ir.id END) as new_requests_count
@@ -81,8 +88,10 @@ class EquipementRepository:
                 LEFT JOIN intervention i ON i.machine_id = m.id
                 LEFT JOIN intervention_request ir ON ir.machine_id = m.id
                 LEFT JOIN equipement_class ec ON ec.id = m.equipement_class_id
+                LEFT JOIN equipement_statuts es ON es.id = m.statut_id
+                LEFT JOIN machine pm ON pm.id = m.equipement_mere
                 {where_clause}
-                GROUP BY m.id, ec.id, ec.code, ec.label
+                GROUP BY m.id, pm.id, pm.code, pm.name, ec.id, ec.code, ec.label, es.id, es.code, es.libelle, es.interventions, es.couleur
                 ORDER BY urgent_count DESC, open_interventions_count DESC, m.name ASC
                 LIMIT %s OFFSET %s
             """
@@ -110,6 +119,17 @@ class EquipementRepository:
                 equipement['equipement_class'] = (
                     {'id': ec_id, 'code': ec_code,
                         'label': ec_label} if ec_id else None
+                )
+
+                statut_id = equipement.pop('statut_id', None)
+                statut_code = equipement.pop('statut_code', None)
+                statut_label = equipement.pop('statut_label', None)
+                statut_interventions = equipement.pop('statut_interventions', None)
+                statut_couleur = equipement.pop('statut_couleur', None)
+                equipement['statut'] = (
+                    {'id': statut_id, 'code': statut_code, 'label': statut_label,
+                     'interventions': statut_interventions, 'couleur': statut_couleur}
+                    if statut_id else None
                 )
 
             return equipements
@@ -198,10 +218,17 @@ class EquipementRepository:
                     m.numero_serie,
                     m.date_mise_service,
                     m.notes,
-                    m.equipement_mere,
+                    pm.id   AS parent_id,
+                    pm.code AS parent_code,
+                    pm.name AS parent_name,
                     ec.id as equipement_class_id,
                     ec.code as equipement_class_code,
                     ec.label as equipement_class_label,
+                    es.id as statut_id,
+                    es.code as statut_code,
+                    es.libelle as statut_label,
+                    es.interventions as statut_interventions,
+                    es.couleur as statut_couleur,
                     COUNT(CASE WHEN i.status_actual != {csq} THEN i.id END) as open_interventions_count,
                     COUNT(CASE WHEN i.status_actual != {csq} AND i.priority = 'urgent' THEN i.id END) as urgent_count,
                     COUNT(CASE WHEN ir.statut = 'nouvelle' THEN ir.id END) as new_requests_count
@@ -209,8 +236,10 @@ class EquipementRepository:
                 LEFT JOIN intervention i ON i.machine_id = m.id
                 LEFT JOIN intervention_request ir ON ir.machine_id = m.id
                 LEFT JOIN equipement_class ec ON ec.id = m.equipement_class_id
+                LEFT JOIN equipement_statuts es ON es.id = m.statut_id
+                LEFT JOIN machine pm ON pm.id = m.equipement_mere
                 WHERE m.id = %s
-                GROUP BY m.id, ec.id, ec.code, ec.label
+                GROUP BY m.id, pm.id, pm.code, pm.name, ec.id, ec.code, ec.label, es.id, es.code, es.libelle, es.interventions, es.couleur
             """
 
             cur.execute(query, (CLOSED_STATUS_CODE,
@@ -229,7 +258,14 @@ class EquipementRepository:
             health = self._calculate_health(open_count, urgent_count, new_requests_count)
 
             equipement['health'] = health
-            equipement['parent_id'] = equipement.pop('equipement_mere', None)
+
+            parent_id = equipement.pop('parent_id', None)
+            parent_code = equipement.pop('parent_code', None)
+            parent_name = equipement.pop('parent_name', None)
+            equipement['parent'] = (
+                {'id': parent_id, 'code': parent_code, 'name': parent_name}
+                if parent_id else None
+            )
 
             # Normaliser les champs string (peuvent être stockés comme int en DB)
             for field in ('no_machine', 'affectation', 'fabricant', 'numero_serie', 'notes'):
@@ -249,6 +285,17 @@ class EquipementRepository:
                 }
             else:
                 equipement['equipement_class'] = None
+
+            statut_id = equipement.pop('statut_id', None)
+            statut_code = equipement.pop('statut_code', None)
+            statut_label = equipement.pop('statut_label', None)
+            statut_interventions = equipement.pop('statut_interventions', None)
+            statut_couleur = equipement.pop('statut_couleur', None)
+            equipement['statut'] = (
+                {'id': statut_id, 'code': statut_code, 'label': statut_label,
+                 'interventions': statut_interventions, 'couleur': statut_couleur}
+                if statut_id else None
+            )
 
             # children_count
             cur.execute(
@@ -320,6 +367,16 @@ class EquipementRepository:
         finally:
             release_connection(conn)
 
+    def _assign_children(self, cur, parent_id: str, children_ids: list) -> None:
+        """Assigne une liste d'équipements comme enfants de parent_id"""
+        if not children_ids:
+            return
+        placeholders = ','.join(['%s'] * len(children_ids))
+        cur.execute(
+            f"UPDATE machine SET equipement_mere = %s WHERE id IN ({placeholders})",
+            (parent_id, *[str(cid) for cid in children_ids])
+        )
+
     def add(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Crée un nouvel équipement"""
         conn = self._get_connection()
@@ -329,17 +386,31 @@ class EquipementRepository:
 
             cur.execute(
                 """
-                INSERT INTO machine (id, code, name, equipement_mere, equipement_class_id)
-                VALUES (%s, %s, %s, %s, %s)
+                INSERT INTO machine (
+                    id, code, name, no_machine, affectation, is_mere,
+                    fabricant, numero_serie, date_mise_service, notes,
+                    equipement_mere, equipement_class_id, statut_id
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     equipement_id,
                     data.get('code'),
                     data['name'],
-                    data.get('parent_id'),
-                    data.get('equipement_class_id')
+                    data.get('no_machine'),
+                    data.get('affectation'),
+                    data.get('is_mere'),
+                    data.get('fabricant'),
+                    data.get('numero_serie'),
+                    data.get('date_mise_service'),
+                    data.get('notes'),
+                    str(data['parent_id']) if data.get('parent_id') else None,
+                    str(data['equipement_class_id']) if data.get('equipement_class_id') else None,
+                    data.get('statut_id'),
                 )
             )
+            if data.get('children_ids'):
+                self._assign_children(cur, equipement_id, data['children_ids'])
             conn.commit()
         except Exception as e:
             conn.rollback()
@@ -361,8 +432,16 @@ class EquipementRepository:
             field_map = {
                 'code': 'code',
                 'name': 'name',
+                'no_machine': 'no_machine',
+                'affectation': 'affectation',
+                'is_mere': 'is_mere',
+                'fabricant': 'fabricant',
+                'numero_serie': 'numero_serie',
+                'date_mise_service': 'date_mise_service',
+                'notes': 'notes',
                 'parent_id': 'equipement_mere',
-                'equipement_class_id': 'equipement_class_id'
+                'equipement_class_id': 'equipement_class_id',
+                'statut_id': 'statut_id',
             }
 
             set_clauses = []
@@ -373,17 +452,16 @@ class EquipementRepository:
                     set_clauses.append(f"{column} = %s")
                     params.append(data[field])
 
-            if not set_clauses:
-                return self.get_by_id(equipement_id)
+            if set_clauses:
+                params.append(equipement_id)
+                cur.execute(
+                    f"UPDATE machine SET {', '.join(set_clauses)} WHERE id = %s",
+                    params
+                )
 
-            params.append(equipement_id)
-            query = f"""
-                UPDATE machine
-                SET {', '.join(set_clauses)}
-                WHERE id = %s
-            """
+            if data.get('children_ids') is not None:
+                self._assign_children(cur, equipement_id, data['children_ids'])
 
-            cur.execute(query, params)
             conn.commit()
         except Exception as e:
             conn.rollback()

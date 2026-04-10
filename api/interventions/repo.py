@@ -112,7 +112,9 @@ class InterventionRepository:
                     ir.created_at AS req_created_at,
                     ir.updated_at AS req_updated_at,
                     m.code as m_code, m.name as m_name,
-                    m.equipement_mere as m_parent_id,
+                    pm.id   AS m_parent_id,
+                    pm.code AS m_parent_code,
+                    pm.name AS m_parent_name,
                     ec.id as ec_id, ec.code as ec_code, ec.label as ec_label,
                     mh.m_open_count, mh.m_urgent_count,
                     COALESCE(SUM(ia.time_spent), 0) as total_time,
@@ -123,6 +125,7 @@ class InterventionRepository:
                 LEFT JOIN intervention_request ir ON ir.intervention_id = i.id
                 LEFT JOIN request_status_ref rs2 ON rs2.code = ir.statut
                 LEFT JOIN machine m ON i.machine_id = m.id
+                LEFT JOIN machine pm ON pm.id = m.equipement_mere
                 LEFT JOIN equipement_class ec ON ec.id = m.equipement_class_id
                 LEFT JOIN LATERAL (
                     SELECT
@@ -135,7 +138,7 @@ class InterventionRepository:
                 LEFT JOIN intervention_action_purchase_request iapr ON ia.id = iapr.intervention_action_id
                 {" ".join(joins)}
                 {where_sql}
-                GROUP BY i.id, ir.id, ir.code, ir.demandeur_nom, ir.demandeur_service, ir.description, ir.statut, rs2.label, rs2.color, ir.intervention_id, ir.created_at, ir.updated_at, m.id, ec.id, mh.m_open_count, mh.m_urgent_count
+                GROUP BY i.id, ir.id, ir.code, ir.demandeur_nom, ir.demandeur_service, ir.description, ir.statut, rs2.label, rs2.color, ir.intervention_id, ir.created_at, ir.updated_at, m.id, pm.id, pm.code, pm.name, ec.id, mh.m_open_count, mh.m_urgent_count
                 {order_sql}
                 LIMIT %s OFFSET %s
             """
@@ -166,12 +169,16 @@ class InterventionRepository:
                     ec_code = row_dict.pop('ec_code', None)
                     ec_label = row_dict.pop('ec_label', None)
 
+                    p_id   = row_dict.pop('m_parent_id',   None)
+                    p_code = row_dict.pop('m_parent_code', None)
+                    p_name = row_dict.pop('m_parent_name', None)
+
                     row_dict['equipements'] = {
                         'id': row_dict.pop('machine_id'),
                         'code': row_dict.pop('m_code', None),
                         'name': row_dict.pop('m_name', None),
                         'health': health,
-                        'parent_id': row_dict.pop('m_parent_id', None),
+                        'parent': {'id': p_id, 'code': p_code, 'name': p_name} if p_id else None,
                         'equipement_class': {'id': ec_id, 'code': ec_code, 'label': ec_label} if ec_id else None
                     }
                 else:

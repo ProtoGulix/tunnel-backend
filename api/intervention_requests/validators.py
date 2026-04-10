@@ -65,3 +65,19 @@ class InterventionRequestValidator:
                 raise ValidationError(
                     "tech_initials est obligatoire pour accepter une demande"
                 )
+
+    @staticmethod
+    def validate_create(data: Dict[str, Any]) -> None:
+        """Valide les règles métier avant création d'une demande d'intervention."""
+        demandeur_nom = (data.get("demandeur_nom") or "").strip()
+        description = (data.get("description") or "").strip()
+
+        if not demandeur_nom:
+            raise ValidationError("demandeur_nom est obligatoire")
+        if not description:
+            raise ValidationError("description est obligatoire")
+        if not data.get("machine_id"):
+            raise ValidationError("machine_id est obligatoire")
+
+        from api.equipement_statuts.repo import check_equipement_statut_allows_interventions
+        check_equipement_statut_allows_interventions(str(data["machine_id"]))

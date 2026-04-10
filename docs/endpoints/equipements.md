@@ -2,7 +2,7 @@
 
 Gestion du parc d'équipements avec état de santé calculé, classification et hiérarchie parent/enfants.
 
-> Voir aussi : [Equipement Classes](equipement-class.md) | [Interventions](interventions.md)
+> Voir aussi : [Equipement Classes](equipement-class.md) | [Equipement Statuts](equipement-statuts.md) | [Interventions](interventions.md)
 >
 > Schemas partagés : [EquipementHealth](../shared-schemas.md#equipementhealth) | [EquipementClass](../shared-schemas.md#equipementclass) | [EmbeddedInterventionItem](../shared-schemas.md#embeddedinterventionitem)
 
@@ -41,11 +41,18 @@ Tri par défaut : urgents DESC, ouverts DESC, nom ASC.
         "urgent_count": 0,
         "new_requests_count": 0
       },
-      "parent_id": null,
+      "parent": null,
       "equipement_class": {
         "id": "b28f1f4f-...",
         "code": "SCIE",
         "label": "Scie"
+      },
+      "statut": {
+        "id": 3,
+        "code": "EN_SERVICE",
+        "label": "En service",
+        "interventions": true,
+        "couleur": "#10B981"
       }
     }
   ],
@@ -67,6 +74,7 @@ Tri par défaut : urgents DESC, ouverts DESC, nom ASC.
 ```
 
 > `equipement_class` dans les items est `null` si aucune classe assignée.
+> `statut` est `null` si aucun statut assigné à l'équipement (compatibilité ascendante).
 > Les facettes comptent les équipements **sans** tenir compte du filtre `exclude_class`, pour permettre l'affichage des compteurs même sur les classes exclues.
 
 ---
@@ -104,8 +112,19 @@ Détail complet d'un équipement avec tous les champs de la base, `children_coun
     "new_requests_count": 2,
     "rules_triggered": ["URGENT_OPEN >= 1", "NEW_REQUESTS > 0"]
   },
-  "parent_id": null,
+  "parent": {
+    "id": "uuid-parent",
+    "code": "EQ-000",
+    "name": "Machine mère"
+  },
   "equipement_class": { "id": "uuid", "code": "SCIE", "label": "Scie" },
+  "statut": {
+    "id": 3,
+    "code": "EN_SERVICE",
+    "label": "En service",
+    "interventions": true,
+    "couleur": "#10B981"
+  },
   "children_count": 233,
   "interventions": {
     "total": 47,
@@ -144,27 +163,76 @@ Crée un équipement.
 {
   "name": "Scie principale",
   "code": "EQ-001",
+  "no_machine": "M-042",
+  "affectation": "Atelier A",
+  "is_mere": true,
+  "fabricant": "Bosch",
+  "numero_serie": "SN-99887",
+  "date_mise_service": "2019-03-15",
+  "notes": "Révision annuelle prévue",
   "parent_id": null,
-  "equipement_class_id": "b28f1f4f-..."
+  "equipement_class_id": "b28f1f4f-...",
+  "statut_id": 3,
+  "children_ids": ["uuid-enfant-1", "uuid-enfant-2"]
 }
 ```
 
-| Champ                 | Type   | Requis | Description                    |
-| --------------------- | ------ | ------ | ------------------------------ |
-| `name`                | string | oui    | Nom de l'équipement            |
-| `code`                | string | non    | Code unique                    |
-| `parent_id`           | uuid   | non    | Équipement parent (hiérarchie) |
-| `equipement_class_id` | uuid   | non    | Classe d'équipement            |
+| Champ                 | Type       | Requis | Description                                                         |
+| --------------------- | ---------- | ------ | ------------------------------------------------------------------- |
+| `name`                | string     | oui    | Nom de l'équipement                                                 |
+| `code`                | string     | non    | Code unique                                                         |
+| `no_machine`          | string     | non    | Numéro machine interne                                              |
+| `affectation`         | string     | non    | Lieu ou service d'affectation                                       |
+| `is_mere`             | bool       | non    | Indique si l'équipement est une machine mère                        |
+| `fabricant`           | string     | non    | Fabricant                                                           |
+| `numero_serie`        | string     | non    | Numéro de série                                                     |
+| `date_mise_service`   | date       | non    | Date de mise en service (YYYY-MM-DD)                                |
+| `notes`               | string     | non    | Notes libres                                                        |
+| `parent_id`           | uuid       | non    | UUID de l'équipement parent                                         |
+| `equipement_class_id` | uuid       | non    | UUID de la classe d'équipement                                      |
+| `statut_id`           | int        | non    | ID du statut (voir `GET /equipement-statuts`)                       |
+| `children_ids`        | uuid[]     | non    | UUIDs des équipements à rattacher comme enfants de cet équipement   |
 
 ### Réponse `201`
 
-Équipement complet (même format que `GET /equipements/{id}`, interventions vides, children_count à 0).
+Équipement complet (même format que `GET /equipements/{id}`).
 
 ---
 
 ## `PUT /equipements/{id}`
 
-Met à jour un équipement. Même body que POST, tous champs optionnels.
+Remplace complètement un équipement. `name` est obligatoire. Tous les champs non envoyés passent à `null`.
+
+### Entrée
+
+Même body que `POST`, avec `name` obligatoire.
+
+### Réponse `200`
+
+Équipement complet (même format que `GET /equipements/{id}`).
+
+---
+
+## `PATCH /equipements/{id}`
+
+Met à jour partiellement un équipement. Seuls les champs envoyés sont modifiés.
+
+### Entrée
+
+Même body que `POST`, tous les champs optionnels (dont `name`).
+
+```json
+{
+  "statut_id": 4,
+  "affectation": "Atelier B"
+}
+```
+
+### Réponse `200`
+
+Équipement complet (même format que `GET /equipements/{id}`).
+
+> `children_ids` fonctionne de la même façon pour `PUT` et `PATCH` : les équipements listés voient leur `equipement_mere` mis à jour pour pointer vers cet équipement. Les enfants existants non listés ne sont pas modifiés.
 
 ---
 

@@ -14,7 +14,9 @@ _EQUIPEMENT_COLS = f"""
     m.id        AS eq_id,
     m.code      AS eq_code,
     m.name      AS eq_name,
-    m.equipement_mere AS eq_parent_id,
+    pm.id       AS eq_parent_id,
+    pm.code     AS eq_parent_code,
+    pm.name     AS eq_parent_name,
     ec.id       AS ec_id,
     ec.code     AS ec_code,
     ec.label    AS ec_label,
@@ -24,6 +26,7 @@ _EQUIPEMENT_COLS = f"""
 
 _EQUIPEMENT_JOINS = """
     LEFT JOIN machine m ON ir.machine_id = m.id
+    LEFT JOIN machine pm ON pm.id = m.equipement_mere
     LEFT JOIN equipement_class ec ON ec.id = m.equipement_class_id
     LEFT JOIN intervention i_h ON i_h.machine_id = m.id
 """
@@ -56,12 +59,16 @@ class InterventionRequestRepository:
         ec_code  = row.pop("ec_code",  None)
         ec_label = row.pop("ec_label", None)
 
+        p_id   = row.pop("eq_parent_id",   None)
+        p_code = row.pop("eq_parent_code", None)
+        p_name = row.pop("eq_parent_name", None)
+
         return {
             "id":        row.pop("eq_id"),
             "code":      row.pop("eq_code",      None),
             "name":      row.pop("eq_name"),
             "health":    health,
-            "parent_id": row.pop("eq_parent_id", None),
+            "parent":    {"id": p_id, "code": p_code, "name": p_name} if p_id else None,
             "equipement_class": {"id": ec_id, "code": ec_code, "label": ec_label} if ec_id else None,
         }
 
@@ -137,7 +144,7 @@ class InterventionRequestRepository:
                 LEFT JOIN request_status_ref rs ON ir.statut = rs.code
                 {_EQUIPEMENT_JOINS}
                 {where_sql}
-                GROUP BY ir.id, rs.label, rs.color, m.id, ec.id
+                GROUP BY ir.id, rs.label, rs.color, m.id, pm.id, pm.code, pm.name, ec.id
                 ORDER BY ir.created_at DESC
                 LIMIT %s OFFSET %s
                 """,
@@ -258,7 +265,7 @@ class InterventionRequestRepository:
                 LEFT JOIN request_status_ref rs ON ir.statut = rs.code
                 {_EQUIPEMENT_JOINS}
                 WHERE ir.id = %s
-                GROUP BY ir.id, rs.label, rs.color, m.id, ec.id
+                GROUP BY ir.id, rs.label, rs.color, m.id, pm.id, pm.code, pm.name, ec.id
                 """,
                 (CLOSED_STATUS_CODE, CLOSED_STATUS_CODE, request_id),
             )
@@ -303,14 +310,9 @@ class InterventionRequestRepository:
     # ──────────────────────────────────────────────────────────────
 
     def create(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        InterventionRequestValidator.validate_create(data)
         demandeur_nom = (data.get("demandeur_nom") or "").strip()
         description = (data.get("description") or "").strip()
-        if not demandeur_nom:
-            raise ValidationError("demandeur_nom est obligatoire")
-        if not description:
-            raise ValidationError("description est obligatoire")
-        if not data.get("machine_id"):
-            raise ValidationError("machine_id est obligatoire")
 
         conn = self._get_connection()
         try:

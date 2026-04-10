@@ -15,6 +15,15 @@ class EquipmentClassRef(BaseModel):
     label: str
 
 
+class EquipementStatutRef(BaseModel):
+    """Référence à un statut d'équipement"""
+    id: int
+    code: str
+    label: str
+    interventions: bool
+    couleur: str | None = None
+
+
 class EquipementHealth(BaseModel):
     """Santé d'un équipement"""
     level: str
@@ -38,8 +47,9 @@ class EquipementListItem(BaseModel):
     code: str | None = None
     name: str
     health: EquipementHealth
-    parent_id: UUID | None = None
+    parent: EquipementParent | None = None
     equipement_class: EquipmentClassRef | None = None
+    statut: EquipementStatutRef | None = None
 
     class Config:
         from_attributes = True
@@ -98,8 +108,9 @@ class EquipementDetail(BaseModel):
     date_mise_service: date | None = None
     notes: str | None = None
     health: EquipementHealth
-    parent_id: UUID | None = None
+    parent: EquipementParent | None = None
     equipement_class: EquipmentClassRef | None = None
+    statut: EquipementStatutRef | None = None
     children_count: int = 0
     interventions: InterventionsPaginated
 
@@ -109,18 +120,53 @@ class EquipementDetail(BaseModel):
 
 class EquipementCreate(BaseModel):
     """Schéma pour créer un équipement"""
-    code: str | None = None
     name: str
+    code: str | None = None
+    no_machine: str | None = None
+    affectation: str | None = None
+    is_mere: bool | None = None
+    fabricant: str | None = None
+    numero_serie: str | None = None
+    date_mise_service: date | None = None
+    notes: str | None = None
     parent_id: UUID | None = None
-    equipment_class_id: UUID | None = None
+    equipement_class_id: UUID | None = None
+    statut_id: int | None = None
+    children_ids: list[UUID] | None = None
 
 
 class EquipementUpdate(BaseModel):
-    """Schéma pour mettre à jour un équipement"""
+    """Schéma pour PUT — remplacement complet (name obligatoire)"""
+    name: str
     code: str | None = None
-    name: str | None = None
+    no_machine: str | None = None
+    affectation: str | None = None
+    is_mere: bool | None = None
+    fabricant: str | None = None
+    numero_serie: str | None = None
+    date_mise_service: date | None = None
+    notes: str | None = None
     parent_id: UUID | None = None
-    equipment_class_id: UUID | None = None
+    equipement_class_id: UUID | None = None
+    statut_id: int | None = None
+    children_ids: list[UUID] | None = None
+
+
+class EquipementPatch(BaseModel):
+    """Schéma pour PATCH — mise à jour partielle"""
+    name: str | None = None
+    code: str | None = None
+    no_machine: str | None = None
+    affectation: str | None = None
+    is_mere: bool | None = None
+    fabricant: str | None = None
+    numero_serie: str | None = None
+    date_mise_service: date | None = None
+    notes: str | None = None
+    parent_id: UUID | None = None
+    equipement_class_id: UUID | None = None
+    statut_id: int | None = None
+    children_ids: list[UUID] | None = None
 
 
 class InterventionsStats(BaseModel):
