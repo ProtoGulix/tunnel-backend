@@ -54,6 +54,7 @@ Documentation OpenAPI interactive : `http://localhost:8000/docs`
 | POST    | `/equipement-class`                                    | Créer classe                  | [equipement-class.md](docs/endpoints/equipement-class.md)               |
 | PATCH   | `/equipement-class/{id}`                               | Modifier classe               | [equipement-class.md](docs/endpoints/equipement-class.md)               |
 | DELETE  | `/equipement-class/{id}`                               | Supprimer classe              | [equipement-class.md](docs/endpoints/equipement-class.md)               |
+| GET     | `/equipement-statuts`                                  | Statuts d'équipement actifs   | [equipement-statuts.md](docs/endpoints/equipement-statuts.md)           |
 | GET     | `/purchase-requests`                                   | Liste demandes [LEGACY]       | [purchase-requests.md](docs/endpoints/purchase-requests.md)             |
 | GET     | `/purchase-requests/list`                              | Liste optimisée               | [purchase-requests.md](docs/endpoints/purchase-requests.md)             |
 | GET     | `/purchase-requests/detail/{id}`                       | Détail enrichi                | [purchase-requests.md](docs/endpoints/purchase-requests.md)             |

@@ -103,6 +103,9 @@ class InterventionValidator:
         """Valide les règles métier avant création d'une intervention."""
         if data.get("type_inter"):
             cls.validate_type_inter(data["type_inter"])
+        if data.get("machine_id"):
+            from api.equipement_statuts.repo import check_equipement_statut_allows_interventions
+            check_equipement_statut_allows_interventions(str(data["machine_id"]))
         if data.get("machine_id") and data.get("type_inter") and data.get("tech_initials"):
             cls.validate_unique_code(
                 machine_id=str(data["machine_id"]),

@@ -14,7 +14,9 @@ _EQUIPEMENT_COLS = f"""
     m.id        AS eq_id,
     m.code      AS eq_code,
     m.name      AS eq_name,
-    m.equipement_mere AS eq_parent_id,
+    pm.id       AS eq_parent_id,
+    pm.code     AS eq_parent_code,
+    pm.name     AS eq_parent_name,
     ec.id       AS ec_id,
     ec.code     AS ec_code,
     ec.label    AS ec_label,
@@ -24,6 +26,7 @@ _EQUIPEMENT_COLS = f"""
 
 _EQUIPEMENT_JOINS = """
     LEFT JOIN machine m ON ir.machine_id = m.id
+    LEFT JOIN machine pm ON pm.id = m.equipement_mere
     LEFT JOIN equipement_class ec ON ec.id = m.equipement_class_id
     LEFT JOIN intervention i_h ON i_h.machine_id = m.id
 """
@@ -56,12 +59,16 @@ class InterventionRequestRepository:
         ec_code  = row.pop("ec_code",  None)
         ec_label = row.pop("ec_label", None)
 
+        p_id   = row.pop("eq_parent_id",   None)
+        p_code = row.pop("eq_parent_code", None)
+        p_name = row.pop("eq_parent_name", None)
+
         return {
             "id":        row.pop("eq_id"),
             "code":      row.pop("eq_code",      None),
             "name":      row.pop("eq_name"),
             "health":    health,
-            "parent_id": row.pop("eq_parent_id", None),
+            "parent":    {"id": p_id, "code": p_code, "name": p_name} if p_id else None,
             "equipement_class": {"id": ec_id, "code": ec_code, "label": ec_label} if ec_id else None,
         }
 
@@ -311,6 +318,9 @@ class InterventionRequestRepository:
             raise ValidationError("description est obligatoire")
         if not data.get("machine_id"):
             raise ValidationError("machine_id est obligatoire")
+
+        from api.equipement_statuts.repo import check_equipement_statut_allows_interventions
+        check_equipement_statut_allows_interventions(str(data["machine_id"]))
 
         conn = self._get_connection()
         try:

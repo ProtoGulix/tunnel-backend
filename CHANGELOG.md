@@ -2,6 +2,15 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [2.14.0] - 10 avril 2026
+
+### Nouveautés
+
+- **Statuts d'équipement (`equipement_statuts`)** : nouvelle table de référence représentant le cycle de vie d'un équipement (En projet, En service, À l'arrêt, etc.). Chaque statut porte une couleur, un ordre d'affichage et un indicateur indiquant si des interventions peuvent être créées.
+- **`GET /equipement-statuts`** : retourne la liste des statuts actifs triés par ordre d'affichage. Auth JWT requise.
+- **Champ `statut` dans `GET /equipements` et `GET /equipements/{id}`** : les réponses incluent désormais l'objet `statut` (id, code, label, interventions, couleur). Le champ est `null` si l'équipement n'a pas encore de statut assigné.
+- **Règle métier — création bloquée sur statut interdit** : `POST /interventions` et `POST /intervention-requests` retournent désormais une erreur `422 equipement_statut_bloque` si l'équipement cible a un statut dont le champ `interventions` vaut `false` (ex : En projet, Rebut).
+
 ## [2.13.0] - 9 avril 2026
 
 ### Nouveautés

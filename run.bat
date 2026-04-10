@@ -2,7 +2,7 @@
 REM Script de démarrage de l'API en développement (Windows)
 
 echo.
-echo Démarrage API GMAO...
+echo Demarrage API GMAO...
 echo.
 
 REM Tuer toute instance uvicorn déjà sur le port 8000
@@ -30,7 +30,7 @@ pip install -r requirements.txt --quiet
 
 REM Démarrer l'API
 echo.
-echo API en cours de démarrage sur http://localhost:8000
+echo API en cours de demarrage sur http://localhost:8000
 echo Docs Swagger: http://localhost:8000/docs
 echo.
 

@@ -2,7 +2,7 @@
 
 Gestion du parc d'équipements avec état de santé calculé, classification et hiérarchie parent/enfants.
 
-> Voir aussi : [Equipement Classes](equipement-class.md) | [Interventions](interventions.md)
+> Voir aussi : [Equipement Classes](equipement-class.md) | [Equipement Statuts](equipement-statuts.md) | [Interventions](interventions.md)
 >
 > Schemas partagés : [EquipementHealth](../shared-schemas.md#equipementhealth) | [EquipementClass](../shared-schemas.md#equipementclass) | [EmbeddedInterventionItem](../shared-schemas.md#embeddedinterventionitem)
 
@@ -41,11 +41,18 @@ Tri par défaut : urgents DESC, ouverts DESC, nom ASC.
         "urgent_count": 0,
         "new_requests_count": 0
       },
-      "parent_id": null,
+      "parent": null,
       "equipement_class": {
         "id": "b28f1f4f-...",
         "code": "SCIE",
         "label": "Scie"
+      },
+      "statut": {
+        "id": 3,
+        "code": "EN_SERVICE",
+        "label": "En service",
+        "interventions": true,
+        "couleur": "#10B981"
       }
     }
   ],
@@ -67,6 +74,7 @@ Tri par défaut : urgents DESC, ouverts DESC, nom ASC.
 ```
 
 > `equipement_class` dans les items est `null` si aucune classe assignée.
+> `statut` est `null` si aucun statut assigné à l'équipement (compatibilité ascendante).
 > Les facettes comptent les équipements **sans** tenir compte du filtre `exclude_class`, pour permettre l'affichage des compteurs même sur les classes exclues.
 
 ---
@@ -104,8 +112,19 @@ Détail complet d'un équipement avec tous les champs de la base, `children_coun
     "new_requests_count": 2,
     "rules_triggered": ["URGENT_OPEN >= 1", "NEW_REQUESTS > 0"]
   },
-  "parent_id": null,
+  "parent": {
+    "id": "uuid-parent",
+    "code": "EQ-000",
+    "name": "Machine mère"
+  },
   "equipement_class": { "id": "uuid", "code": "SCIE", "label": "Scie" },
+  "statut": {
+    "id": 3,
+    "code": "EN_SERVICE",
+    "label": "En service",
+    "interventions": true,
+    "couleur": "#10B981"
+  },
   "children_count": 233,
   "interventions": {
     "total": 47,

@@ -20,6 +20,7 @@ from api.action_subcategories.routes import router as action_subcategory_router
 from api.complexity_factors.routes import router as complexity_factor_router
 from api.equipements.routes import router as equipement_router
 from api.equipement_class.routes import router as equipement_class_router
+from api.equipement_statuts.routes import router as equipement_statut_router
 from api.stats.routes import router as stats_router
 from api.purchase_requests.routes import router as purchase_request_router
 from api.stock_items.routes import router as stock_item_router
@@ -119,6 +120,7 @@ app.include_router(action_category_router)
 app.include_router(action_subcategory_router)
 app.include_router(equipement_router)
 app.include_router(equipement_class_router)
+app.include_router(equipement_statut_router)
 app.include_router(stats_router)
 app.include_router(complexity_factor_router)
 app.include_router(purchase_request_router)

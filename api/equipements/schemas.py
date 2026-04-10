@@ -15,6 +15,15 @@ class EquipmentClassRef(BaseModel):
     label: str
 
 
+class EquipementStatutRef(BaseModel):
+    """Référence à un statut d'équipement"""
+    id: int
+    code: str
+    label: str
+    interventions: bool
+    couleur: str | None = None
+
+
 class EquipementHealth(BaseModel):
     """Santé d'un équipement"""
     level: str
@@ -38,8 +47,9 @@ class EquipementListItem(BaseModel):
     code: str | None = None
     name: str
     health: EquipementHealth
-    parent_id: UUID | None = None
+    parent: EquipementParent | None = None
     equipement_class: EquipmentClassRef | None = None
+    statut: EquipementStatutRef | None = None
 
     class Config:
         from_attributes = True
@@ -98,8 +108,9 @@ class EquipementDetail(BaseModel):
     date_mise_service: date | None = None
     notes: str | None = None
     health: EquipementHealth
-    parent_id: UUID | None = None
+    parent: EquipementParent | None = None
     equipement_class: EquipmentClassRef | None = None
+    statut: EquipementStatutRef | None = None
     children_count: int = 0
     interventions: InterventionsPaginated
 
