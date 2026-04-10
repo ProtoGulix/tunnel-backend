@@ -163,27 +163,76 @@ Crée un équipement.
 {
   "name": "Scie principale",
   "code": "EQ-001",
+  "no_machine": "M-042",
+  "affectation": "Atelier A",
+  "is_mere": true,
+  "fabricant": "Bosch",
+  "numero_serie": "SN-99887",
+  "date_mise_service": "2019-03-15",
+  "notes": "Révision annuelle prévue",
   "parent_id": null,
-  "equipement_class_id": "b28f1f4f-..."
+  "equipement_class_id": "b28f1f4f-...",
+  "statut_id": 3,
+  "children_ids": ["uuid-enfant-1", "uuid-enfant-2"]
 }
 ```
 
-| Champ                 | Type   | Requis | Description                    |
-| --------------------- | ------ | ------ | ------------------------------ |
-| `name`                | string | oui    | Nom de l'équipement            |
-| `code`                | string | non    | Code unique                    |
-| `parent_id`           | uuid   | non    | Équipement parent (hiérarchie) |
-| `equipement_class_id` | uuid   | non    | Classe d'équipement            |
+| Champ                 | Type       | Requis | Description                                                         |
+| --------------------- | ---------- | ------ | ------------------------------------------------------------------- |
+| `name`                | string     | oui    | Nom de l'équipement                                                 |
+| `code`                | string     | non    | Code unique                                                         |
+| `no_machine`          | string     | non    | Numéro machine interne                                              |
+| `affectation`         | string     | non    | Lieu ou service d'affectation                                       |
+| `is_mere`             | bool       | non    | Indique si l'équipement est une machine mère                        |
+| `fabricant`           | string     | non    | Fabricant                                                           |
+| `numero_serie`        | string     | non    | Numéro de série                                                     |
+| `date_mise_service`   | date       | non    | Date de mise en service (YYYY-MM-DD)                                |
+| `notes`               | string     | non    | Notes libres                                                        |
+| `parent_id`           | uuid       | non    | UUID de l'équipement parent                                         |
+| `equipement_class_id` | uuid       | non    | UUID de la classe d'équipement                                      |
+| `statut_id`           | int        | non    | ID du statut (voir `GET /equipement-statuts`)                       |
+| `children_ids`        | uuid[]     | non    | UUIDs des équipements à rattacher comme enfants de cet équipement   |
 
 ### Réponse `201`
 
-Équipement complet (même format que `GET /equipements/{id}`, interventions vides, children_count à 0).
+Équipement complet (même format que `GET /equipements/{id}`).
 
 ---
 
 ## `PUT /equipements/{id}`
 
-Met à jour un équipement. Même body que POST, tous champs optionnels.
+Remplace complètement un équipement. `name` est obligatoire. Tous les champs non envoyés passent à `null`.
+
+### Entrée
+
+Même body que `POST`, avec `name` obligatoire.
+
+### Réponse `200`
+
+Équipement complet (même format que `GET /equipements/{id}`).
+
+---
+
+## `PATCH /equipements/{id}`
+
+Met à jour partiellement un équipement. Seuls les champs envoyés sont modifiés.
+
+### Entrée
+
+Même body que `POST`, tous les champs optionnels (dont `name`).
+
+```json
+{
+  "statut_id": 4,
+  "affectation": "Atelier B"
+}
+```
+
+### Réponse `200`
+
+Équipement complet (même format que `GET /equipements/{id}`).
+
+> `children_ids` fonctionne de la même façon pour `PUT` et `PATCH` : les équipements listés voient leur `equipement_mere` mis à jour pour pointer vers cet équipement. Les enfants existants non listés ne sont pas modifiés.
 
 ---
 

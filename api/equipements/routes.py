@@ -7,7 +7,8 @@ from api.equipements.schemas import (
     EquipementStatsDetailed,
     EquipementHealthOnly,
     EquipementCreate,
-    EquipementUpdate
+    EquipementUpdate,
+    EquipementPatch
 )
 from api.utils.pagination import create_pagination_meta
 
@@ -77,7 +78,14 @@ def create_equipement(data: EquipementCreate):
 
 @router.put("/{equipement_id}", response_model=EquipementDetail)
 def update_equipement(equipement_id: str, data: EquipementUpdate):
-    """Met à jour un équipement existant"""
+    """Remplace complètement un équipement (tous les champs non envoyés passent à null)"""
+    repo = EquipementRepository()
+    return repo.update(equipement_id, data.model_dump())
+
+
+@router.patch("/{equipement_id}", response_model=EquipementDetail)
+def patch_equipement(equipement_id: str, data: EquipementPatch):
+    """Met à jour partiellement un équipement (seuls les champs envoyés sont modifiés)"""
     repo = EquipementRepository()
     return repo.update(equipement_id, data.model_dump(exclude_unset=True))
 

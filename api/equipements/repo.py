@@ -367,6 +367,16 @@ class EquipementRepository:
         finally:
             release_connection(conn)
 
+    def _assign_children(self, cur, parent_id: str, children_ids: list) -> None:
+        """Assigne une liste d'équipements comme enfants de parent_id"""
+        if not children_ids:
+            return
+        placeholders = ','.join(['%s'] * len(children_ids))
+        cur.execute(
+            f"UPDATE machine SET equipement_mere = %s WHERE id IN ({placeholders})",
+            (parent_id, *[str(cid) for cid in children_ids])
+        )
+
     def add(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Crée un nouvel équipement"""
         conn = self._get_connection()
@@ -376,17 +386,31 @@ class EquipementRepository:
 
             cur.execute(
                 """
-                INSERT INTO machine (id, code, name, equipement_mere, equipement_class_id)
-                VALUES (%s, %s, %s, %s, %s)
+                INSERT INTO machine (
+                    id, code, name, no_machine, affectation, is_mere,
+                    fabricant, numero_serie, date_mise_service, notes,
+                    equipement_mere, equipement_class_id, statut_id
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     equipement_id,
                     data.get('code'),
                     data['name'],
-                    data.get('parent_id'),
-                    data.get('equipement_class_id')
+                    data.get('no_machine'),
+                    data.get('affectation'),
+                    data.get('is_mere'),
+                    data.get('fabricant'),
+                    data.get('numero_serie'),
+                    data.get('date_mise_service'),
+                    data.get('notes'),
+                    str(data['parent_id']) if data.get('parent_id') else None,
+                    str(data['equipement_class_id']) if data.get('equipement_class_id') else None,
+                    data.get('statut_id'),
                 )
             )
+            if data.get('children_ids'):
+                self._assign_children(cur, equipement_id, data['children_ids'])
             conn.commit()
         except Exception as e:
             conn.rollback()
@@ -408,8 +432,16 @@ class EquipementRepository:
             field_map = {
                 'code': 'code',
                 'name': 'name',
+                'no_machine': 'no_machine',
+                'affectation': 'affectation',
+                'is_mere': 'is_mere',
+                'fabricant': 'fabricant',
+                'numero_serie': 'numero_serie',
+                'date_mise_service': 'date_mise_service',
+                'notes': 'notes',
                 'parent_id': 'equipement_mere',
-                'equipement_class_id': 'equipement_class_id'
+                'equipement_class_id': 'equipement_class_id',
+                'statut_id': 'statut_id',
             }
 
             set_clauses = []
@@ -420,17 +452,16 @@ class EquipementRepository:
                     set_clauses.append(f"{column} = %s")
                     params.append(data[field])
 
-            if not set_clauses:
-                return self.get_by_id(equipement_id)
+            if set_clauses:
+                params.append(equipement_id)
+                cur.execute(
+                    f"UPDATE machine SET {', '.join(set_clauses)} WHERE id = %s",
+                    params
+                )
 
-            params.append(equipement_id)
-            query = f"""
-                UPDATE machine
-                SET {', '.join(set_clauses)}
-                WHERE id = %s
-            """
+            if data.get('children_ids') is not None:
+                self._assign_children(cur, equipement_id, data['children_ids'])
 
-            cur.execute(query, params)
             conn.commit()
         except Exception as e:
             conn.rollback()

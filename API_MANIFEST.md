@@ -47,6 +47,10 @@ Documentation OpenAPI interactive : `http://localhost:8000/docs`
 | GET     | `/complexity-factors/{code}`                           | Détail facteur                | [complexity-factors.md](docs/endpoints/complexity-factors.md)           |
 | GET     | `/equipements`                                         | Liste équipements             | [equipements.md](docs/endpoints/equipements.md)                         |
 | GET     | `/equipements/{id}`                                    | Détail équipement             | [equipements.md](docs/endpoints/equipements.md)                         |
+| POST    | `/equipements`                                         | Créer équipement              | [equipements.md](docs/endpoints/equipements.md)                         |
+| PUT     | `/equipements/{id}`                                    | Remplacer équipement          | [equipements.md](docs/endpoints/equipements.md)                         |
+| PATCH   | `/equipements/{id}`                                    | Mise à jour partielle         | [equipements.md](docs/endpoints/equipements.md)                         |
+| DELETE  | `/equipements/{id}`                                    | Supprimer équipement          | [equipements.md](docs/endpoints/equipements.md)                         |
 | GET     | `/equipements/{id}/stats`                              | Statistiques équipement       | [equipements.md](docs/endpoints/equipements.md)                         |
 | GET     | `/equipements/{id}/health`                             | Santé équipement              | [equipements.md](docs/endpoints/equipements.md)                         |
 | GET     | `/equipement-class`                                    | Classes d'équipements         | [equipement-class.md](docs/endpoints/equipement-class.md)               |
