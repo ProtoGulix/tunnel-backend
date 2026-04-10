@@ -2,6 +2,23 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [2.15.0] - 10 avril 2026
+
+### Nouveautés
+
+- **`POST /equipements` enrichi** : la création d'équipement accepte désormais tous les champs métier (`no_machine`, `affectation`, `is_mere`, `fabricant`, `numero_serie`, `date_mise_service`, `notes`, `statut_id`) ainsi que `children_ids` pour rattacher des sous-équipements en une seule opération.
+- **`PATCH /equipements/{id}`** : nouvel endpoint de mise à jour partielle. Seuls les champs envoyés sont modifiés.
+- **`PUT /equipements/{id}` en remplacement complet** : les champs non envoyés passent à `null`, conforme à la sémantique REST.
+- **Règles métier de création dans le validator** : les validations à la création d'une demande d'intervention (`demandeur_nom`, `description`, `machine_id`, statut équipement) sont désormais centralisées dans `InterventionRequestValidator.validate_create()`, conforme au pattern du module interventions.
+
+### Corrections
+
+- **`GET /intervention-requests`** : requête SQL corrigée (clause `GROUP BY` étendue aux colonnes de la machine parent), évitant une erreur 500 introduite lors de l'ajout du champ `parent`.
+
+### Changements incompatibles
+
+- **Champ `parent_id` supprimé** dans les réponses `GET /equipements`, `GET /equipements/{id}`, et partout où un objet équipement est imbriqué (`GET /interventions`, `GET /intervention-requests`). Remplacer par l'objet `parent : { id, code, name }` qui est `null` si l'équipement n'a pas de parent.
+
 ## [2.14.0] - 10 avril 2026
 
 ### Nouveautés
