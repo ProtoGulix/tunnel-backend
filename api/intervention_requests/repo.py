@@ -310,17 +310,9 @@ class InterventionRequestRepository:
     # ──────────────────────────────────────────────────────────────
 
     def create(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        InterventionRequestValidator.validate_create(data)
         demandeur_nom = (data.get("demandeur_nom") or "").strip()
         description = (data.get("description") or "").strip()
-        if not demandeur_nom:
-            raise ValidationError("demandeur_nom est obligatoire")
-        if not description:
-            raise ValidationError("description est obligatoire")
-        if not data.get("machine_id"):
-            raise ValidationError("machine_id est obligatoire")
-
-        from api.equipement_statuts.repo import check_equipement_statut_allows_interventions
-        check_equipement_statut_allows_interventions(str(data["machine_id"]))
 
         conn = self._get_connection()
         try:
