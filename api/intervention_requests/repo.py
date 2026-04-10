@@ -144,7 +144,7 @@ class InterventionRequestRepository:
                 LEFT JOIN request_status_ref rs ON ir.statut = rs.code
                 {_EQUIPEMENT_JOINS}
                 {where_sql}
-                GROUP BY ir.id, rs.label, rs.color, m.id, ec.id
+                GROUP BY ir.id, rs.label, rs.color, m.id, pm.id, pm.code, pm.name, ec.id
                 ORDER BY ir.created_at DESC
                 LIMIT %s OFFSET %s
                 """,
@@ -265,7 +265,7 @@ class InterventionRequestRepository:
                 LEFT JOIN request_status_ref rs ON ir.statut = rs.code
                 {_EQUIPEMENT_JOINS}
                 WHERE ir.id = %s
-                GROUP BY ir.id, rs.label, rs.color, m.id, ec.id
+                GROUP BY ir.id, rs.label, rs.color, m.id, pm.id, pm.code, pm.name, ec.id
                 """,
                 (CLOSED_STATUS_CODE, CLOSED_STATUS_CODE, request_id),
             )
