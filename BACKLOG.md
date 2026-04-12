@@ -25,17 +25,17 @@ Généré suite à l'audit du 2026-04-12. Priorisé par impact.
 
 ## 🟠 MAJEUR
 
-- [ ] **[NETTOYAGE] Supprimer `python-jose` des dépendances**
+- [x] **[NETTOYAGE] Supprimer `python-jose` des dépendances**
   Fichier : `requirements.txt`
   `python-jose` est listé mais jamais importé. `PyJWT` fait le travail.
   _Fix : retirer la ligne `python-jose` de `requirements.txt`._
 
-- [ ] **[NETTOYAGE] Supprimer `DIRECTUS_KEY` inutilisée**
+- [x] **[NETTOYAGE] Supprimer `DIRECTUS_KEY` inutilisée**
   Fichier : `api/settings.py`
   Variable définie mais jamais utilisée dans la codebase.
   _Fix : supprimer ou documenter l'usage prévu._
 
-- [ ] **[NETTOYAGE] Supprimer `get_active_status_ids()` morte**
+- [x] **[NETTOYAGE] Supprimer `get_active_status_ids()` morte**
   Fichier : `api/constants.py` lignes ~99-103
   Fonction avec import lazy jamais appelée dans le projet.
   _Fix : supprimer la fonction._

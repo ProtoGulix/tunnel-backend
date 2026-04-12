@@ -23,7 +23,6 @@ class Settings(BaseSettings):
         "http://localhost:8055"
     )
     DIRECTUS_SECRET: str = os.getenv("DIRECTUS_SECRET", "")
-    DIRECTUS_KEY: str = os.getenv("DIRECTUS_KEY", "")
 
     # API
     API_TITLE: str = "GMAO API"
