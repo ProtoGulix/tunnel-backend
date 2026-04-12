@@ -42,7 +42,6 @@ def list_equipements(
     total = repo.count_all(
         search=search, exclude_class=exclude_list, select_class=select_list, select_mere=select_mere)
     facets = repo.get_facets(search=search)
-    facets = repo.get_facets(search=search)
     return {
         "items": items,
         "pagination": create_pagination_meta(total=total, offset=skip, limit=limit, count=len(items)),
