@@ -389,8 +389,8 @@ class InterventionRepository:
                 INSERT INTO intervention
                 (id, title, machine_id, type_inter, priority,
                  reported_by, tech_initials, status_actual,
-                 printed_fiche, reported_date)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                 printed_fiche, reported_date, plan_id)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     intervention_id,
@@ -402,7 +402,8 @@ class InterventionRepository:
                     data.get('tech_initials'),
                     data.get('status_actual', 'ouvert'),
                     data.get('printed_fiche', False),
-                    data.get('reported_date')
+                    data.get('reported_date'),
+                    data.get('plan_id')
                 )
             )
 

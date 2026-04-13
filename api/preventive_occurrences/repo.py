@@ -374,12 +374,12 @@ class PreventiveOccurrenceRepository:
 
         # Auto-accept : dans une transaction séparée après le commit ci-dessus
         if plan["auto_accept"]:
-            self._auto_accept_occurrence(occurrence_id, di_id, machine_id)
+            self._auto_accept_occurrence(occurrence_id, di_id, machine_id, plan["id"])
 
         return "generated"
 
     def _auto_accept_occurrence(
-        self, occurrence_id: str, di_id: str, machine_id: str
+        self, occurrence_id: str, di_id: str, machine_id: str, plan_id: str
     ) -> None:
         """
         Crée une intervention en acceptant la DI liée à l'occurrence.
@@ -395,6 +395,7 @@ class PreventiveOccurrenceRepository:
                     "tech_initials": "SYS",
                     "priority": "normale",
                     "request_id": di_id,
+                    "plan_id": plan_id,
                 }
             )
             intervention_id = str(intervention["id"])
