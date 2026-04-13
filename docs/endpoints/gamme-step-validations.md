@@ -138,9 +138,13 @@ Calcule la progression de la gamme pour une intervention **ou** une occurrence. 
 
 Met à jour le statut d'une étape de gamme (`validated` ou `skipped`).
 
+**Principe fondamental** : L'action est la base de Tunnel. Une étape validée DOIT être liée à une action (travail réalisé).
+
 > Une étape déjà traitée (`validated` ou `skipped`) ne peut pas être modifiée (`400`).
 
 ### Entrée
+
+**Cas 1 : Valider une étape (obligatoire : lier à une action)**
 
 ```json
 {
@@ -150,6 +154,8 @@ Met à jour le statut d'une étape de gamme (`validated` ou `skipped`).
 }
 ```
 
+**Cas 2 : Ignorer une étape (non applicable)**
+
 ```json
 {
   "status": "skipped",
@@ -158,12 +164,29 @@ Met à jour le statut d'une étape de gamme (`validated` ou `skipped`).
 }
 ```
 
-| Champ          | Type   | Requis  | Condition                                                                   |
-| -------------- | ------ | ------- | --------------------------------------------------------------------------- |
-| `status`       | string | **oui** | `validated` ou `skipped` uniquement                                         |
-| `validated_by` | uuid   | **oui** | Technicien réalisant la validation                                          |
-| `action_id`    | uuid   | non     | Doit appartenir à la **même intervention** que la validation                |
-| `skip_reason`  | string | *cond*  | Obligatoire si `status = "skipped"`, ignoré sinon                           |
+| Champ          | Type   | Requis  | Condition |
+|---|---|---|---|
+| `status` | string | **oui** | `"validated"` ou `"skipped"` |
+| `validated_by` | uuid | **oui** | Technicien validant l'étape |
+| `action_id` | uuid | **si validated** | **OBLIGATOIRE si status = "validated"**. Doit appartenir à la même intervention |
+| `skip_reason` | string | **si skipped** | **OBLIGATOIRE si status = "skipped"**. Non vide |
+
+### Règles métier
+
+**Validée** (`status = "validated"`):
+- `action_id` est **OBLIGATOIRE** — l'étape valide le travail réalisé par cette action
+- L'action doit exister et appartenir à la même intervention
+- `validated_at` est auto-rempli avec `NOW()`
+
+**Ignorée** (`status = "skipped"`):
+- `action_id` doit être **NULL** (pas d'action)
+- `skip_reason` est **OBLIGATOIRE** et non-vide
+- Raison typique : "Pièce non disponible", "Maintenance non nécessaire"
+
+**Cas invalides (erreur 400/422)**:
+- `status = "validated"` sans `action_id` → **validation échoue**
+- `status = "skipped"` avec `action_id` fourni → **validation échoue**
+- `status = "skipped"` sans `skip_reason` → **validation échoue**
 
 ### Réponse `200`
 
@@ -171,10 +194,12 @@ Validation mise à jour avec `validated_at` renseigné si `status = "validated"`
 
 ### Erreurs
 
-| Code | Cas                                                                 |
-| ---- | ------------------------------------------------------------------- |
-| 400  | Étape déjà traitée (`validated` ou `skipped`)                       |
-| 400  | `skip_reason` absent ou vide pour un statut `skipped`               |
-| 400  | `action_id` n'appartient pas à la même intervention                 |
-| 404  | Validation introuvable                                              |
-| 422  | `status` invalide (ni `validated` ni `skipped`) — erreur Pydantic   |
+| Code | Cas |
+|------|-----|
+| 400 | Étape déjà traitée (`validated` ou `skipped`) |
+| 400 | `status = "validated"` sans `action_id` — action OBLIGATOIRE |
+| 400 | `status = "skipped"` avec `action_id` fourni — doit être null |
+| 400 | `status = "skipped"` sans `skip_reason` — motif OBLIGATOIRE |
+| 400 | `action_id` n'appartient pas à la même intervention |
+| 404 | Validation ou action introuvable |
+| 422 | `status` invalide (ni `validated` ni `skipped`) |

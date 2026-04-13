@@ -217,7 +217,7 @@ class GammeStepValidationRepository:
             if current_status in ("validated", "skipped"):
                 raise ValidationError("Ce step a déjà été traité")
 
-            # Vérifier que action_id appartient à la même intervention
+            # Vérifier que action_id appartient à la même intervention si fourni
             if data.action_id is not None:
                 cur.execute(
                     "SELECT intervention_id FROM intervention_action WHERE id = %s",
