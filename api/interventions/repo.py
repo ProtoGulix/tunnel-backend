@@ -351,8 +351,10 @@ class InterventionRepository:
                 from api.gamme_step_validations.repo import GammeStepValidationRepository
                 gsv_repo = GammeStepValidationRepository()
                 intervention['gamme_progress'] = gsv_repo.get_progress(intervention_id)
+                intervention['gamme_steps'] = gsv_repo.get_by_intervention(intervention_id)
             else:
                 intervention['gamme_progress'] = None
+                intervention['gamme_steps'] = []
 
             return intervention
         except NotFoundError:
