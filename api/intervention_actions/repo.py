@@ -89,6 +89,31 @@ class InterventionActionRepository:
         except Exception:
             return []
 
+    def _get_gamme_steps_for_action(self, action_id: str, conn) -> List[Dict[str, Any]]:
+        """Récupère les steps de gamme validés/skippés par cette action"""
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                SELECT
+                    gsv.id, gsv.step_id,
+                    gs.label AS step_label,
+                    gs.sort_order AS step_sort_order,
+                    gs.optional AS step_optional,
+                    gsv.status, gsv.skip_reason, gsv.validated_at, gsv.validated_by
+                FROM gamme_step_validation gsv
+                LEFT JOIN preventive_plan_gamme_step gs ON gs.id = gsv.step_id
+                WHERE gsv.action_id = %s
+                ORDER BY gs.sort_order ASC
+                """,
+                (action_id,)
+            )
+            rows = cur.fetchall()
+            cols = [d[0] for d in cur.description]
+            return [dict(zip(cols, row)) for row in rows]
+        except Exception:
+            return []
+
     def get_all(
         self,
         date_from: Optional[date] = None,
@@ -157,6 +182,7 @@ class InterventionActionRepository:
                     'equipement_name': action.pop('interv_equipement_name', None),
                 } if action.get('intervention_id') else None
                 action['purchase_requests'] = []
+                action['gamme_steps'] = []
                 all_actions.append(action)
 
             # Batch PR : 2 requêtes pour toutes les actions
@@ -186,6 +212,33 @@ class InterventionActionRepository:
                             pr_by_id[pid] for pid in action_pr_map.get(str(action['id']), [])
                             if pid in pr_by_id
                         ]
+
+                # Batch gamme steps : récupère les steps liés
+                cur.execute(
+                    f"""
+                    SELECT
+                        gsv.action_id, gsv.id, gsv.step_id,
+                        gs.label AS step_label,
+                        gs.sort_order AS step_sort_order,
+                        gs.optional AS step_optional,
+                        gsv.status, gsv.skip_reason, gsv.validated_at, gsv.validated_by
+                    FROM gamme_step_validation gsv
+                    LEFT JOIN preventive_plan_gamme_step gs ON gs.id = gsv.step_id
+                    WHERE gsv.action_id IN ({placeholders})
+                    ORDER BY gs.sort_order ASC
+                    """,
+                    action_ids
+                )
+                steps_rows = cur.fetchall()
+                if steps_rows:
+                    action_steps_map: Dict[str, List] = {}
+                    cols_steps = [d[0] for d in cur.description]
+                    for row in steps_rows:
+                        row_dict = dict(zip(cols_steps, row))
+                        action_id = str(row_dict.pop('action_id'))
+                        action_steps_map.setdefault(action_id, []).append(row_dict)
+                    for action in all_actions:
+                        action['gamme_steps'] = action_steps_map.get(str(action['id']), [])
 
             # Groupement par date
             groups: Dict[date, List[Dict[str, Any]]] = {}
@@ -253,6 +306,8 @@ class InterventionActionRepository:
             } if action.get('intervention_id') else None
             action['purchase_requests'] = self._get_linked_purchase_requests(
                 str(action['id']), conn)
+            action['gamme_steps'] = self._get_gamme_steps_for_action(
+                str(action['id']), conn)
             return action
         except NotFoundError:
             raise
@@ -299,6 +354,7 @@ class InterventionActionRepository:
                     dict(zip(cols, row)))
                 action = self._map_tech_user(action)
                 action['purchase_requests'] = []
+                action['gamme_steps'] = []
                 results.append(action)
 
             if not results:
@@ -334,6 +390,36 @@ class InterventionActionRepository:
                         pr_by_id[pid] for pid in action_pr_map.get(str(action['id']), [])
                         if pid in pr_by_id
                     ]
+
+            # Batch : récupère les steps de gamme liés à toutes les actions
+            cur.execute(
+                f"""
+                SELECT
+                    gsv.action_id, gsv.id, gsv.step_id,
+                    gs.label AS step_label,
+                    gs.sort_order AS step_sort_order,
+                    gs.optional AS step_optional,
+                    gsv.status, gsv.skip_reason, gsv.validated_at, gsv.validated_by
+                FROM gamme_step_validation gsv
+                LEFT JOIN preventive_plan_gamme_step gs ON gs.id = gsv.step_id
+                WHERE gsv.action_id IN ({placeholders})
+                ORDER BY gs.sort_order ASC
+                """,
+                action_ids
+            )
+            steps_rows = cur.fetchall()
+
+            if steps_rows:
+                # Index : action_id → [steps...]
+                action_steps_map: Dict[str, List] = {}
+                cols_steps = [d[0] for d in cur.description]
+                for row in steps_rows:
+                    row_dict = dict(zip(cols_steps, row))
+                    action_id = str(row_dict.pop('action_id'))
+                    action_steps_map.setdefault(action_id, []).append(row_dict)
+
+                for action in results:
+                    action['gamme_steps'] = action_steps_map.get(str(action['id']), [])
 
             return results
         except HTTPException:

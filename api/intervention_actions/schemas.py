@@ -108,6 +108,22 @@ class InterventionRef(BaseModel):
         from_attributes = True
 
 
+class GammeStepValidationDetail(BaseModel):
+    """Détail du step de gamme validé/skippé par cette action"""
+    id: UUID = Field(description="ID de la validation de step")
+    step_id: UUID = Field(description="ID du step de gamme")
+    step_label: str = Field(description="Label du step")
+    step_sort_order: int = Field(description="Ordre d'affichage du step")
+    step_optional: bool = Field(description="Si le step est optionnel")
+    status: str = Field(description="'validated' ou 'skipped'")
+    skip_reason: Optional[str] = Field(default=None, description="Raison du skip si applicable")
+    validated_at: Optional[datetime] = Field(default=None, description="Date de validation")
+    validated_by: Optional[UUID] = Field(default=None, description="Technicien qui a validé")
+
+    class Config:
+        from_attributes = True
+
+
 class InterventionActionOut(BaseModel):
     """Schéma de sortie pour une action d'intervention"""
     id: UUID
@@ -122,6 +138,10 @@ class InterventionActionOut(BaseModel):
     action_start: Optional[time] = None
     action_end: Optional[time] = None
     purchase_requests: List[PurchaseRequestListItem] = Field(default_factory=list)
+    gamme_steps: List[GammeStepValidationDetail] = Field(
+        default_factory=list,
+        description="Steps de gamme validés/skippés par cette action"
+    )
     created_at: Optional[datetime] = Field(default=None)
     updated_at: Optional[datetime] = Field(default=None)
 

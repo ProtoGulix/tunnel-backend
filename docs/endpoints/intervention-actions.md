@@ -122,6 +122,30 @@ Détail d'une action avec sous-catégorie et demandes d'achat.
       "updated_at": "2026-01-13T10:00:00"
     }
   ],
+  "gamme_steps": [
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440000",
+      "step_id": "660e8400-e29b-41d4-a716-446655440001",
+      "step_label": "Diagnostic initial",
+      "step_sort_order": 1,
+      "step_optional": false,
+      "status": "validated",
+      "skip_reason": null,
+      "validated_at": "2026-01-13T14:35:00",
+      "validated_by": "a1b2c3d4-..."
+    },
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440001",
+      "step_id": "660e8400-e29b-41d4-a716-446655440002",
+      "step_label": "Remplacement pièce",
+      "step_sort_order": 2,
+      "step_optional": false,
+      "status": "validated",
+      "skip_reason": null,
+      "validated_at": "2026-01-13T15:00:00",
+      "validated_by": "a1b2c3d4-..."
+    }
+  ],
   "created_at": "2026-01-13T14:30:00",
   "updated_at": "2026-01-13T15:00:00"
 }
@@ -131,6 +155,21 @@ Détail d'une action avec sous-catégorie et demandes d'achat.
 >
 > - `tech` : [UserListItem](users.md#userlistitem) (informations du technicien)
 > - `purchase_requests` : tableau de [PurchaseRequestListItem](purchase-requests.md#get-purchase-requestslist-v120) — demandes d'achat liées à cette action via `intervention_action_purchase_request`. `intervention_code` est déduit via la jonction `→ intervention_action → intervention`.
+> - `gamme_steps` : tableau de [GammeStepValidationDetail](#gammestepvalidationdetail) — steps de gamme validés/skippés par cette action (liés via `gamme_step_validation.action_id`). Vide si l'action ne valide aucun step.
+
+### GammeStepValidationDetail
+
+| Champ | Type | Description |
+|-------|------|-------------|
+| `id` | uuid | ID de la validation de step (gamme_step_validation.id) |
+| `step_id` | uuid | ID du step de gamme (preventive_plan_gamme_step.id) |
+| `step_label` | string | Libellé du step (ex: "Diagnostic initial") |
+| `step_sort_order` | int | Ordre d'affichage du step dans la gamme |
+| `step_optional` | boolean | Si le step est optionnel |
+| `status` | string | `"validated"` ou `"skipped"` |
+| `skip_reason` | string \| null | Motif du skip si applicable (null pour validated) |
+| `validated_at` | datetime | Date/heure de la validation/skip |
+| `validated_by` | uuid | ID du technicien qui a validé |
 
 ---
 
