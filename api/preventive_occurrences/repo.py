@@ -401,7 +401,20 @@ class PreventiveOccurrenceRepository:
                     "UPDATE preventive_occurrence SET intervention_id = %s WHERE id = %s",
                     (intervention_id, occurrence_id),
                 )
+                # ✅ Mettre à jour les gamme_step_validation avec l'intervention_id
+                cur.execute(
+                    """
+                    UPDATE gamme_step_validation
+                    SET intervention_id = %s
+                    WHERE occurrence_id = %s AND intervention_id IS NULL
+                    """,
+                    (intervention_id, occurrence_id),
+                )
                 conn.commit()
+                logger.info(
+                    "Rattachement gamme auto-accept : intervention %s liée à l'occurrence %s",
+                    intervention_id, occurrence_id,
+                )
             except Exception:
                 conn.rollback()
                 raise
