@@ -516,6 +516,13 @@ class InterventionRequestRepository:
                 )
                 occurrence_row = cur.fetchone()
                 if occurrence_row:
+                    occurrence_id = str(occurrence_row[0])
+                    # Mettre à jour l'occurrence pour lier l'intervention
+                    cur.execute(
+                        "UPDATE preventive_occurrence SET intervention_id = %s WHERE id = %s",
+                        (str(intervention_id), occurrence_id),
+                    )
+                    # Mettre à jour les gamme_step_validation
                     cur.execute(
                         """
                         UPDATE gamme_step_validation
@@ -523,7 +530,7 @@ class InterventionRequestRepository:
                         WHERE occurrence_id = %s
                         AND intervention_id IS NULL
                         """,
-                        (str(intervention_id), str(occurrence_row[0])),
+                        (str(intervention_id), occurrence_id),
                     )
                     logger.info(
                         "Rattachement gamme : %s step(s) liés à l'intervention %s",
