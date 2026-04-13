@@ -594,13 +594,21 @@ class InterventionRequestRepository:
 
         reported_date = intervention_data.get("reported_date") or None
 
+        # Récupérer plan_id depuis l'occurrence liée (DI système préventive)
+        cur.execute(
+            "SELECT plan_id FROM preventive_occurrence WHERE di_id = %s LIMIT 1",
+            (str(request["id"]),),
+        )
+        occ_row = cur.fetchone()
+        plan_id = str(occ_row[0]) if occ_row and occ_row[0] else None
+
         cur.execute(
             """
             INSERT INTO intervention
                 (id, title, machine_id, type_inter, priority,
                  reported_by, tech_initials, status_actual,
-                 printed_fiche, reported_date)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                 printed_fiche, reported_date, plan_id)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """,
             (
                 intervention_id,
@@ -614,6 +622,7 @@ class InterventionRequestRepository:
                 status_pris_en_charge_id,
                 False,
                 reported_date,
+                plan_id,
             ),
         )
         return intervention_id
