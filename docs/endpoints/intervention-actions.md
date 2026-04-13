@@ -145,17 +145,18 @@ Deux modes exclusifs pour saisir le temps — la logique est gérée par trigger
 
 Fournir les deux ou aucun des deux déclenche une erreur `400` avec le message du trigger.
 
-### Embarquement de la validation de gamme step (optionnel)
+### Embarquement de la validation de gamme steps (optionnel)
 
-Vous pouvez **valider ou skipper automatiquement un step de gamme** lors de la création de l'action, en un seul appel :
+Vous pouvez **valider ou skipper automatiquement plusieurs steps de gamme** lors de la création de l'action, en un seul appel.
 
-- **Cas 1 – Valider un step** : fournir `gamme_step_validation_id` **sans** `gamme_step_skip_reason`
-  - L'action créée liera automatiquement ce step : `gamme_step_validation.action_id = created_action.id`
-  - Le step sera marqué `status = "validated"`, `validated_by = tech`
+Fournissez `gamme_step_validations` (liste d'objets) avec :
+- `step_validation_id` : UUID du step à traiter
+- `status` : `"validated"` ou `"skipped"`
+- `skip_reason` : **Requis si status="skipped"**; ignoré sinon
 
-- **Cas 2 – Skipper un step** : fournir `gamme_step_validation_id` **avec** `gamme_step_skip_reason`
-  - Le step sera marqué `status = "skipped"`, `skip_reason = gamme_step_skip_reason`, pas d'action_id
-  - Typique : "Pièce non disponible", "Maintenance non nécessaire"
+**Comportement** :
+- **Status "validated"** : L'action créée lie ce step (`action_id = new_action.id`), `validated_by = tech`
+- **Status "skipped"** : Skip le step avec motif, pas d'action_id, `validated_by = tech`
 
 ### Entrée — mode bornes
 
@@ -187,9 +188,9 @@ Vous pouvez **valider ou skipper automatiquement un step de gamme** lors de la c
 }
 ```
 
-### Entrée — mode direct avec validation de gamme step
+### Entrée — mode direct avec validation de gamme steps
 
-L'exemple ci-dessous crée une action **ET valide un step de gamme** en un seul appel :
+L'exemple ci-dessous crée une action **ET valide 2 steps de gamme + skippe 1 step** en un seul appel :
 
 ```json
 {
@@ -200,23 +201,22 @@ L'exemple ci-dessous crée une action **ET valide un step de gamme** en un seul 
   "tech": "a1b2c3d4-...",
   "complexity_score": 7,
   "complexity_factor": "PCE",
-  "gamme_step_validation_id": "550e8400-e29b-41d4-a716-446655440000",
-  "created_at": "2026-01-13T14:30:00"
-}
-```
-
-Ou pour **skipper un step** (quand l'étape ne s'applique pas) :
-
-```json
-{
-  "intervention_id": "5ecf60d5-8471-4739-8ba8-0fdad7b51781",
-  "description": "Diagnostic - pièce de rechange non disponible",
-  "time_spent": 0.5,
-  "action_subcategory": 30,
-  "tech": "a1b2c3d4-...",
-  "complexity_score": 3,
-  "gamme_step_validation_id": "550e8400-e29b-41d4-a716-446655440000",
-  "gamme_step_skip_reason": "Pièce de rechange non disponible"
+  "created_at": "2026-01-13T14:30:00",
+  "gamme_step_validations": [
+    {
+      "step_validation_id": "550e8400-e29b-41d4-a716-446655440000",
+      "status": "validated"
+    },
+    {
+      "step_validation_id": "550e8400-e29b-41d4-a716-446655440001",
+      "status": "validated"
+    },
+    {
+      "step_validation_id": "550e8400-e29b-41d4-a716-446655440002",
+      "status": "skipped",
+      "skip_reason": "Pièce de rechange non disponible"
+    }
+  ]
 }
 ```
 
@@ -232,8 +232,15 @@ Ou pour **skipper un step** (quand l'étape ne s'applique pas) :
 | `complexity_score`   | int      | oui          | Score 1-10                                                                                                              |
 | `complexity_factor`  | string   | conditionnel | **Requis si score > 5**. Code existant dans [complexity_factors](complexity-factors.md)                                 |
 | `created_at`         | datetime | non          | Défaut: `now()`. Permet le backdating                                                                                   |
-| `gamme_step_validation_id` | uuid | non | ID du step de gamme à valider/skipper. Optionnel — si non fourni, aucune validation de gamme n'est effectuée |
-| `gamme_step_skip_reason` | string | conditionnel | **Requis si** `gamme_step_validation_id` **est fourni ET on veut skipper**. Raison du skip (non-vide). Sinon ignoré |
+| `gamme_step_validations` | array | non | Liste optionnelle de steps à valider/skipper. Voir schéma ci-dessous |
+
+#### Schéma `GammeStepValidationRequest`
+
+| Champ | Type | Requis | Description |
+|-------|------|--------|-------------|
+| `step_validation_id` | uuid | oui | ID du gamme_step_validation à traiter |
+| `status` | string | oui | `"validated"` ou `"skipped"` |
+| `skip_reason` | string | conditionnel | **Requis si status="skipped"**. Raison du skip (non-vide). Ignoré sinon |
 
 ### Réponse `201`
 
@@ -247,11 +254,11 @@ Action complète avec sous-catégorie enrichie.
 | 400  | Ni `action_start`/`action_end` ni `time_spent` fournis |
 | 400  | `action_end` ≤ `action_start`                          |
 | 400  | Bornes ou `time_spent` non multiples de 0.25h          |
-| 400  | `gamme_step_validation_id` fourni mais step inexistant |
-| 400  | `gamme_step_validation_id` n'appartient pas à la même intervention |
-| 400  | `gamme_step_skip_reason` vide/whitespace quand gamme_step_validation_id fourni et on veut skipper |
-| 400  | Step déjà validé/skippé (`status != 'pending'`) |
-| 422  | Validation de gamme échoue (ex: action_id n'appartient pas à l'intervention) |
+| 400  | Step dans `gamme_step_validations` inexistant          |
+| 400  | Step n'appartient pas à la même intervention           |
+| 400  | `skip_reason` vide/whitespace quand status="skipped"   |
+| 400  | Step déjà validé/skippé (`status != 'pending'`)        |
+| 422  | Validation d'un step échoue (ex: action_id invalide)   |
 
 ---
 

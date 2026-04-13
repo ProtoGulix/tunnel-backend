@@ -389,13 +389,13 @@ class InterventionActionRepository:
     def add(self, action_data: Dict[str, Any]) -> Dict[str, Any]:
         """Ajoute une nouvelle action à une intervention
 
-        Si gamme_step_validation_id est fourni, valide aussi le step après création de l'action.
-        Mode validation : lie l'action au step (action_id = created action)
-        Mode skip : skippe le step avec skip_reason fourni (pas d'action_id)
+        Si gamme_step_validations est fourni (liste), valide/skippe les steps après création.
+        Chaque validatior peut être :
+          - status="validated" : lie l'action_id au step
+          - status="skipped" : skippe le step avec skip_reason
         """
-        # Extraction des champs gamme avant la validation
-        gamme_step_validation_id = action_data.pop('gamme_step_validation_id', None)
-        gamme_step_skip_reason = action_data.pop('gamme_step_skip_reason', None)
+        # Extraction des validations de gamme steps avant la validation
+        gamme_step_validations = action_data.pop('gamme_step_validations', None)
 
         # Validation et préparation des données — lève ValidationError (400) si invalide
         validated_data = InterventionActionValidator.validate_and_prepare(
@@ -440,35 +440,36 @@ class InterventionActionRepository:
             )
             conn.commit()
 
-            # Valider le gamme step si fourni
-            if gamme_step_validation_id:
+            # Valider/skipper les gamme steps si fournis
+            if gamme_step_validations:
                 # Import lazy pour éviter la circularité
                 from api.gamme_step_validations.repo import GammeStepValidationRepository
                 from api.gamme_step_validations.schemas import GammeStepValidationPatch
 
                 gsv_repo = GammeStepValidationRepository()
 
-                if gamme_step_skip_reason and gamme_step_skip_reason.strip():
-                    # Mode skip
-                    patch_data = GammeStepValidationPatch(
-                        status="skipped",
-                        skip_reason=gamme_step_skip_reason,
-                        validated_by=validated_data['tech'],
-                        action_id=None
-                    )
-                else:
-                    # Mode validation : lier à l'action créée
-                    patch_data = GammeStepValidationPatch(
-                        status="validated",
-                        action_id=_uuid.UUID(action_id),
-                        validated_by=validated_data['tech'],
-                        skip_reason=None
-                    )
+                for gsv_request in gamme_step_validations:
+                    if gsv_request.get('status') == "skipped":
+                        # Mode skip
+                        patch_data = GammeStepValidationPatch(
+                            status="skipped",
+                            skip_reason=gsv_request.get('skip_reason'),
+                            validated_by=validated_data['tech'],
+                            action_id=None
+                        )
+                    else:
+                        # Mode validation : lier à l'action créée
+                        patch_data = GammeStepValidationPatch(
+                            status="validated",
+                            action_id=_uuid.UUID(action_id),
+                            validated_by=validated_data['tech'],
+                            skip_reason=None
+                        )
 
-                gsv_repo.patch_validation(
-                    str(gamme_step_validation_id),
-                    patch_data
-                )
+                    gsv_repo.patch_validation(
+                        str(gsv_request.get('step_validation_id')),
+                        patch_data
+                    )
 
             return self.get_by_id(action_id)
         except HTTPException:

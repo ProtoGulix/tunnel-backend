@@ -6,6 +6,34 @@ from api.users.schemas import UserListItem
 from api.purchase_requests.schemas import PurchaseRequestListItem
 
 
+class GammeStepValidationRequest(BaseModel):
+    """Requête pour valider/skipper un step de gamme lors de la création d'action"""
+    step_validation_id: UUID = Field(
+        description="ID du gamme_step_validation à valider/skipper"
+    )
+    status: str = Field(
+        description="'validated' pour lier l'action, 'skipped' pour ignorer l'étape"
+    )
+    skip_reason: Optional[str] = Field(
+        default=None,
+        description="Motif du skip (OBLIGATOIRE si status='skipped')"
+    )
+
+    @model_validator(mode="after")
+    def validate_skip_logic(self) -> "GammeStepValidationRequest":
+        """Valide que skip_reason est cohérent avec le status"""
+        if self.status not in ("validated", "skipped"):
+            raise ValueError("status doit être 'validated' ou 'skipped'")
+
+        if self.status == "skipped" and not (self.skip_reason or "").strip():
+            raise ValueError("skip_reason est obligatoire quand status='skipped'")
+
+        if self.status == "validated" and self.skip_reason:
+            raise ValueError("skip_reason doit être null quand status='validated'")
+
+        return self
+
+
 class InterventionActionIn(BaseModel):
     """Schéma d'entrée pour créer une action d'intervention"""
     intervention_id: UUID
@@ -18,29 +46,14 @@ class InterventionActionIn(BaseModel):
     created_at: Optional[str] = Field(default=None)
     action_start: Optional[time] = Field(default=None)
     action_end: Optional[time] = Field(default=None)
-    # Embarquement optionnel de la validation de gamme step
-    gamme_step_validation_id: Optional[UUID] = Field(
+    # Embarquement optionnel de la validation de plusieurs gamme steps
+    gamme_step_validations: Optional[List[GammeStepValidationRequest]] = Field(
         default=None,
-        description="Si fourni, valide automatiquement ce step en le liant à l'action créée"
-    )
-    gamme_step_skip_reason: Optional[str] = Field(
-        default=None,
-        description="Si fourni avec gamme_step_validation_id, skippe le step au lieu de le valider"
+        description="Liste optionnelle de steps à valider/skipper après création de l'action"
     )
 
     class Config:
         from_attributes = True
-
-    @model_validator(mode="after")
-    def validate_gamme_embedding(self) -> "InterventionActionIn":
-        """Valide que si gamme_step_validation_id est fourni, la logique est cohérente"""
-        if self.gamme_step_validation_id is not None:
-            # Si on fournit le skip_reason, on ne peut pas valider l'action (skip mode)
-            if self.gamme_step_skip_reason and self.gamme_step_skip_reason.strip():
-                # Mode skip : on va skipper le step, pas valider
-                pass
-            # Sinon mode validation : l'action créée va valider le step
-        return self
 
 
 class ActionCategoryDetail(BaseModel):
