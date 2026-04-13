@@ -2,6 +2,12 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [2.16.1] - 13 avril 2026
+
+### Corrections
+
+- **Dockerfile** : suppression du flag `--reload` en production. Ce flag de développement lançait deux processus sur le même port (érreur `Address already in use`) et surveillait inutilement le filesystem. Remplacé par `--workers 2`.
+
 ## [2.16.0] - 12 avril 2026
 
 ### Nouveautés
