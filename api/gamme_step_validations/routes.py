@@ -1,6 +1,9 @@
+from typing import Optional
+
 from fastapi import APIRouter, Depends, Query
 
 from api.auth.permissions import require_authenticated
+from api.errors.exceptions import ValidationError
 from api.gamme_step_validations.repo import GammeStepValidationRepository
 from api.gamme_step_validations.schemas import (
     GammeProgressOut,
@@ -16,17 +19,40 @@ router = APIRouter(
 
 
 @router.get("", response_model=list[GammeStepValidationOut])
-def list_validations(intervention_id: str = Query(..., description="ID de l'intervention")):
-    """Liste les validations d'étapes de gamme pour une intervention"""
+def list_validations(
+    intervention_id: Optional[str] = Query(None, description="ID de l'intervention"),
+    occurrence_id: Optional[str] = Query(None, description="ID de l'occurrence"),
+):
+    """Liste les validations d'étapes de gamme pour une intervention ou une occurrence"""
     repo = GammeStepValidationRepository()
-    return repo.get_by_intervention(intervention_id)
+    if intervention_id:
+        return repo.get_by_intervention(intervention_id)
+    if occurrence_id:
+        return repo.get_by_occurrence(occurrence_id)
+    raise ValidationError("intervention_id ou occurrence_id requis")
+
+
+@router.get("/by-occurrence", response_model=list[GammeStepValidationOut])
+def list_validations_by_occurrence(
+    occurrence_id: str = Query(..., description="ID de l'occurrence"),
+):
+    """Liste les validations d'étapes de gamme pour une occurrence"""
+    repo = GammeStepValidationRepository()
+    return repo.get_by_occurrence(occurrence_id)
 
 
 @router.get("/progress", response_model=GammeProgressOut)
-def get_progress(intervention_id: str = Query(..., description="ID de l'intervention")):
-    """Calcule la progression de la gamme pour une intervention"""
+def get_progress(
+    intervention_id: Optional[str] = Query(None, description="ID de l'intervention"),
+    occurrence_id: Optional[str] = Query(None, description="ID de l'occurrence"),
+):
+    """Calcule la progression de la gamme pour une intervention ou une occurrence"""
     repo = GammeStepValidationRepository()
-    return repo.get_progress(intervention_id)
+    if intervention_id:
+        return repo.get_progress(intervention_id)
+    if occurrence_id:
+        return repo.get_progress_by_occurrence(occurrence_id)
+    raise ValidationError("intervention_id ou occurrence_id requis")
 
 
 @router.patch("/{validation_id}", response_model=GammeStepValidationOut)

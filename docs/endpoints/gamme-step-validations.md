@@ -1,20 +1,27 @@
 # Gamme Step Validations
 
-Suivi de la validation des étapes de gamme lors d'une intervention préventive. Chaque validation est liée à une étape du plan (`preventive_plan_gamme_step`) et à une intervention.
+Suivi de la validation des étapes de gamme lors d'une intervention préventive. Chaque validation est liée à une étape du plan (`preventive_plan_gamme_step`), à l'occurrence qui l'a générée, et — après acceptation de la DI — à l'intervention.
 
-> Voir aussi : [Preventive Plans](preventive-plans.md) | [Interventions](interventions.md)
+> Voir aussi : [Preventive Plans](preventive-plans.md) | [Preventive Occurrences](preventive-occurrences.md) | [Interventions](interventions.md)
 
 ---
 
-## `GET /gamme-step-validations?intervention_id=`
+## Cycle de vie d'une validation
 
-Liste les validations d'étapes de gamme pour une intervention, triées par `sort_order ASC`.
+Les validations sont créées automatiquement lors de l'appel `POST /preventive-occurrences/generate`, dans la même transaction que l'occurrence. `occurrence_id` est renseigné immédiatement ; `intervention_id` est `null` jusqu'à ce que la DI liée soit acceptée (transition `acceptee`), moment où toutes les validations de l'occurrence sont rattachées à l'intervention créée.
+
+---
+
+## `GET /gamme-step-validations`
+
+Liste les validations pour une intervention **ou** une occurrence. Un des deux paramètres est obligatoire.
 
 ### Query params
 
-| Param             | Type | Requis  | Description             |
-| ----------------- | ---- | ------- | ----------------------- |
-| `intervention_id` | uuid | **oui** | ID de l'intervention    |
+| Param             | Type | Requis      | Description                                    |
+| ----------------- | ---- | ----------- | ---------------------------------------------- |
+| `intervention_id` | uuid | conditionnel | ID de l'intervention                           |
+| `occurrence_id`   | uuid | conditionnel | ID de l'occurrence (avant acceptation de la DI) |
 
 ### Réponse `200`
 
@@ -26,7 +33,8 @@ Liste les validations d'étapes de gamme pour une intervention, triées par `sor
     "step_label": "Contrôle de la tension de la lame",
     "step_sort_order": 1,
     "step_optional": false,
-    "intervention_id": "uuid-intervention",
+    "occurrence_id": "uuid-occurrence",
+    "intervention_id": null,
     "action_id": null,
     "status": "pending",
     "skip_reason": null,
@@ -39,6 +47,7 @@ Liste les validations d'étapes de gamme pour une intervention, triées par `sor
     "step_label": "Lubrification des guides",
     "step_sort_order": 2,
     "step_optional": true,
+    "occurrence_id": "uuid-occurrence",
     "intervention_id": "uuid-intervention",
     "action_id": "uuid-action",
     "status": "validated",
@@ -49,25 +58,49 @@ Liste les validations d'étapes de gamme pour une intervention, triées par `sor
 ]
 ```
 
-| Champ              | Description                                                     |
-| ------------------ | --------------------------------------------------------------- |
-| `step_label`       | Libellé de l'étape (depuis `preventive_plan_gamme_step`)        |
-| `step_optional`    | `true` : l'étape peut être ignorée sans bloquer la clôture      |
-| `action_id`        | Action d'intervention optionnellement liée à cette validation   |
-| `status`           | `pending`, `validated`, `skipped`                               |
-| `validated_by`     | UUID du technicien qui a validé/ignoré l'étape                  |
+| Champ              | Description                                                                              |
+| ------------------ | ---------------------------------------------------------------------------------------- |
+| `occurrence_id`    | Occurrence préventive qui a généré cette validation                                      |
+| `intervention_id`  | `null` avant acceptation de la DI ; renseigné automatiquement lors de la transition `acceptee` |
+| `step_optional`    | `true` : l'étape peut être ignorée sans bloquer la clôture                               |
+| `action_id`        | Action d'intervention optionnellement liée à cette validation                            |
+| `status`           | `pending`, `validated`, `skipped`                                                        |
+| `validated_by`     | UUID du technicien qui a validé/ignoré l'étape                                           |
+
+### Erreurs
+
+| Code | Cas                                                   |
+| ---- | ----------------------------------------------------- |
+| 400  | Ni `intervention_id` ni `occurrence_id` fourni        |
 
 ---
 
-## `GET /gamme-step-validations/progress?intervention_id=`
+## `GET /gamme-step-validations/by-occurrence?occurrence_id=`
 
-Calcule la progression de la gamme pour une intervention.
+Alias explicite pour lister les validations par occurrence (même résultat que `GET /?occurrence_id=`).
 
 ### Query params
 
-| Param             | Type | Requis  | Description             |
-| ----------------- | ---- | ------- | ----------------------- |
-| `intervention_id` | uuid | **oui** | ID de l'intervention    |
+| Param           | Type | Requis  | Description        |
+| --------------- | ---- | ------- | ------------------ |
+| `occurrence_id` | uuid | **oui** | ID de l'occurrence |
+
+### Réponse `200`
+
+Même structure que `GET /`.
+
+---
+
+## `GET /gamme-step-validations/progress`
+
+Calcule la progression de la gamme pour une intervention **ou** une occurrence. Un des deux paramètres est obligatoire.
+
+### Query params
+
+| Param             | Type | Requis      | Description                                     |
+| ----------------- | ---- | ----------- | ----------------------------------------------- |
+| `intervention_id` | uuid | conditionnel | ID de l'intervention                            |
+| `occurrence_id`   | uuid | conditionnel | ID de l'occurrence (avant acceptation de la DI) |
 
 ### Réponse `200`
 
@@ -77,19 +110,27 @@ Calcule la progression de la gamme pour une intervention.
   "validated": 3,
   "skipped": 1,
   "pending": 1,
+  "blocking_pending": 1,
   "is_complete": false
 }
 ```
 
-| Champ         | Description                                             |
-| ------------- | ------------------------------------------------------- |
-| `total`       | Nombre total d'étapes                                   |
-| `validated`   | Étapes validées                                         |
-| `skipped`     | Étapes ignorées                                         |
-| `pending`     | Étapes en attente                                       |
-| `is_complete` | `true` si `pending == 0` et `total > 0`                 |
+| Champ              | Description                                                                          |
+| ------------------ | ------------------------------------------------------------------------------------ |
+| `total`            | Nombre total d'étapes                                                                |
+| `validated`        | Étapes validées                                                                      |
+| `skipped`          | Étapes ignorées                                                                      |
+| `pending`          | Toutes les étapes en attente (optionnelles + obligatoires)                           |
+| `blocking_pending` | Étapes en attente **non optionnelles** — c'est ce compteur qui bloque la clôture     |
+| `is_complete`      | `true` si `blocking_pending == 0` et `total > 0`                                     |
 
-> **Clôture** : si l'intervention a un plan de gamme (`plan_id` non null), un trigger DB peut bloquer le passage en `ferme` quand `pending > 0` (retourne `409` avec `"Des étapes de gamme sont en attente de validation"`). Les étapes optionnelles peuvent être ignorées via `PATCH /:id`.
+### Erreurs
+
+| Code | Cas                                                   |
+| ---- | ----------------------------------------------------- |
+| 400  | Ni `intervention_id` ni `occurrence_id` fourni        |
+
+> **Clôture** : si l'intervention a un plan de gamme (`plan_id` non null), le passage en `ferme` est bloqué quand `blocking_pending > 0` (retourne `409` avec `"Des étapes de gamme sont en attente de validation"`). Les étapes optionnelles (`step_optional = true`) peuvent être ignorées sans impact sur `is_complete`.
 
 ---
 

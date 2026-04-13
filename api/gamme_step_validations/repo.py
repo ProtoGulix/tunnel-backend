@@ -30,7 +30,7 @@ class GammeStepValidationRepository:
                     gs.label AS step_label,
                     gs.sort_order AS step_sort_order,
                     gs.optional AS step_optional,
-                    gsv.intervention_id, gsv.action_id,
+                    gsv.occurrence_id, gsv.intervention_id, gsv.action_id,
                     gsv.status, gsv.skip_reason, gsv.validated_at, gsv.validated_by
                 FROM gamme_step_validation gsv
                 LEFT JOIN preventive_plan_gamme_step gs ON gs.id = gsv.step_id
@@ -49,6 +49,37 @@ class GammeStepValidationRepository:
         finally:
             release_connection(conn)
 
+    def get_by_occurrence(self, occurrence_id: str) -> List[Dict[str, Any]]:
+        """Récupère toutes les validations de gamme d'une occurrence, triées par sort_order"""
+        conn = self._get_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                SELECT
+                    gsv.id, gsv.step_id,
+                    gs.label AS step_label,
+                    gs.sort_order AS step_sort_order,
+                    gs.optional AS step_optional,
+                    gsv.occurrence_id, gsv.intervention_id, gsv.action_id,
+                    gsv.status, gsv.skip_reason, gsv.validated_at, gsv.validated_by
+                FROM gamme_step_validation gsv
+                LEFT JOIN preventive_plan_gamme_step gs ON gs.id = gsv.step_id
+                WHERE gsv.occurrence_id = %s
+                ORDER BY gs.sort_order ASC
+                """,
+                (occurrence_id,),
+            )
+            rows = cur.fetchall()
+            cols = [d[0] for d in cur.description]
+            return [dict(zip(cols, row)) for row in rows]
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise_db_error(e, "récupération des validations de gamme par occurrence")
+        finally:
+            release_connection(conn)
+
     def get_progress(self, intervention_id: str) -> Dict[str, Any]:
         """Calcule la progression de la gamme pour une intervention"""
         conn = self._get_connection()
@@ -56,32 +87,107 @@ class GammeStepValidationRepository:
             cur = conn.cursor()
             cur.execute(
                 """
-                SELECT status, COUNT(*) AS cnt
-                FROM gamme_step_validation
-                WHERE intervention_id = %s
-                GROUP BY status
+                SELECT
+                    COUNT(*)                                                    AS total,
+                    COUNT(*) FILTER (WHERE gsv.status = 'validated')           AS validated,
+                    COUNT(*) FILTER (WHERE gsv.status = 'skipped')             AS skipped,
+                    COUNT(*) FILTER (WHERE gsv.status = 'pending')             AS pending,
+                    COUNT(*) FILTER (WHERE gsv.status = 'pending'
+                                     AND pgs.optional = FALSE)                 AS blocking_pending
+                FROM gamme_step_validation gsv
+                JOIN preventive_plan_gamme_step pgs ON pgs.id = gsv.step_id
+                WHERE gsv.intervention_id = %s
                 """,
                 (intervention_id,),
             )
-            rows = cur.fetchall()
-            counts: Dict[str, int] = {row[0]: row[1] for row in rows}
-
-            validated = counts.get("validated", 0)
-            skipped = counts.get("skipped", 0)
-            pending = counts.get("pending", 0)
-            total = validated + skipped + pending
-
+            row = cur.fetchone()
+            total, validated, skipped, pending, blocking_pending = (
+                row[0], row[1], row[2], row[3], row[4]
+            )
             return {
                 "total": total,
                 "validated": validated,
                 "skipped": skipped,
                 "pending": pending,
-                "is_complete": pending == 0 and total > 0,
+                "blocking_pending": blocking_pending,
+                "is_complete": blocking_pending == 0 and total > 0,
             }
         except HTTPException:
             raise
         except Exception as e:
             raise_db_error(e, "calcul de la progression de gamme")
+        finally:
+            release_connection(conn)
+
+    def get_progress_by_occurrence(self, occurrence_id: str) -> Dict[str, Any]:
+        """Calcule la progression de la gamme pour une occurrence (avant acceptation DI)"""
+        conn = self._get_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                SELECT
+                    COUNT(*)                                                    AS total,
+                    COUNT(*) FILTER (WHERE gsv.status = 'validated')           AS validated,
+                    COUNT(*) FILTER (WHERE gsv.status = 'skipped')             AS skipped,
+                    COUNT(*) FILTER (WHERE gsv.status = 'pending')             AS pending,
+                    COUNT(*) FILTER (WHERE gsv.status = 'pending'
+                                     AND pgs.optional = FALSE)                 AS blocking_pending
+                FROM gamme_step_validation gsv
+                JOIN preventive_plan_gamme_step pgs ON pgs.id = gsv.step_id
+                WHERE gsv.occurrence_id = %s
+                """,
+                (occurrence_id,),
+            )
+            row = cur.fetchone()
+            total, validated, skipped, pending, blocking_pending = (
+                row[0], row[1], row[2], row[3], row[4]
+            )
+            return {
+                "total": total,
+                "validated": validated,
+                "skipped": skipped,
+                "pending": pending,
+                "blocking_pending": blocking_pending,
+                "is_complete": blocking_pending == 0 and total > 0,
+            }
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise_db_error(e, "calcul de la progression de gamme par occurrence")
+        finally:
+            release_connection(conn)
+
+    def rattach_to_intervention(
+        self, occurrence_id: str, intervention_id: str
+    ) -> int:
+        """
+        Rattache toutes les gamme_step_validation d'une occurrence
+        à l'intervention créée lors de l'acceptation de la DI.
+        Retourne le nombre de lignes mises à jour.
+        """
+        conn = self._get_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                UPDATE gamme_step_validation
+                SET intervention_id = %s
+                WHERE occurrence_id = %s
+                AND intervention_id IS NULL
+                """,
+                (intervention_id, occurrence_id),
+            )
+            count = cur.rowcount
+            conn.commit()
+            logger.info(
+                "Rattachement gamme : %s step(s) liés à l'intervention %s",
+                count, intervention_id,
+            )
+            return count
+        except Exception as e:
+            conn.rollback()
+            raise_db_error(e, "rattachement des validations de gamme à l'intervention")
         finally:
             release_connection(conn)
 
@@ -166,7 +272,7 @@ class GammeStepValidationRepository:
                     gs.label AS step_label,
                     gs.sort_order AS step_sort_order,
                     gs.optional AS step_optional,
-                    gsv.intervention_id, gsv.action_id,
+                    gsv.occurrence_id, gsv.intervention_id, gsv.action_id,
                     gsv.status, gsv.skip_reason, gsv.validated_at, gsv.validated_by
                 FROM gamme_step_validation gsv
                 LEFT JOIN preventive_plan_gamme_step gs ON gs.id = gsv.step_id

@@ -330,6 +330,32 @@ class PreventiveOccurrenceRepository:
                 (di_id, occurrence_id),
             )
 
+            # Générer les gamme_step_validation liées à l'occurrence
+            # (le trigger DB est supprimé — génération manuelle depuis ici)
+            cur.execute(
+                """
+                SELECT id FROM preventive_plan_gamme_step
+                WHERE plan_id = %s
+                ORDER BY sort_order ASC
+                """,
+                (plan_id,),
+            )
+            steps = cur.fetchall()
+            for step_row in steps:
+                cur.execute(
+                    """
+                    INSERT INTO gamme_step_validation
+                        (step_id, occurrence_id, intervention_id, status)
+                    VALUES (%s, %s, NULL, 'pending')
+                    ON CONFLICT (step_id, occurrence_id) DO NOTHING
+                    """,
+                    (str(step_row[0]), occurrence_id),
+                )
+            logger.info(
+                "Gamme : %s step(s) générés pour l'occurrence %s",
+                len(steps), occurrence_id,
+            )
+
             conn.commit()
 
         except HTTPException:

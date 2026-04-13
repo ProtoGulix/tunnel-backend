@@ -11,7 +11,8 @@ class GammeStepValidationOut(BaseModel):
     step_label: str
     step_sort_order: int
     step_optional: bool
-    intervention_id: UUID
+    occurrence_id: Optional[UUID] = None
+    intervention_id: Optional[UUID] = None
     action_id: Optional[UUID] = None
     status: str
     skip_reason: Optional[str] = None
@@ -41,11 +42,12 @@ class GammeProgressOut(BaseModel):
     validated: int
     skipped: int
     pending: int
+    blocking_pending: int = 0
     is_complete: bool = False
 
     model_config = ConfigDict(from_attributes=True)
 
     @model_validator(mode="after")
     def compute_is_complete(self) -> "GammeProgressOut":
-        self.is_complete = self.pending == 0 and self.total > 0
+        self.is_complete = self.blocking_pending == 0 and self.total > 0
         return self

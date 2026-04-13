@@ -509,6 +509,26 @@ class InterventionRequestRepository:
                     "UPDATE intervention_request SET intervention_id = %s WHERE id = %s",
                     (str(intervention_id), request_id),
                 )
+                # Rattacher les gamme_step_validation de l'occurrence à cette intervention
+                cur.execute(
+                    "SELECT id FROM preventive_occurrence WHERE di_id = %s LIMIT 1",
+                    (request_id,),
+                )
+                occurrence_row = cur.fetchone()
+                if occurrence_row:
+                    cur.execute(
+                        """
+                        UPDATE gamme_step_validation
+                        SET intervention_id = %s
+                        WHERE occurrence_id = %s
+                        AND intervention_id IS NULL
+                        """,
+                        (str(intervention_id), str(occurrence_row[0])),
+                    )
+                    logger.info(
+                        "Rattachement gamme : %s step(s) liés à l'intervention %s",
+                        cur.rowcount, intervention_id,
+                    )
 
             conn.commit()
             logger.info(
