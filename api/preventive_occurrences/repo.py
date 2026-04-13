@@ -129,7 +129,8 @@ class PreventiveOccurrenceRepository:
             if not row:
                 raise NotFoundError(f"Occurrence {occurrence_id} non trouvée")
             if row[0] != "pending":
-                raise ValidationError("Seule une occurrence en statut pending peut être ignorée")
+                raise ValidationError(
+                    "Seule une occurrence en statut pending peut être ignorée")
 
             cur.execute(
                 """
@@ -167,16 +168,19 @@ class PreventiveOccurrenceRepository:
 
         for plan in plans:
             plan_id = str(plan["id"])
-            machines = self._load_machines_for_class(str(plan["equipement_class_id"]))
+            machines = self._load_machines_for_class(
+                str(plan["equipement_class_id"]))
             if machines is None:
-                errors.append(f"Plan {plan['label']}: erreur chargement machines")
+                errors.append(
+                    f"Plan {plan['label']}: erreur chargement machines")
                 continue
 
             for machine in machines:
                 machine_id = str(machine["id"])
                 machine_label = machine.get("code") or machine_id
                 try:
-                    result = self._generate_for_machine(plan, machine_id, today)
+                    result = self._generate_for_machine(
+                        plan, machine_id, today)
                     if result == "generated":
                         generated += 1
                     elif result == "conflict":
@@ -253,7 +257,8 @@ class PreventiveOccurrenceRepository:
                 )
                 last_date = cur.fetchone()[0]
                 if last_date is not None:
-                    next_date = last_date + timedelta(days=plan["periodicity_days"])
+                    next_date = last_date + \
+                        timedelta(days=plan["periodicity_days"])
                     if next_date > today:
                         return "skipped_not_due"
                     scheduled_date = next_date
@@ -422,4 +427,5 @@ class PreventiveOccurrenceRepository:
                 release_connection(conn)
 
         except Exception as e:
-            logger.warning("Auto-accept échoué pour l'occurrence %s: %s", occurrence_id, e)
+            logger.warning(
+                "Auto-accept échoué pour l'occurrence %s: %s", occurrence_id, e)
