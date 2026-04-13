@@ -32,8 +32,19 @@ class GammeStepValidationPatch(BaseModel):
     def validate_status_rules(self) -> "GammeStepValidationPatch":
         if self.status not in ("validated", "skipped"):
             raise ValueError("status doit être 'validated' ou 'skipped'")
+
+        # Si validé, action_id est OBLIGATOIRE
+        if self.status == "validated" and self.action_id is None:
+            raise ValueError("action_id est obligatoire quand status = 'validated'")
+
+        # Si skippé, skip_reason est OBLIGATOIRE (pas d'action)
         if self.status == "skipped" and not (self.skip_reason or "").strip():
             raise ValueError("skip_reason est obligatoire quand status = 'skipped'")
+
+        # Si skippé, action_id doit être NULL
+        if self.status == "skipped" and self.action_id is not None:
+            raise ValueError("action_id doit être null quand status = 'skipped'")
+
         return self
 
 
