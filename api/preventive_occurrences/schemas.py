@@ -16,6 +16,8 @@ class PreventiveOccurrenceOut(BaseModel):
     triggered_at: Optional[datetime] = None
     hours_at_trigger: Optional[float] = None
     di_id: Optional[UUID] = None
+    di_code: Optional[str] = None
+    di_statut: Optional[str] = None
     intervention_id: Optional[UUID] = None
     status: str
     skip_reason: Optional[str] = None

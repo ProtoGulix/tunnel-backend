@@ -58,11 +58,13 @@ class PreventiveOccurrenceRepository:
                     po.id, po.plan_id, pp.label AS plan_label,
                     po.machine_id, m.code AS machine_code, m.name AS machine_name,
                     po.scheduled_date, po.triggered_at, po.hours_at_trigger,
-                    po.di_id, po.intervention_id,
+                    po.di_id, ir.code AS di_code, ir.statut AS di_statut,
+                    po.intervention_id,
                     po.status, po.skip_reason, po.created_at
                 FROM preventive_occurrence po
                 LEFT JOIN preventive_plan pp ON pp.id = po.plan_id
                 LEFT JOIN machine m ON m.id = po.machine_id
+                LEFT JOIN intervention_request ir ON ir.id = po.di_id
                 {where_sql}
                 ORDER BY po.scheduled_date DESC
                 """,
@@ -89,11 +91,13 @@ class PreventiveOccurrenceRepository:
                     po.id, po.plan_id, pp.label AS plan_label,
                     po.machine_id, m.code AS machine_code, m.name AS machine_name,
                     po.scheduled_date, po.triggered_at, po.hours_at_trigger,
-                    po.di_id, po.intervention_id,
+                    po.di_id, ir.code AS di_code, ir.statut AS di_statut,
+                    po.intervention_id,
                     po.status, po.skip_reason, po.created_at
                 FROM preventive_occurrence po
                 LEFT JOIN preventive_plan pp ON pp.id = po.plan_id
                 LEFT JOIN machine m ON m.id = po.machine_id
+                LEFT JOIN intervention_request ir ON ir.id = po.di_id
                 WHERE po.id = %s
                 """,
                 (occurrence_id,),

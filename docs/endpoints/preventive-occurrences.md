@@ -19,6 +19,8 @@ pending → generated → (intervention liée) → ferme
 | `generated` | DI créée, liée via `di_id`                                   |
 | `skipped`   | Ignorée manuellement (raison obligatoire)                    |
 
+> **Rejet de la DI** : si la DI liée passe en `rejetee`, l'occurrence revient automatiquement à `pending` et `di_id` est vidé. Elle pourra être régénérée au prochain appel de `POST /generate`.
+
 ---
 
 ## `GET /preventive-occurrences`
@@ -50,6 +52,8 @@ Liste les occurrences de maintenance préventive avec filtres optionnels.
     "triggered_at": "2026-04-13T08:00:00",
     "hours_at_trigger": null,
     "di_id": "uuid-demande",
+    "di_code": "DI-2026-0042",
+    "di_statut": "nouvelle",
     "intervention_id": null,
     "status": "generated",
     "skip_reason": null,
@@ -86,8 +90,8 @@ Déclenche la génération des occurrences pour tous les plans préventifs actif
   - **trigger_type = `periodicity`** : génère si `last_scheduled_date + periodicity_days ≤ today` (ou si aucune occurrence précédente)
   - **trigger_type = `hours`** : génère si `current_hours - last_trigger_hours ≥ hours_threshold`
   - Insère avec `ON CONFLICT (plan_id, machine_id, scheduled_date) DO NOTHING` — pas de doublon
-  - Crée automatiquement une DI (`demandeur_nom = "Système préventif"`, `statut = "nouvelle"`)
-  - Si `plan.auto_accept = true` : crée aussi l'intervention (`type_inter = "PREV"`, `tech_initials = "SYS"`)
+  - Crée automatiquement une DI (`demandeur_nom = "Système préventif"`, `statut = "nouvelle"`, `is_system = true`, `suggested_type_inter = "PRE"`)
+  - Si `plan.auto_accept = true` : crée aussi l'intervention (`type_inter = "PRE"`, `tech_initials = "SYS"`)
 
 - Chaque machine est traitée dans sa **propre transaction** — l'échec sur une machine n'annule pas les autres.
 

@@ -477,6 +477,22 @@ class InterventionRequestRepository:
                         request_id, intervention_id,
                     )
 
+            # ── Rejet : remettre l'occurrence préventive liée en pending ──
+            elif status_to == "rejetee":
+                cur.execute(
+                    """
+                    UPDATE preventive_occurrence
+                    SET status = 'pending', di_id = NULL
+                    WHERE di_id = %s
+                    """,
+                    (request_id,),
+                )
+                if cur.rowcount:
+                    logger.info(
+                        "Demande %s rejetée : occurrence préventive remise en pending",
+                        request_id,
+                    )
+
             # Appliquer la transition (flag pour éviter double-trigger)
             cur.execute("SET LOCAL app.skip_request_status_log = 'true'")
             cur.execute(
