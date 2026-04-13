@@ -104,7 +104,7 @@ class InterventionRepository:
                     i.*,
                     ir.id        AS req_id,
                     ir.code      AS req_code,
-                    ir.demandeur_nom, ir.demandeur_service, ir.description AS req_description,
+                    ir.demandeur_nom, ir.demandeur_service_legacy AS demandeur_service, ir.description AS req_description,
                     ir.statut    AS req_statut,
                     rs2.label    AS req_statut_label,
                     rs2.color    AS req_statut_color,
@@ -138,7 +138,7 @@ class InterventionRepository:
                 LEFT JOIN intervention_action_purchase_request iapr ON ia.id = iapr.intervention_action_id
                 {" ".join(joins)}
                 {where_sql}
-                GROUP BY i.id, ir.id, ir.code, ir.demandeur_nom, ir.demandeur_service, ir.description, ir.statut, rs2.label, rs2.color, ir.intervention_id, ir.created_at, ir.updated_at, m.id, pm.id, pm.code, pm.name, ec.id, mh.m_open_count, mh.m_urgent_count
+                GROUP BY i.id, ir.id, ir.code, ir.demandeur_nom, ir.demandeur_service_legacy, ir.description, ir.statut, rs2.label, rs2.color, ir.intervention_id, ir.created_at, ir.updated_at, m.id, pm.id, pm.code, pm.name, ec.id, mh.m_open_count, mh.m_urgent_count
                 {order_sql}
                 LIMIT %s OFFSET %s
             """
@@ -250,7 +250,7 @@ class InterventionRepository:
                     ir.id           AS req_id,
                     ir.code         AS req_code,
                     ir.demandeur_nom,
-                    ir.demandeur_service,
+                    ir.demandeur_service_legacy AS demandeur_service,
                     ir.description  AS req_description,
                     ir.statut       AS req_statut,
                     rs2.label       AS req_statut_label,

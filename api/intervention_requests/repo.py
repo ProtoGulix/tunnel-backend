@@ -24,11 +24,20 @@ _EQUIPEMENT_COLS = f"""
     COUNT(CASE WHEN i_h.status_actual != {_CLOSED_SQ} AND i_h.priority = 'urgent' THEN i_h.id END) AS eq_urgent_count
 """
 
+# Colonnes service
+_SERVICE_COLS = """
+    s.id        AS service_id,
+    s.code      AS service_code,
+    s.label     AS service_label,
+    s.is_active AS service_is_active
+"""
+
 _EQUIPEMENT_JOINS = """
     LEFT JOIN machine m ON ir.machine_id = m.id
     LEFT JOIN machine pm ON pm.id = m.equipement_mere
     LEFT JOIN equipement_class ec ON ec.id = m.equipement_class_id
     LEFT JOIN intervention i_h ON i_h.machine_id = m.id
+    LEFT JOIN service s ON ir.service_id = s.id
 """
 
 logger = logging.getLogger(__name__)
@@ -47,19 +56,23 @@ class InterventionRequestRepository:
         open_count = row.pop("eq_open_count", 0) or 0
         urgent_count = row.pop("eq_urgent_count", 0) or 0
         if urgent_count > 0:
-            health = {"level": "critical",     "reason": f"{urgent_count} intervention(s) urgente(s)", "rules_triggered": None}
+            health = {"level": "critical",
+                      "reason": f"{urgent_count} intervention(s) urgente(s)", "rules_triggered": None}
         elif open_count > 5:
-            health = {"level": "warning",      "reason": f"{open_count} interventions ouvertes",        "rules_triggered": None}
+            health = {"level": "warning",
+                      "reason": f"{open_count} interventions ouvertes",        "rules_triggered": None}
         elif open_count > 0:
-            health = {"level": "maintenance",  "reason": f"{open_count} intervention(s) ouverte(s)",    "rules_triggered": None}
+            health = {"level": "maintenance",
+                      "reason": f"{open_count} intervention(s) ouverte(s)",    "rules_triggered": None}
         else:
-            health = {"level": "ok",           "reason": "Aucune intervention ouverte",                 "rules_triggered": None}
+            health = {"level": "ok",           "reason": "Aucune intervention ouverte",
+                      "rules_triggered": None}
 
-        ec_id    = row.pop("ec_id",    None)
-        ec_code  = row.pop("ec_code",  None)
+        ec_id = row.pop("ec_id",    None)
+        ec_code = row.pop("ec_code",  None)
         ec_label = row.pop("ec_label", None)
 
-        p_id   = row.pop("eq_parent_id",   None)
+        p_id = row.pop("eq_parent_id",   None)
         p_code = row.pop("eq_parent_code", None)
         p_name = row.pop("eq_parent_name", None)
 
@@ -70,6 +83,18 @@ class InterventionRequestRepository:
             "health":    health,
             "parent":    {"id": p_id, "code": p_code, "name": p_name} if p_id else None,
             "equipement_class": {"id": ec_id, "code": ec_code, "label": ec_label} if ec_id else None,
+        }
+
+    @staticmethod
+    def _build_service(row: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Construit l'objet service (ServiceOut) depuis les colonnes préfixées service_."""
+        if not row.get("service_id"):
+            return None
+        return {
+            "id":        row.pop("service_id"),
+            "code":      row.pop("service_code"),
+            "label":     row.pop("service_label"),
+            "is_active": row.pop("service_is_active"),
         }
 
     # ──────────────────────────────────────────────────────────────
@@ -134,17 +159,18 @@ class InterventionRequestRepository:
                 f"""
                 SELECT
                     ir.id, ir.code,
-                    ir.demandeur_nom, ir.demandeur_service, ir.description,
+                    ir.demandeur_nom, ir.demandeur_service_legacy, ir.description,
                     ir.statut,
                     rs.label AS statut_label, rs.color AS statut_color,
                     ir.intervention_id,
                     ir.created_at, ir.updated_at,
-                    {_EQUIPEMENT_COLS}
+                    {_EQUIPEMENT_COLS},
+                    {_SERVICE_COLS}
                 FROM intervention_request ir
                 LEFT JOIN request_status_ref rs ON ir.statut = rs.code
                 {_EQUIPEMENT_JOINS}
                 {where_sql}
-                GROUP BY ir.id, rs.label, rs.color, m.id, pm.id, pm.code, pm.name, ec.id
+                GROUP BY ir.id, rs.label, rs.color, m.id, pm.id, pm.code, pm.name, ec.id, s.id
                 ORDER BY ir.created_at DESC
                 LIMIT %s OFFSET %s
                 """,
@@ -156,6 +182,7 @@ class InterventionRequestRepository:
             for row in rows:
                 r = dict(zip(cols, row))
                 r["equipement"] = self._build_equipement(r)
+                r["service"] = self._build_service(r)
                 result.append(r)
             return result
         except Exception as e:
@@ -255,17 +282,18 @@ class InterventionRequestRepository:
                 f"""
                 SELECT
                     ir.id, ir.code,
-                    ir.demandeur_nom, ir.demandeur_service, ir.description,
+                    ir.demandeur_nom, ir.demandeur_service_legacy, ir.description,
                     ir.statut,
                     rs.label AS statut_label, rs.color AS statut_color,
                     ir.intervention_id,
                     ir.created_at, ir.updated_at,
-                    {_EQUIPEMENT_COLS}
+                    {_EQUIPEMENT_COLS},
+                    {_SERVICE_COLS}
                 FROM intervention_request ir
                 LEFT JOIN request_status_ref rs ON ir.statut = rs.code
                 {_EQUIPEMENT_JOINS}
                 WHERE ir.id = %s
-                GROUP BY ir.id, rs.label, rs.color, m.id, pm.id, pm.code, pm.name, ec.id
+                GROUP BY ir.id, rs.label, rs.color, m.id, pm.id, pm.code, pm.name, ec.id, s.id
                 """,
                 (CLOSED_STATUS_CODE, CLOSED_STATUS_CODE, request_id),
             )
@@ -275,6 +303,7 @@ class InterventionRequestRepository:
             cols = [d[0] for d in cur.description]
             result = dict(zip(cols, row))
             result["equipement"] = self._build_equipement(result)
+            result["service"] = self._build_service(result)
 
             # Log des transitions
             cur.execute(
@@ -313,6 +342,7 @@ class InterventionRequestRepository:
         InterventionRequestValidator.validate_create(data)
         demandeur_nom = (data.get("demandeur_nom") or "").strip()
         description = (data.get("description") or "").strip()
+        service_id = data.get("service_id")
 
         conn = self._get_connection()
         try:
@@ -320,14 +350,14 @@ class InterventionRequestRepository:
             cur.execute(
                 """
                 INSERT INTO intervention_request
-                    (machine_id, demandeur_nom, demandeur_service, description, code, statut)
+                    (machine_id, demandeur_nom, service_id, description, code, statut)
                 VALUES (%s, %s, %s, %s, 'PLACEHOLDER', 'nouvelle')
                 RETURNING id
                 """,
                 (
                     str(data["machine_id"]),
                     demandeur_nom,
-                    data.get("demandeur_service"),
+                    str(service_id) if service_id else None,
                     description,
                 ),
             )
@@ -375,7 +405,8 @@ class InterventionRequestRepository:
         try:
             cur = conn.cursor()
             cur.execute(
-                "SELECT code FROM request_status_ref WHERE code = %s", (status_to,)
+                "SELECT code FROM request_status_ref WHERE code = %s", (
+                    status_to,)
             )
             if not cur.fetchone():
                 raise ValidationError(f"Statut '{status_to}' inconnu")
@@ -395,7 +426,8 @@ class InterventionRequestRepository:
             # ── Clôture : fermer l'intervention liée ──────────────────
             elif status_to == "cloturee":
                 if intervention_id:
-                    self._close_linked_intervention(cur=cur, intervention_id=str(intervention_id))
+                    self._close_linked_intervention(
+                        cur=cur, intervention_id=str(intervention_id))
                     logger.info(
                         "Demande %s clôturée : intervention %s fermée",
                         request_id, intervention_id,
@@ -492,7 +524,8 @@ class InterventionRequestRepository:
             """,
             (
                 intervention_id,
-                request.get("description"),          # titre = description de la demande
+                # titre = description de la demande
+                request.get("description"),
                 str(request["machine_id"]),
                 intervention_data["type_inter"],
                 intervention_data.get("priority", "normale"),
