@@ -23,11 +23,10 @@ class Settings(BaseSettings):
         "http://localhost:8055"
     )
     DIRECTUS_SECRET: str = os.getenv("DIRECTUS_SECRET", "")
-    DIRECTUS_KEY: str = os.getenv("DIRECTUS_KEY", "")
 
     # API
     API_TITLE: str = "GMAO API"
-    API_VERSION: str = "2.15.0"
+    API_VERSION: str = "2.16.0"
     API_ENV: str = os.getenv("API_ENV", "development")
     AUTH_DISABLED: bool = os.getenv("AUTH_DISABLED", "false").lower() == "true"
     FRONTEND_URL: str = os.getenv("FRONTEND_URL", "http://localhost:5173")

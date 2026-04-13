@@ -4,6 +4,7 @@ from datetime import datetime
 from uuid import UUID
 
 from api.equipements.schemas import EquipementListItem
+from api.services.schemas import ServiceOut
 
 
 class RequestStatusRef(BaseModel):
@@ -19,8 +20,10 @@ class RequestStatusRef(BaseModel):
 class InterventionRequestIn(BaseModel):
     machine_id: UUID = Field(..., description="Machine concernée")
     demandeur_nom: str = Field(..., description="Nom du demandeur")
-    demandeur_service: Optional[str] = Field(default=None, description="Service du demandeur")
-    description: str = Field(..., description="Description de l'intervention demandée")
+    service_id: Optional[UUID] = Field(
+        default=None, description="UUID du service (optionnel)")
+    description: str = Field(...,
+                             description="Description de l'intervention demandée")
 
     class Config:
         from_attributes = True
@@ -46,7 +49,9 @@ class InterventionRequestListItem(BaseModel):
     code: str
     equipement: Optional[EquipementListItem] = None
     demandeur_nom: str
-    demandeur_service: Optional[str] = None
+    service: Optional[ServiceOut] = None
+    demandeur_service: Optional[str] = Field(
+        None, alias="demandeur_service_legacy")
     description: str
     statut: str
     statut_label: Optional[str] = None
@@ -57,6 +62,7 @@ class InterventionRequestListItem(BaseModel):
 
     class Config:
         from_attributes = True
+        populate_by_name = True
 
 
 class InterventionRequestDetail(InterventionRequestListItem):
@@ -65,10 +71,16 @@ class InterventionRequestDetail(InterventionRequestListItem):
 
 class StatusTransitionIn(BaseModel):
     status_to: str = Field(..., description="Nouveau statut cible")
-    notes: Optional[str] = Field(default=None, description="Motif ou commentaire (obligatoire pour rejetee)")
-    changed_by: Optional[UUID] = Field(default=None, description="UUID de l'utilisateur Directus")
+    notes: Optional[str] = Field(
+        default=None, description="Motif ou commentaire (obligatoire pour rejetee)")
+    changed_by: Optional[UUID] = Field(
+        default=None, description="UUID de l'utilisateur Directus")
     # Champs pour la création d'intervention lors de l'acceptation (status_to = acceptee)
-    type_inter: Optional[str] = Field(default=None, description="Type d'intervention (obligatoire pour acceptee)")
-    tech_initials: Optional[str] = Field(default=None, description="Initiales du technicien (obligatoire pour acceptee)")
-    priority: Optional[str] = Field(default=None, description="Priorité de l'intervention")
-    reported_date: Optional[str] = Field(default=None, description="Date de signalement (YYYY-MM-DD)")
+    type_inter: Optional[str] = Field(
+        default=None, description="Type d'intervention (obligatoire pour acceptee)")
+    tech_initials: Optional[str] = Field(
+        default=None, description="Initiales du technicien (obligatoire pour acceptee)")
+    priority: Optional[str] = Field(
+        default=None, description="Priorité de l'intervention")
+    reported_date: Optional[str] = Field(
+        default=None, description="Date de signalement (YYYY-MM-DD)")
