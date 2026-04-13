@@ -16,8 +16,11 @@ class JWTMiddleware(BaseHTTPMiddleware):
     """
 
     # Routes publiques (pas d'auth requise)
-    PUBLIC_ROUTES = {"/health", "/server/ping", "/docs", "/openapi.json",
-                     "/redoc", "/favicon.ico", "/auth/login"}
+    # Note : /docs, /openapi.json, /redoc sont exclus en production pour ne pas exposer la spec API
+    PUBLIC_ROUTES = {"/health", "/server/ping", "/favicon.ico", "/auth/login"}
+
+    if settings.API_ENV != "production":
+        PUBLIC_ROUTES |= {"/docs", "/openapi.json", "/redoc"}
 
     async def dispatch(self, request: Request, call_next):
         # Requêtes OPTIONS (CORS preflight) : laisser passer sans auth

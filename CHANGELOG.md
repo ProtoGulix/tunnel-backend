@@ -2,6 +2,28 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [2.16.1] - 13 avril 2026
+
+### Corrections
+
+- **Dockerfile** : suppression du flag `--reload` en production. Ce flag de développement lançait deux processus sur le même port (érreur `Address already in use`) et surveillait inutilement le filesystem. Remplacé par `--workers 2`.
+
+## [2.16.0] - 12 avril 2026
+
+### Nouveautés
+
+- **Module Services (`/services`)** : nouveau domaine référentiel pour gérer les services/départements. Endpoints : `GET /services`, `GET /services/{id}`, `POST /services`, `PATCH /services/{id}`. Chaque service a un code unique (immuable) et un libellé.
+- **Liaison services ↔ demandes d'intervention** : le champ `demandeur_service` (texte libre) est remplacé par une référence `service_id` (UUID) lors de la création d'une demande. La colonne legacy `demandeur_service_legacy` reste en base pour backward-compatibility (exposée en sortie sous le nom `demandeur_service`).
+- **Nouveau champ `service: ServiceOut`** dans les réponses `GET /intervention-requests` et `GET /intervention-requests/{id}` : objet complet du service référentiel si disponible, sinon `null`.
+
+### Corrections
+
+- **`interventions/repo.py`** : correction des requêtes SQL pour utiliser `ir.demandeur_service_legacy` au lieu de la colonne supprimée `ir.demandeur_service`. Alias SQL `AS demandeur_service` pour maintenir la compatibilité du code Python.
+
+### Changements incompatibles
+
+- **`POST /intervention-requests` input** : le champ `demandeur_service` (texte libre) est supprimé. Utiliser le nouveau champ optionnel `service_id: UUID` pour lier la demande à un service référentiel. Les demandes sans service restent possibles (`service_id: null`).
+
 ## [2.15.0] - 10 avril 2026
 
 ### Nouveautés
