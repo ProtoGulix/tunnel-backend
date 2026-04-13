@@ -34,7 +34,7 @@ def upgrade() -> None:
             ('LOGIS', 'Logistique'),
             ('QHSE',  'QHSE'),
             ('ADMIN', 'Administration'),
-            ('INFRA', 'Infrastructure / Batiment'),
+            ('INFRA', 'Infrastructure / Bâtiment'),
             ('IT',    'Informatique')
     """)
     op.execute("""

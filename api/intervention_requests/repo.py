@@ -129,6 +129,7 @@ class InterventionRequestRepository:
         exclude_statuses: Optional[List[str]] = None,
         machine_id: Optional[str] = None,
         search: Optional[str] = None,
+        is_system: Optional[bool] = None,
     ) -> List[Dict[str, Any]]:
         limit = min(limit, 500)
         conn = self._get_connection()
@@ -152,6 +153,9 @@ class InterventionRequestRepository:
                     "(ir.code ILIKE %s OR ir.demandeur_nom ILIKE %s OR ir.description ILIKE %s)"
                 )
                 params += [f"%{search}%", f"%{search}%", f"%{search}%"]
+            if is_system is not None:
+                where.append("ir.is_system = %s")
+                params.append(is_system)
 
             where_sql = ("WHERE " + " AND ".join(where)) if where else ""
 
@@ -163,6 +167,7 @@ class InterventionRequestRepository:
                     ir.statut,
                     rs.label AS statut_label, rs.color AS statut_color,
                     ir.intervention_id,
+                    ir.is_system, ir.suggested_type_inter,
                     ir.created_at, ir.updated_at,
                     {_EQUIPEMENT_COLS},
                     {_SERVICE_COLS}
@@ -196,6 +201,7 @@ class InterventionRequestRepository:
         exclude_statuses: Optional[List[str]] = None,
         machine_id: Optional[str] = None,
         search: Optional[str] = None,
+        is_system: Optional[bool] = None,
     ) -> int:
         conn = self._get_connection()
         try:
@@ -218,6 +224,9 @@ class InterventionRequestRepository:
                     "(code ILIKE %s OR demandeur_nom ILIKE %s OR description ILIKE %s)"
                 )
                 params += [f"%{search}%", f"%{search}%", f"%{search}%"]
+            if is_system is not None:
+                where.append("is_system = %s")
+                params.append(is_system)
 
             where_sql = ("WHERE " + " AND ".join(where)) if where else ""
             cur.execute(
@@ -286,6 +295,7 @@ class InterventionRequestRepository:
                     ir.statut,
                     rs.label AS statut_label, rs.color AS statut_color,
                     ir.intervention_id,
+                    ir.is_system, ir.suggested_type_inter,
                     ir.created_at, ir.updated_at,
                     {_EQUIPEMENT_COLS},
                     {_SERVICE_COLS}
@@ -343,6 +353,8 @@ class InterventionRequestRepository:
         demandeur_nom = (data.get("demandeur_nom") or "").strip()
         description = (data.get("description") or "").strip()
         service_id = data.get("service_id")
+        is_system = bool(data.get("is_system", False))
+        suggested_type_inter = data.get("suggested_type_inter") or None
 
         conn = self._get_connection()
         try:
@@ -350,8 +362,9 @@ class InterventionRequestRepository:
             cur.execute(
                 """
                 INSERT INTO intervention_request
-                    (machine_id, demandeur_nom, service_id, description, code, statut)
-                VALUES (%s, %s, %s, %s, 'PLACEHOLDER', 'nouvelle')
+                    (machine_id, demandeur_nom, service_id, description,
+                     is_system, suggested_type_inter, code, statut)
+                VALUES (%s, %s, %s, %s, %s, %s, 'PLACEHOLDER', 'nouvelle')
                 RETURNING id
                 """,
                 (
@@ -359,6 +372,8 @@ class InterventionRequestRepository:
                     demandeur_nom,
                     str(service_id) if service_id else None,
                     description,
+                    is_system,
+                    suggested_type_inter,
                 ),
             )
             new_id = cur.fetchone()[0]
@@ -411,16 +426,45 @@ class InterventionRequestRepository:
             if not cur.fetchone():
                 raise ValidationError(f"Statut '{status_to}' inconnu")
 
-            # ── Acceptation : création de l'intervention ───────────────
+            # ── Acceptation : résolution du type_inter et création intervention ───
             if status_to == "acceptee":
+                # Résolution du type_inter effectif par priorité
+                payload_type = (intervention_data or {}).get("type_inter")
+                di_is_system = existing.get("is_system", False)
+                di_suggested = existing.get("suggested_type_inter")
+
+                if di_is_system and di_suggested:
+                    # DI système : suggested_type_inter est autoritaire
+                    if payload_type and payload_type != di_suggested:
+                        raise ValidationError(
+                            f"Cette demande système impose le type '{di_suggested}'. "
+                            f"Le type '{payload_type}' ne peut pas être substitué."
+                        )
+                    effective_type_inter = di_suggested
+                elif di_suggested and not payload_type:
+                    # DI humaine avec suggestion : utilisée par défaut si rien dans le payload
+                    effective_type_inter = di_suggested
+                elif payload_type:
+                    # Cas standard : le payload fournit le type
+                    effective_type_inter = payload_type
+                else:
+                    raise ValidationError(
+                        "Le type d'intervention est requis pour accepter cette demande."
+                    )
+
+                # Injecter le type résolu dans intervention_data
+                if intervention_data is None:
+                    intervention_data = {}
+                intervention_data["type_inter"] = effective_type_inter
+
                 intervention_id = self._create_intervention_for_request(
                     cur=cur,
                     request=existing,
                     intervention_data=intervention_data,
                 )
                 logger.info(
-                    "Demande %s acceptée : intervention %s créée",
-                    request_id, intervention_id,
+                    "Demande %s acceptée : intervention %s créée (type: %s)",
+                    request_id, intervention_id, effective_type_inter,
                 )
 
             # ── Clôture : fermer l'intervention liée ──────────────────

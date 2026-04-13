@@ -4,7 +4,9 @@ Gestion des interventions de maintenance. Chaque intervention est liée à un é
 
 Une intervention peut être créée manuellement via `POST /interventions`, ou **automatiquement depuis une demande d'intervention** lors de la transition vers `acceptee`. Dans ce cas, le champ `request` contient les informations de la demande d'origine.
 
-> Voir aussi : [Actions](intervention-actions.md) | [Status Logs](intervention-status-log.md) | [Purchase Requests](purchase-requests.md) | [Intervention Requests](intervention-requests.md)
+Une intervention peut aussi être liée à un **plan de maintenance préventive** (`plan_id` non null). Dans ce cas, le champ `gamme_progress` est hydraté sur `GET /interventions/{id}`.
+
+> Voir aussi : [Actions](intervention-actions.md) | [Status Logs](intervention-status-log.md) | [Purchase Requests](purchase-requests.md) | [Intervention Requests](intervention-requests.md) | [Preventive Plans](preventive-plans.md) | [Gamme Step Validations](gamme-step-validations.md)
 
 ---
 
@@ -197,6 +199,8 @@ Détail complet d'une intervention. **La structure est différente de la liste**
     "avg_complexity": 6.2,
     "purchase_count": 1
   },
+  "plan_id": null,
+  "gamme_progress": null,
   "actions": [
     {
       "id": "uuid",
@@ -269,6 +273,8 @@ Détail complet d'une intervention. **La structure est différente de la liste**
 | `request`              | Objet `InterventionRequestListItem` (`null` si création manuelle)       | Idem                                                                                                                                                        |
 | `actions`              | Toujours `[]`                                                           | Tableau de [InterventionActionOut](intervention-actions.md) complet avec `subcategory`, `tech`, `purchase_requests`                                         |
 | `status_logs`          | Toujours `[]`                                                           | Tableau de [InterventionStatusLogOut](intervention-status-log.md)                                                                                           |
+| `plan_id`              | Absent (non retourné en liste)                                          | UUID du plan préventif si l'intervention provient de la maintenance préventive, `null` sinon                                                                |
+| `gamme_progress`       | Absent (non retourné en liste)                                          | Objet [GammeProgressOut](gamme-step-validations.md) (`total`, `validated`, `skipped`, `pending`, `is_complete`). `null` si `plan_id` est null               |
 | `stats.purchase_count` | Calculé en SQL (agrégat)                                                | Calculé depuis les `purchase_requests` chargées dans les actions                                                                                            |
 
 ---
@@ -325,6 +331,8 @@ Intervention complète avec equipement, `request` (objet demande si liée), stat
 Met à jour une intervention. Même body que POST, tous les champs sont optionnels.
 
 > **Clôture automatique de la demande liée** : si `status_actual` est mis à jour vers le code `ferme` et qu'une demande d'intervention est liée (`request` non null), cette demande passe automatiquement à `cloturee`.
+
+> **Gamme incomplète** : si l'intervention a un plan préventif (`plan_id` non null) et que des étapes de gamme sont encore en statut `pending`, un trigger DB bloque la clôture et retourne `409` avec `"Des étapes de gamme sont en attente de validation"`. Utiliser `PATCH /gamme-step-validations` pour traiter les étapes avant de clôturer.
 
 ### Réponse `200`
 

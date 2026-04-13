@@ -1,10 +1,11 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List
 from datetime import datetime
 from uuid import UUID
 
 from api.equipements.schemas import EquipementListItem
 from api.services.schemas import ServiceOut
+from api.constants import INTERVENTION_TYPE_IDS
 
 
 class RequestStatusRef(BaseModel):
@@ -24,6 +25,16 @@ class InterventionRequestIn(BaseModel):
         default=None, description="UUID du service (optionnel)")
     description: str = Field(...,
                              description="Description de l'intervention demandée")
+    is_system: bool = Field(default=False, description="DI créée par le système (ex: maintenance préventive)")
+    suggested_type_inter: Optional[str] = Field(
+        default=None, description="Type d'intervention suggéré (pré-remplit l'acceptation)")
+
+    @field_validator("suggested_type_inter")
+    @classmethod
+    def validate_suggested_type_inter(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and v not in INTERVENTION_TYPE_IDS:
+            raise ValueError(f"Type d'intervention suggéré invalide : {v}")
+        return v
 
     class Config:
         from_attributes = True
@@ -57,6 +68,8 @@ class InterventionRequestListItem(BaseModel):
     statut_label: Optional[str] = None
     statut_color: Optional[str] = None
     intervention_id: Optional[UUID] = None
+    is_system: bool = False
+    suggested_type_inter: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 

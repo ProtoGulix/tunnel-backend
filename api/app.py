@@ -36,6 +36,9 @@ from api.exports.routes import router as exports_router
 from api.users.routes import router as user_router
 from api.intervention_requests.routes import router as intervention_request_router
 from api.services.routes import router as service_router
+from api.preventive_plans.routes import router as preventive_plans_router
+from api.preventive_occurrences.routes import router as preventive_occurrences_router
+from api.gamme_step_validations.routes import router as gamme_step_validations_router
 from api.errors.handlers import register_error_handlers
 from api.health import health_check
 
@@ -138,6 +141,9 @@ app.include_router(exports_router)
 app.include_router(user_router)
 app.include_router(intervention_request_router)
 app.include_router(service_router)
+app.include_router(preventive_plans_router)
+app.include_router(preventive_occurrences_router)
+app.include_router(gamme_step_validations_router)
 app.include_router(auth_router)
 
 

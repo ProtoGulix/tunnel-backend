@@ -345,6 +345,15 @@ class InterventionRepository:
             intervention['status_logs'] = status_log_repo.get_by_intervention(
                 intervention_id)
 
+            # Calculer la progression de gamme si l'intervention a un plan préventif
+            if intervention.get('plan_id'):
+                # Import lazy pour éviter la circularité avec gamme_step_validations.repo
+                from api.gamme_step_validations.repo import GammeStepValidationRepository
+                gsv_repo = GammeStepValidationRepository()
+                intervention['gamme_progress'] = gsv_repo.get_progress(intervention_id)
+            else:
+                intervention['gamme_progress'] = None
+
             return intervention
         except NotFoundError:
             raise
