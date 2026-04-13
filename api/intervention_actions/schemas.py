@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from typing import Optional, List
 from datetime import datetime, time, date
 from uuid import UUID
@@ -18,9 +18,29 @@ class InterventionActionIn(BaseModel):
     created_at: Optional[str] = Field(default=None)
     action_start: Optional[time] = Field(default=None)
     action_end: Optional[time] = Field(default=None)
+    # Embarquement optionnel de la validation de gamme step
+    gamme_step_validation_id: Optional[UUID] = Field(
+        default=None,
+        description="Si fourni, valide automatiquement ce step en le liant à l'action créée"
+    )
+    gamme_step_skip_reason: Optional[str] = Field(
+        default=None,
+        description="Si fourni avec gamme_step_validation_id, skippe le step au lieu de le valider"
+    )
 
     class Config:
         from_attributes = True
+
+    @model_validator(mode="after")
+    def validate_gamme_embedding(self) -> "InterventionActionIn":
+        """Valide que si gamme_step_validation_id est fourni, la logique est cohérente"""
+        if self.gamme_step_validation_id is not None:
+            # Si on fournit le skip_reason, on ne peut pas valider l'action (skip mode)
+            if self.gamme_step_skip_reason and self.gamme_step_skip_reason.strip():
+                # Mode skip : on va skipper le step, pas valider
+                pass
+            # Sinon mode validation : l'action créée va valider le step
+        return self
 
 
 class ActionCategoryDetail(BaseModel):

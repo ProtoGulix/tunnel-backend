@@ -18,9 +18,9 @@ Liste les validations pour une intervention **ou** une occurrence. Un des deux p
 
 ### Query params
 
-| Param             | Type | Requis      | Description                                    |
-| ----------------- | ---- | ----------- | ---------------------------------------------- |
-| `intervention_id` | uuid | conditionnel | ID de l'intervention                           |
+| Param             | Type | Requis       | Description                                     |
+| ----------------- | ---- | ------------ | ----------------------------------------------- |
+| `intervention_id` | uuid | conditionnel | ID de l'intervention                            |
 | `occurrence_id`   | uuid | conditionnel | ID de l'occurrence (avant acceptation de la DI) |
 
 ### Réponse `200`
@@ -58,20 +58,20 @@ Liste les validations pour une intervention **ou** une occurrence. Un des deux p
 ]
 ```
 
-| Champ              | Description                                                                              |
-| ------------------ | ---------------------------------------------------------------------------------------- |
-| `occurrence_id`    | Occurrence préventive qui a généré cette validation                                      |
-| `intervention_id`  | `null` avant acceptation de la DI ; renseigné automatiquement lors de la transition `acceptee` |
-| `step_optional`    | `true` : l'étape peut être ignorée sans bloquer la clôture                               |
-| `action_id`        | Action d'intervention optionnellement liée à cette validation                            |
-| `status`           | `pending`, `validated`, `skipped`                                                        |
-| `validated_by`     | UUID du technicien qui a validé/ignoré l'étape                                           |
+| Champ             | Description                                                                                    |
+| ----------------- | ---------------------------------------------------------------------------------------------- |
+| `occurrence_id`   | Occurrence préventive qui a généré cette validation                                            |
+| `intervention_id` | `null` avant acceptation de la DI ; renseigné automatiquement lors de la transition `acceptee` |
+| `step_optional`   | `true` : l'étape peut être ignorée sans bloquer la clôture                                     |
+| `action_id`       | Action d'intervention optionnellement liée à cette validation                                  |
+| `status`          | `pending`, `validated`, `skipped`                                                              |
+| `validated_by`    | UUID du technicien qui a validé/ignoré l'étape                                                 |
 
 ### Erreurs
 
-| Code | Cas                                                   |
-| ---- | ----------------------------------------------------- |
-| 400  | Ni `intervention_id` ni `occurrence_id` fourni        |
+| Code | Cas                                            |
+| ---- | ---------------------------------------------- |
+| 400  | Ni `intervention_id` ni `occurrence_id` fourni |
 
 ---
 
@@ -97,8 +97,8 @@ Calcule la progression de la gamme pour une intervention **ou** une occurrence. 
 
 ### Query params
 
-| Param             | Type | Requis      | Description                                     |
-| ----------------- | ---- | ----------- | ----------------------------------------------- |
+| Param             | Type | Requis       | Description                                     |
+| ----------------- | ---- | ------------ | ----------------------------------------------- |
 | `intervention_id` | uuid | conditionnel | ID de l'intervention                            |
 | `occurrence_id`   | uuid | conditionnel | ID de l'occurrence (avant acceptation de la DI) |
 
@@ -115,20 +115,20 @@ Calcule la progression de la gamme pour une intervention **ou** une occurrence. 
 }
 ```
 
-| Champ              | Description                                                                          |
-| ------------------ | ------------------------------------------------------------------------------------ |
-| `total`            | Nombre total d'étapes                                                                |
-| `validated`        | Étapes validées                                                                      |
-| `skipped`          | Étapes ignorées                                                                      |
-| `pending`          | Toutes les étapes en attente (optionnelles + obligatoires)                           |
-| `blocking_pending` | Étapes en attente **non optionnelles** — c'est ce compteur qui bloque la clôture     |
-| `is_complete`      | `true` si `blocking_pending == 0` et `total > 0`                                     |
+| Champ              | Description                                                                      |
+| ------------------ | -------------------------------------------------------------------------------- |
+| `total`            | Nombre total d'étapes                                                            |
+| `validated`        | Étapes validées                                                                  |
+| `skipped`          | Étapes ignorées                                                                  |
+| `pending`          | Toutes les étapes en attente (optionnelles + obligatoires)                       |
+| `blocking_pending` | Étapes en attente **non optionnelles** — c'est ce compteur qui bloque la clôture |
+| `is_complete`      | `true` si `blocking_pending == 0` et `total > 0`                                 |
 
 ### Erreurs
 
-| Code | Cas                                                   |
-| ---- | ----------------------------------------------------- |
-| 400  | Ni `intervention_id` ni `occurrence_id` fourni        |
+| Code | Cas                                            |
+| ---- | ---------------------------------------------- |
+| 400  | Ni `intervention_id` ni `occurrence_id` fourni |
 
 > **Clôture** : si l'intervention a un plan de gamme (`plan_id` non null), le passage en `ferme` est bloqué quand `blocking_pending > 0` (retourne `409` avec `"Des étapes de gamme sont en attente de validation"`). Les étapes optionnelles (`step_optional = true`) peuvent être ignorées sans impact sur `is_complete`.
 
@@ -164,26 +164,29 @@ Met à jour le statut d'une étape de gamme (`validated` ou `skipped`).
 }
 ```
 
-| Champ          | Type   | Requis  | Condition |
-|---|---|---|---|
-| `status` | string | **oui** | `"validated"` ou `"skipped"` |
-| `validated_by` | uuid | **oui** | Technicien validant l'étape |
-| `action_id` | uuid | **si validated** | **OBLIGATOIRE si status = "validated"**. Doit appartenir à la même intervention |
-| `skip_reason` | string | **si skipped** | **OBLIGATOIRE si status = "skipped"**. Non vide |
+| Champ          | Type   | Requis           | Condition                                                                       |
+| -------------- | ------ | ---------------- | ------------------------------------------------------------------------------- |
+| `status`       | string | **oui**          | `"validated"` ou `"skipped"`                                                    |
+| `validated_by` | uuid   | **oui**          | Technicien validant l'étape                                                     |
+| `action_id`    | uuid   | **si validated** | **OBLIGATOIRE si status = "validated"**. Doit appartenir à la même intervention |
+| `skip_reason`  | string | **si skipped**   | **OBLIGATOIRE si status = "skipped"**. Non vide                                 |
 
 ### Règles métier
 
 **Validée** (`status = "validated"`):
+
 - `action_id` est **OBLIGATOIRE** — l'étape valide le travail réalisé par cette action
 - L'action doit exister et appartenir à la même intervention
 - `validated_at` est auto-rempli avec `NOW()`
 
 **Ignorée** (`status = "skipped"`):
+
 - `action_id` doit être **NULL** (pas d'action)
 - `skip_reason` est **OBLIGATOIRE** et non-vide
 - Raison typique : "Pièce non disponible", "Maintenance non nécessaire"
 
 **Cas invalides (erreur 400/422)**:
+
 - `status = "validated"` sans `action_id` → **validation échoue**
 - `status = "skipped"` avec `action_id` fourni → **validation échoue**
 - `status = "skipped"` sans `skip_reason` → **validation échoue**
@@ -194,12 +197,12 @@ Validation mise à jour avec `validated_at` renseigné si `status = "validated"`
 
 ### Erreurs
 
-| Code | Cas |
-|------|-----|
-| 400 | Étape déjà traitée (`validated` ou `skipped`) |
-| 400 | `status = "validated"` sans `action_id` — action OBLIGATOIRE |
-| 400 | `status = "skipped"` avec `action_id` fourni — doit être null |
-| 400 | `status = "skipped"` sans `skip_reason` — motif OBLIGATOIRE |
-| 400 | `action_id` n'appartient pas à la même intervention |
-| 404 | Validation ou action introuvable |
-| 422 | `status` invalide (ni `validated` ni `skipped`) |
+| Code | Cas                                                           |
+| ---- | ------------------------------------------------------------- |
+| 400  | Étape déjà traitée (`validated` ou `skipped`)                 |
+| 400  | `status = "validated"` sans `action_id` — action OBLIGATOIRE  |
+| 400  | `status = "skipped"` avec `action_id` fourni — doit être null |
+| 400  | `status = "skipped"` sans `skip_reason` — motif OBLIGATOIRE   |
+| 400  | `action_id` n'appartient pas à la même intervention           |
+| 404  | Validation ou action introuvable                              |
+| 422  | `status` invalide (ni `validated` ni `skipped`)               |

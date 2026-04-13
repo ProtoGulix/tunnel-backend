@@ -76,7 +76,8 @@ class GammeStepValidationRepository:
         except HTTPException:
             raise
         except Exception as e:
-            raise_db_error(e, "récupération des validations de gamme par occurrence")
+            raise_db_error(
+                e, "récupération des validations de gamme par occurrence")
         finally:
             release_connection(conn)
 
@@ -154,7 +155,8 @@ class GammeStepValidationRepository:
         except HTTPException:
             raise
         except Exception as e:
-            raise_db_error(e, "calcul de la progression de gamme par occurrence")
+            raise_db_error(
+                e, "calcul de la progression de gamme par occurrence")
         finally:
             release_connection(conn)
 
@@ -187,7 +189,8 @@ class GammeStepValidationRepository:
             return count
         except Exception as e:
             conn.rollback()
-            raise_db_error(e, "rattachement des validations de gamme à l'intervention")
+            raise_db_error(
+                e, "rattachement des validations de gamme à l'intervention")
         finally:
             release_connection(conn)
 
@@ -225,7 +228,8 @@ class GammeStepValidationRepository:
                 )
                 action_row = cur.fetchone()
                 if not action_row:
-                    raise ValidationError(f"Action {data.action_id} introuvable")
+                    raise ValidationError(
+                        f"Action {data.action_id} introuvable")
                 if str(action_row[0]) != str(intervention_id):
                     raise ValidationError(
                         "L'action fournie n'appartient pas à la même intervention"

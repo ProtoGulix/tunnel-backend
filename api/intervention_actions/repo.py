@@ -387,7 +387,16 @@ class InterventionActionRepository:
             release_connection(conn)
 
     def add(self, action_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Ajoute une nouvelle action à une intervention"""
+        """Ajoute une nouvelle action à une intervention
+
+        Si gamme_step_validation_id est fourni, valide aussi le step après création de l'action.
+        Mode validation : lie l'action au step (action_id = created action)
+        Mode skip : skippe le step avec skip_reason fourni (pas d'action_id)
+        """
+        # Extraction des champs gamme avant la validation
+        gamme_step_validation_id = action_data.pop('gamme_step_validation_id', None)
+        gamme_step_skip_reason = action_data.pop('gamme_step_skip_reason', None)
+
         # Validation et préparation des données — lève ValidationError (400) si invalide
         validated_data = InterventionActionValidator.validate_and_prepare(
             action_data)
@@ -430,6 +439,37 @@ class InterventionActionRepository:
                 )
             )
             conn.commit()
+
+            # Valider le gamme step si fourni
+            if gamme_step_validation_id:
+                # Import lazy pour éviter la circularité
+                from api.gamme_step_validations.repo import GammeStepValidationRepository
+                from api.gamme_step_validations.schemas import GammeStepValidationPatch
+
+                gsv_repo = GammeStepValidationRepository()
+
+                if gamme_step_skip_reason and gamme_step_skip_reason.strip():
+                    # Mode skip
+                    patch_data = GammeStepValidationPatch(
+                        status="skipped",
+                        skip_reason=gamme_step_skip_reason,
+                        validated_by=validated_data['tech'],
+                        action_id=None
+                    )
+                else:
+                    # Mode validation : lier à l'action créée
+                    patch_data = GammeStepValidationPatch(
+                        status="validated",
+                        action_id=_uuid.UUID(action_id),
+                        validated_by=validated_data['tech'],
+                        skip_reason=None
+                    )
+
+                gsv_repo.patch_validation(
+                    str(gamme_step_validation_id),
+                    patch_data
+                )
+
             return self.get_by_id(action_id)
         except HTTPException:
             conn.rollback()

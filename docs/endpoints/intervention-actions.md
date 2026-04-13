@@ -145,6 +145,18 @@ Deux modes exclusifs pour saisir le temps — la logique est gérée par trigger
 
 Fournir les deux ou aucun des deux déclenche une erreur `400` avec le message du trigger.
 
+### Embarquement de la validation de gamme step (optionnel)
+
+Vous pouvez **valider ou skipper automatiquement un step de gamme** lors de la création de l'action, en un seul appel :
+
+- **Cas 1 – Valider un step** : fournir `gamme_step_validation_id` **sans** `gamme_step_skip_reason`
+  - L'action créée liera automatiquement ce step : `gamme_step_validation.action_id = created_action.id`
+  - Le step sera marqué `status = "validated"`, `validated_by = tech`
+
+- **Cas 2 – Skipper un step** : fournir `gamme_step_validation_id` **avec** `gamme_step_skip_reason`
+  - Le step sera marqué `status = "skipped"`, `skip_reason = gamme_step_skip_reason`, pas d'action_id
+  - Typique : "Pièce non disponible", "Maintenance non nécessaire"
+
 ### Entrée — mode bornes
 
 ```json
@@ -175,6 +187,39 @@ Fournir les deux ou aucun des deux déclenche une erreur `400` avec le message d
 }
 ```
 
+### Entrée — mode direct avec validation de gamme step
+
+L'exemple ci-dessous crée une action **ET valide un step de gamme** en un seul appel :
+
+```json
+{
+  "intervention_id": "5ecf60d5-8471-4739-8ba8-0fdad7b51781",
+  "description": "Remplacement du roulement SKF 6205",
+  "time_spent": 1.5,
+  "action_subcategory": 30,
+  "tech": "a1b2c3d4-...",
+  "complexity_score": 7,
+  "complexity_factor": "PCE",
+  "gamme_step_validation_id": "550e8400-e29b-41d4-a716-446655440000",
+  "created_at": "2026-01-13T14:30:00"
+}
+```
+
+Ou pour **skipper un step** (quand l'étape ne s'applique pas) :
+
+```json
+{
+  "intervention_id": "5ecf60d5-8471-4739-8ba8-0fdad7b51781",
+  "description": "Diagnostic - pièce de rechange non disponible",
+  "time_spent": 0.5,
+  "action_subcategory": 30,
+  "tech": "a1b2c3d4-...",
+  "complexity_score": 3,
+  "gamme_step_validation_id": "550e8400-e29b-41d4-a716-446655440000",
+  "gamme_step_skip_reason": "Pièce de rechange non disponible"
+}
+```
+
 | Champ                | Type     | Requis       | Description                                                                                                             |
 | -------------------- | -------- | ------------ | ----------------------------------------------------------------------------------------------------------------------- |
 | `intervention_id`    | uuid     | oui          | Intervention parente                                                                                                    |
@@ -187,6 +232,8 @@ Fournir les deux ou aucun des deux déclenche une erreur `400` avec le message d
 | `complexity_score`   | int      | oui          | Score 1-10                                                                                                              |
 | `complexity_factor`  | string   | conditionnel | **Requis si score > 5**. Code existant dans [complexity_factors](complexity-factors.md)                                 |
 | `created_at`         | datetime | non          | Défaut: `now()`. Permet le backdating                                                                                   |
+| `gamme_step_validation_id` | uuid | non | ID du step de gamme à valider/skipper. Optionnel — si non fourni, aucune validation de gamme n'est effectuée |
+| `gamme_step_skip_reason` | string | conditionnel | **Requis si** `gamme_step_validation_id` **est fourni ET on veut skipper**. Raison du skip (non-vide). Sinon ignoré |
 
 ### Réponse `201`
 
@@ -200,6 +247,11 @@ Action complète avec sous-catégorie enrichie.
 | 400  | Ni `action_start`/`action_end` ni `time_spent` fournis |
 | 400  | `action_end` ≤ `action_start`                          |
 | 400  | Bornes ou `time_spent` non multiples de 0.25h          |
+| 400  | `gamme_step_validation_id` fourni mais step inexistant |
+| 400  | `gamme_step_validation_id` n'appartient pas à la même intervention |
+| 400  | `gamme_step_skip_reason` vide/whitespace quand gamme_step_validation_id fourni et on veut skipper |
+| 400  | Step déjà validé/skippé (`status != 'pending'`) |
+| 422  | Validation de gamme échoue (ex: action_id n'appartient pas à l'intervention) |
 
 ---
 
