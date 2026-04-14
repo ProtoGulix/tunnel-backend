@@ -83,10 +83,9 @@ class EquipementRepository:
                     es.couleur as statut_couleur,
                     COUNT(CASE WHEN i.status_actual != {csq} THEN i.id END) as open_interventions_count,
                     COUNT(CASE WHEN i.status_actual != {csq} AND i.priority = 'urgent' THEN i.id END) as urgent_count,
-                    COUNT(CASE WHEN ir.statut = 'nouvelle' THEN ir.id END) as new_requests_count
+                    (SELECT COUNT(*) FROM intervention_request WHERE machine_id = m.id AND statut = 'nouvelle') as new_requests_count
                 FROM machine m
                 LEFT JOIN intervention i ON i.machine_id = m.id
-                LEFT JOIN intervention_request ir ON ir.machine_id = m.id
                 LEFT JOIN equipement_class ec ON ec.id = m.equipement_class_id
                 LEFT JOIN equipement_statuts es ON es.id = m.statut_id
                 LEFT JOIN machine pm ON pm.id = m.equipement_mere
@@ -231,10 +230,9 @@ class EquipementRepository:
                     es.couleur as statut_couleur,
                     COUNT(CASE WHEN i.status_actual != {csq} THEN i.id END) as open_interventions_count,
                     COUNT(CASE WHEN i.status_actual != {csq} AND i.priority = 'urgent' THEN i.id END) as urgent_count,
-                    COUNT(CASE WHEN ir.statut = 'nouvelle' THEN ir.id END) as new_requests_count
+                    (SELECT COUNT(*) FROM intervention_request WHERE machine_id = m.id AND statut = 'nouvelle') as new_requests_count
                 FROM machine m
                 LEFT JOIN intervention i ON i.machine_id = m.id
-                LEFT JOIN intervention_request ir ON ir.machine_id = m.id
                 LEFT JOIN equipement_class ec ON ec.id = m.equipement_class_id
                 LEFT JOIN equipement_statuts es ON es.id = m.statut_id
                 LEFT JOIN machine pm ON pm.id = m.equipement_mere
@@ -507,10 +505,9 @@ class EquipementRepository:
                     ec.label as equipement_class_label,
                     COUNT(CASE WHEN i.status_actual != {csq} THEN i.id END) as open_interventions_count,
                     COUNT(CASE WHEN i.status_actual != {csq} AND i.priority = 'urgent' THEN i.id END) as urgent_count,
-                    COUNT(CASE WHEN ir.statut = 'nouvelle' THEN ir.id END) as new_requests_count
+                    (SELECT COUNT(*) FROM intervention_request WHERE machine_id = m.id AND statut = 'nouvelle') as new_requests_count
                 FROM machine m
                 LEFT JOIN intervention i ON i.machine_id = m.id
-                LEFT JOIN intervention_request ir ON ir.machine_id = m.id
                 LEFT JOIN equipement_class ec ON ec.id = m.equipement_class_id
                 WHERE m.equipement_mere = %s
                 GROUP BY m.id, ec.id, ec.code, ec.label
@@ -656,10 +653,9 @@ class EquipementRepository:
                 SELECT
                     COUNT(CASE WHEN i.status_actual != {csq} THEN i.id END) as open_count,
                     COUNT(CASE WHEN i.status_actual != {csq} AND i.priority = 'urgent' THEN i.id END) as urgent_count,
-                    COUNT(CASE WHEN ir.statut = 'nouvelle' THEN ir.id END) as new_requests_count
+                    (SELECT COUNT(*) FROM intervention_request WHERE machine_id = m.id AND statut = 'nouvelle') as new_requests_count
                 FROM machine m
                 LEFT JOIN intervention i ON i.machine_id = m.id
-                LEFT JOIN intervention_request ir ON ir.machine_id = m.id
                 WHERE m.id = %s
                 GROUP BY m.id
             """
