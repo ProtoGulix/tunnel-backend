@@ -81,7 +81,7 @@ Tri par défaut : urgents DESC, ouverts DESC, nom ASC.
 
 ## `GET /equipements/{id}`
 
-Détail complet d'un équipement avec tous les champs de la base, `children_count` et les interventions directement liées, paginées.
+Détail complet d'un équipement avec tous les champs de la base, `children_count`, interventions directement liées (paginées), et 3 blocs contextuels : plans de maintenance, occurrences préventives, et demandes d'intervention ouvertes.
 
 ### Query params
 
@@ -145,11 +145,95 @@ Détail complet d'un équipement avec tous les champs de la base, `children_coun
         "reported_date": "2026-02-10"
       }
     ]
-  }
+  },
+  "preventive_plans": [
+    {
+      "id": "uuid-plan-1",
+      "code": "PRE-SCIE-001",
+      "label": "Maintenance mensuelle Scie",
+      "trigger_type": "periodicity",
+      "periodicity_days": 30,
+      "hours_threshold": null,
+      "active": true,
+      "next_occurrence": "2026-05-15"
+    }
+  ],
+  "preventive_occurrences_summary": {
+    "pending_count": 1,
+    "generated_count": 3,
+    "skipped_count": 2,
+    "next_scheduled": "2026-05-15",
+    "last_skipped_reason": "Équipement en révision"
+  },
+  "open_requests": [
+    {
+      "id": "uuid-req-1",
+      "code": "DI-0451",
+      "description": "Remplacement courroie d'entraînement",
+      "statut": "nouvelle",
+      "statut_label": "Nouvelle demande",
+      "statut_color": "#EF4444",
+      "is_system": false,
+      "created_at": "2026-04-12"
+    }
+  ]
 }
 ```
 
+### Détail des nouveaux blocs
+
+#### `preventive_plans` (optionnel)
+
+Plans de maintenance préventive applicables à cet équipement (via sa classe d'équipement).
+
+| Champ               | Type           | Description                                                   |
+| ------------------- | -------------- | ------------------------------------------------------------- |
+| `id`                | UUID           | ID du plan                                                    |
+| `code`              | string         | Code du plan                                                  |
+| `label`             | string         | Libellé descriptif                                            |
+| `trigger_type`      | string         | Type de déclenchement : `"periodicity"` ou `"hours"`         |
+| `periodicity_days`  | int \| null    | Intervalle en jours (si trigger_type = periodicity)          |
+| `hours_threshold`   | int \| null    | Seuil d'heures (si trigger_type = hours)                    |
+| `active`            | bool           | Statut d'activation du plan                                   |
+| `next_occurrence`   | date \| null   | Date de la prochaine occurrence pending/générée, si existe   |
+
+Retourne `null` si aucune classe d'équipement assignée. Vide `[]` si la classe n'a pas de plans actifs.
+
+#### `preventive_occurrences_summary` (obligatoire)
+
+Résumé agrégé des occurrences préventives liées à cet équipement.
+
+| Champ                | Type          | Description                                       |
+| -------------------- | ------------- | ------------------------------------------------- |
+| `pending_count`      | int           | Nombre d'occurrences en attente (pending)        |
+| `generated_count`    | int           | Nombre d'occurrences générées                    |
+| `skipped_count`      | int           | Nombre d'occurrences skippées                    |
+| `next_scheduled`     | date \| null  | Date de la prochaine occurrence pending          |
+| `last_skipped_reason` | string \| null | Raison du dernier skip                           |
+
+Retourne toujours un objet, avec compteurs à zéro et dates `null` si aucune occurrence.
+
+#### `open_requests` (optionnel)
+
+Demandes d'intervention ouvertes liées à cet équipement (tous les statuts sauf `"rejetee"` et `"cloturee"`).
+
+| Champ        | Type          | Description                              |
+| ------------ | ------------- | ---------------------------------------- |
+| `id`         | UUID          | ID de la demande                         |
+| `code`       | string \| null | Code de la demande                       |
+| `description` | string \| null | Description de la demande               |
+| `statut`     | string        | Code du statut (ex. `"nouvelle"`)        |
+| `statut_label` | string \| null | Libellé du statut                       |
+| `statut_color` | string \| null | Couleur associée au statut (hex)        |
+| `is_system`  | bool          | Indique si c'est une demande système    |
+| `created_at` | date \| null  | Date de création                        |
+
+Retourne `null` si aucune demande ouverte. Triées par `created_at DESC`.
+
+---
+
 > Les interventions retournées sont uniquement celles **directement liées** à cet équipement (`machine_id`), triées par `reported_date DESC`.
+> En cas de problème lors de la récupération des blocs contextuels (plans, occurrences, demandes), l'endpoint retourne `200` avec les blocs retournant `null` ou des listes vides, pour garantir la résilience.
 
 ---
 
