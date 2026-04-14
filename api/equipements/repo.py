@@ -1,11 +1,14 @@
 from fastapi import HTTPException
 """Requêtes pour le domaine équipements"""
+import logging
 from typing import Dict, Any, List
 from uuid import uuid4
 
 from api.db import get_connection, release_connection
 from api.errors.exceptions import DatabaseError, raise_db_error, NotFoundError
 from api.constants import PRIORITY_TYPES, CLOSED_STATUS_CODE, INTERVENTION_TYPES_MAP
+
+logger = logging.getLogger(__name__)
 
 
 class EquipementRepository:
@@ -83,10 +86,9 @@ class EquipementRepository:
                     es.couleur as statut_couleur,
                     COUNT(CASE WHEN i.status_actual != {csq} THEN i.id END) as open_interventions_count,
                     COUNT(CASE WHEN i.status_actual != {csq} AND i.priority = 'urgent' THEN i.id END) as urgent_count,
-                    COUNT(CASE WHEN ir.statut = 'nouvelle' THEN ir.id END) as new_requests_count
+                    (SELECT COUNT(*) FROM intervention_request WHERE machine_id = m.id AND statut = 'nouvelle') as new_requests_count
                 FROM machine m
                 LEFT JOIN intervention i ON i.machine_id = m.id
-                LEFT JOIN intervention_request ir ON ir.machine_id = m.id
                 LEFT JOIN equipement_class ec ON ec.id = m.equipement_class_id
                 LEFT JOIN equipement_statuts es ON es.id = m.statut_id
                 LEFT JOIN machine pm ON pm.id = m.equipement_mere
@@ -231,10 +233,9 @@ class EquipementRepository:
                     es.couleur as statut_couleur,
                     COUNT(CASE WHEN i.status_actual != {csq} THEN i.id END) as open_interventions_count,
                     COUNT(CASE WHEN i.status_actual != {csq} AND i.priority = 'urgent' THEN i.id END) as urgent_count,
-                    COUNT(CASE WHEN ir.statut = 'nouvelle' THEN ir.id END) as new_requests_count
+                    (SELECT COUNT(*) FROM intervention_request WHERE machine_id = m.id AND statut = 'nouvelle') as new_requests_count
                 FROM machine m
                 LEFT JOIN intervention i ON i.machine_id = m.id
-                LEFT JOIN intervention_request ir ON ir.machine_id = m.id
                 LEFT JOIN equipement_class ec ON ec.id = m.equipement_class_id
                 LEFT JOIN equipement_statuts es ON es.id = m.statut_id
                 LEFT JOIN machine pm ON pm.id = m.equipement_mere
@@ -356,6 +357,22 @@ class EquipementRepository:
                 'total_pages': total_pages,
                 'items': interventions_items
             }
+
+            # Enrichir avec les blocs contextuels (plans, occurrences, demandes)
+            # Extraire equipement_class_id depuis l'objet déjà construit
+            equipement_class = equipement.get('equipement_class')
+            equipement_class_id = equipement_class.get('id') if equipement_class else None
+            if equipement_class_id:
+                equipement_class_id = str(equipement_class_id)
+
+            plans = self._fetch_preventive_plans(cur, equipement_class_id, equipement_id)
+            equipement['preventive_plans'] = plans if plans else None
+
+            occurrences_summary = self._fetch_preventive_occurrences_summary(cur, equipement_id)
+            equipement['preventive_occurrences_summary'] = occurrences_summary
+
+            open_requests = self._fetch_open_requests(cur, equipement_id)
+            equipement['open_requests'] = open_requests if open_requests else None
 
             return equipement
         except NotFoundError:
@@ -507,10 +524,9 @@ class EquipementRepository:
                     ec.label as equipement_class_label,
                     COUNT(CASE WHEN i.status_actual != {csq} THEN i.id END) as open_interventions_count,
                     COUNT(CASE WHEN i.status_actual != {csq} AND i.priority = 'urgent' THEN i.id END) as urgent_count,
-                    COUNT(CASE WHEN ir.statut = 'nouvelle' THEN ir.id END) as new_requests_count
+                    (SELECT COUNT(*) FROM intervention_request WHERE machine_id = m.id AND statut = 'nouvelle') as new_requests_count
                 FROM machine m
                 LEFT JOIN intervention i ON i.machine_id = m.id
-                LEFT JOIN intervention_request ir ON ir.machine_id = m.id
                 LEFT JOIN equipement_class ec ON ec.id = m.equipement_class_id
                 WHERE m.equipement_mere = %s
                 GROUP BY m.id, ec.id, ec.code, ec.label
@@ -656,10 +672,9 @@ class EquipementRepository:
                 SELECT
                     COUNT(CASE WHEN i.status_actual != {csq} THEN i.id END) as open_count,
                     COUNT(CASE WHEN i.status_actual != {csq} AND i.priority = 'urgent' THEN i.id END) as urgent_count,
-                    COUNT(CASE WHEN ir.statut = 'nouvelle' THEN ir.id END) as new_requests_count
+                    (SELECT COUNT(*) FROM intervention_request WHERE machine_id = m.id AND statut = 'nouvelle') as new_requests_count
                 FROM machine m
                 LEFT JOIN intervention i ON i.machine_id = m.id
-                LEFT JOIN intervention_request ir ON ir.machine_id = m.id
                 WHERE m.id = %s
                 GROUP BY m.id
             """
@@ -691,6 +706,95 @@ class EquipementRepository:
             raise_db_error(e, "opération")
         finally:
             release_connection(conn)
+
+    def _fetch_preventive_plans(self, cur, equipement_class_id: str | None, machine_id: str) -> List[Dict[str, Any]]:
+        """Récupère les plans de maintenance préventive applicables"""
+        if not equipement_class_id:
+            return []
+
+        try:
+            query = """
+                SELECT
+                    pp.id, pp.code, pp.label,
+                    pp.trigger_type, pp.periodicity_days, pp.hours_threshold,
+                    pp.active,
+                    MIN(po.scheduled_date) AS next_occurrence
+                FROM preventive_plan pp
+                LEFT JOIN preventive_occurrence po ON po.plan_id = pp.id
+                    AND po.machine_id = %s
+                    AND po.status IN ('pending', 'generated')
+                WHERE pp.equipement_class_id = %s AND pp.active = true
+                GROUP BY pp.id, pp.code, pp.label, pp.trigger_type, pp.periodicity_days, pp.hours_threshold, pp.active
+                ORDER BY pp.code ASC
+            """
+            cur.execute(query, (machine_id, equipement_class_id))
+            rows = cur.fetchall()
+            cols = [desc[0] for desc in cur.description]
+            return [dict(zip(cols, row)) for row in rows]
+        except Exception as e:
+            logger.error(f"Erreur récupération plans préventifs pour équipement: {e}")
+            return []
+
+    def _fetch_preventive_occurrences_summary(self, cur, equipement_id: str) -> Dict[str, Any]:
+        """Récupère le résumé des occurrences préventives"""
+        try:
+            query = """
+                SELECT
+                    COUNT(CASE WHEN status = 'pending' THEN 1 END) AS pending_count,
+                    COUNT(CASE WHEN status = 'generated' THEN 1 END) AS generated_count,
+                    COUNT(CASE WHEN status = 'skipped' THEN 1 END) AS skipped_count,
+                    MIN(CASE WHEN status = 'pending' THEN scheduled_date END) AS next_scheduled,
+                    (
+                        SELECT skip_reason FROM preventive_occurrence
+                        WHERE machine_id = %s AND status = 'skipped'
+                        ORDER BY created_at DESC LIMIT 1
+                    ) AS last_skipped_reason
+                FROM preventive_occurrence
+                WHERE machine_id = %s
+            """
+            cur.execute(query, (equipement_id, equipement_id))
+            row = cur.fetchone()
+            if not row:
+                return {
+                    'pending_count': 0,
+                    'generated_count': 0,
+                    'skipped_count': 0,
+                    'next_scheduled': None,
+                    'last_skipped_reason': None
+                }
+            cols = [desc[0] for desc in cur.description]
+            return dict(zip(cols, row))
+        except Exception as e:
+            logger.error(f"Erreur récupération résumé occurrences: {e}")
+            return {
+                'pending_count': 0,
+                'generated_count': 0,
+                'skipped_count': 0,
+                'next_scheduled': None,
+                'last_skipped_reason': None
+            }
+
+    def _fetch_open_requests(self, cur, equipement_id: str) -> List[Dict[str, Any]]:
+        """Récupère les demandes d'intervention ouvertes"""
+        try:
+            query = """
+                SELECT
+                    ir.id, ir.code, ir.description, ir.statut,
+                    rs.label AS statut_label, rs.color AS statut_color,
+                    ir.is_system, ir.created_at
+                FROM intervention_request ir
+                LEFT JOIN request_status_ref rs ON rs.code = ir.statut
+                WHERE ir.machine_id = %s
+                  AND ir.statut NOT IN ('rejetee', 'cloturee')
+                ORDER BY ir.created_at DESC
+            """
+            cur.execute(query, (equipement_id,))
+            rows = cur.fetchall()
+            cols = [desc[0] for desc in cur.description]
+            return [dict(zip(cols, row)) for row in rows]
+        except Exception as e:
+            logger.error(f"Erreur récupération demandes ouvertes: {e}")
+            return []
 
     def _calculate_health(self, open_count: int, urgent_count: int, new_requests_count: int = 0) -> Dict[str, Any]:
         """Calcule le health d'un équipement selon interventions et demandes"""

@@ -17,6 +17,10 @@ Généré suite à l'audit du 2026-04-12. Priorisé par impact.
   Toute la spec API est accessible sans auth en prod.
   _Fix : conditionner ces routes sur `settings.API_ENV != "production"`._
 
+- [x] **[BUG] Changement de statut DI ne synchronise pas `status_actual` ni l'occurrence préventive**
+  Trigger `trg_sync_status_log_to_intervention` ajouté via migration `20260414_h3c4d5e6f7a8`.
+  _Fix : trigger AFTER INSERT ON intervention_status_log → update intervention.status_actual + preventive_occurrence.status + clôture DI._
+
 - [ ] **[QUALITÉ] Zéro tests dans le projet**
   Aucun fichier `test_*.py`. Les validators métier critiques (time_spent, status_from, transitions DA) ne sont pas couverts.
   _Fix : créer la structure `tests/` et commencer par `test_validators/`._

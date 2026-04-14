@@ -2,6 +2,38 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [2.18.0] - 15 avril 2026
+
+### Nouveautés
+
+- **Enrichissement de `GET /equipements/{id}` avec 3 blocs contextuels** : la fiche équipement expose désormais des informations de maintenance et de demandes directement liées.
+  - **`preventive_plans`** : liste des plans de maintenance préventive applicables à l'équipement (via sa classe), avec la date de la prochaine occurrence pending/générée
+  - **`preventive_occurrences_summary`** : résumé agrégé (compteurs par statut, prochaine occurrence, dernier motif de skip)
+  - **`open_requests`** : liste des demandes d'intervention ouvertes (statuts actifs), triées par création descendante
+  - Les 3 blocs sont calculés uniquement dans `get_by_id()` (pas dans `get_all()` pour performances)
+  - Résilience : en cas d'erreur lors de la récupération d'un bloc, le endpoint retourne 200 avec le bloc vide/null plutôt que 500
+
+- **Documentation API enrichie** (`docs/endpoints/equipements.md`) :
+  - Détail des schémas pour les 3 blocs contextuels
+  - Exemples JSON complets
+  - Notes sur les cas limites (pas de classe → plans null, pas d'occurrence → compteurs zéro)
+
+### Scripts de diagnostic
+
+- **`diagnostic_gamme_steps.py`** : script complet de diagnostic pour investiguer les problèmes de gamme_steps non accessibles
+  - Vérifie : existence de l'intervention, des études de gamme, des tables requis, de la structure DB
+  - Teste les requêtes SQL directement
+  - Utile pour déboguer les problèmes de migration Alembic
+
+- **Documentation de diagnostic** :
+  - `QUICK_FIX_GAMME_STEPS.md` : guide rapide (2 pages) avec solutions probables
+  - `DIAGNOSIS_GAMME_STEPS.md` : documentation complète avec tous les cas possibles
+  - `test_gamme_steps_endpoint.sh` : test curl pour l'API
+
+### Migrations
+
+- Aucune (enrichissement de `get_by_id()` uniquement, pas de changement DB)
+
 ## [2.17.0] - 14 avril 2026
 
 ### Nouveautés
