@@ -209,7 +209,13 @@ class InterventionStatusLogRepository:
         return self.get_all(intervention_id=intervention_id, limit=1000, offset=0)
 
     def add(self, log_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Crée un nouveau log de changement de statut"""
+        """Crée un nouveau log de changement de statut.
+
+        Le trigger trg_sync_status_log_to_intervention se déclenche après l'INSERT et :
+        - met à jour intervention.status_actual avec status_to
+        - si status_to = 'ferme' : passe preventive_occurrence.status à 'completed'
+          et clôture automatiquement la demande liée (intervention_request.statut → 'cloturee')
+        """
         # Validation via validators
         validated_data = InterventionStatusLogValidator.validate_and_prepare(log_data)
 
