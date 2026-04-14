@@ -2,6 +2,37 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [2.17.0] - 14 avril 2026
+
+### Nouveautés
+
+- **Embarquement de validation de gamme steps dans `POST /intervention-actions`** : le endpoint permet maintenant de créer une action ET valider/skipper plusieurs steps de gamme en une seule requête atomique.
+  - Nouveau champ `gamme_step_validations` : tableau d'objets `GammeStepValidationRequest`
+  - Chaque objet : `step_validation_id`, `status` ("validated"/"skipped"), `skip_reason` (si skipped)
+  - L'action créée lie automatiquement les steps validés (`action_id = new_action.id`)
+  - Le technicien créateur est assigné comme `validated_by` pour tous les steps
+  - Mode validation atomique : une seule requête POST crée action + valide/skippe N steps
+
+- **Gamme steps propagés dans les réponses `GET /intervention-actions`** : chaque action retourne les steps de gamme qu'elle valide/skippe.
+  - Nouveau champ `gamme_steps` dans `InterventionActionOut` (tableau de `GammeStepValidationDetail`)
+  - Chaque step expose : `id`, `step_id`, `step_label`, `step_sort_order`, `step_optional`, `status`, `skip_reason`, `validated_at`, `validated_by`
+  - Endpoints enrichis : `GET /intervention-actions`, `GET /intervention-actions/{id}`, `GET /intervention-actions?tech_id=...`
+  - Optimisation batch : une requête SQL pour tous les steps de toutes les actions (pas de N+1)
+
+- **Documentation mise à jour** :
+  - `docs/endpoints/intervention-actions.md` : documenter l'embarquement multiple de validations de step
+  - `docs/endpoints/interventions.md` : documenter la propagation des gamme_steps dans les actions
+
+### Règles métier renforçées
+
+- **Validation de gamme step** : `action_id` est **OBLIGATOIRE** pour `status="validated"` (principe fondamental : l'action est la base de Tunnel)
+- **Skip de gamme step** : `action_id` doit être **NULL** et `skip_reason` **OBLIGATOIRE** pour `status="skipped"`
+- Validations appliquées au niveau Pydantic : rejet des requêtes invalides avec HTTP 422
+
+### Migrations
+
+- Nul (aucune migration DB requise - structure gamme_step_validation inchangée)
+
 ## [2.16.1] - 13 avril 2026
 
 ### Corrections

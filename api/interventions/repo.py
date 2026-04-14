@@ -345,6 +345,17 @@ class InterventionRepository:
             intervention['status_logs'] = status_log_repo.get_by_intervention(
                 intervention_id)
 
+            # Calculer la progression de gamme si l'intervention a un plan préventif
+            if intervention.get('plan_id'):
+                # Import lazy pour éviter la circularité avec gamme_step_validations.repo
+                from api.gamme_step_validations.repo import GammeStepValidationRepository
+                gsv_repo = GammeStepValidationRepository()
+                intervention['gamme_progress'] = gsv_repo.get_progress(intervention_id)
+                intervention['gamme_steps'] = gsv_repo.get_by_intervention(intervention_id)
+            else:
+                intervention['gamme_progress'] = None
+                intervention['gamme_steps'] = []
+
             return intervention
         except NotFoundError:
             raise
@@ -378,8 +389,8 @@ class InterventionRepository:
                 INSERT INTO intervention
                 (id, title, machine_id, type_inter, priority,
                  reported_by, tech_initials, status_actual,
-                 printed_fiche, reported_date)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                 printed_fiche, reported_date, plan_id)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     intervention_id,
@@ -391,7 +402,8 @@ class InterventionRepository:
                     data.get('tech_initials'),
                     data.get('status_actual', 'ouvert'),
                     data.get('printed_fiche', False),
-                    data.get('reported_date')
+                    data.get('reported_date'),
+                    data.get('plan_id')
                 )
             )
 

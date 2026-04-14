@@ -4,7 +4,9 @@ Gestion des interventions de maintenance. Chaque intervention est liée à un é
 
 Une intervention peut être créée manuellement via `POST /interventions`, ou **automatiquement depuis une demande d'intervention** lors de la transition vers `acceptee`. Dans ce cas, le champ `request` contient les informations de la demande d'origine.
 
-> Voir aussi : [Actions](intervention-actions.md) | [Status Logs](intervention-status-log.md) | [Purchase Requests](purchase-requests.md) | [Intervention Requests](intervention-requests.md)
+Une intervention peut aussi être liée à un **plan de maintenance préventive** (`plan_id` non null). Dans ce cas, le champ `gamme_progress` est hydraté sur `GET /interventions/{id}`.
+
+> Voir aussi : [Actions](intervention-actions.md) | [Status Logs](intervention-status-log.md) | [Purchase Requests](purchase-requests.md) | [Intervention Requests](intervention-requests.md) | [Preventive Plans](preventive-plans.md) | [Gamme Step Validations](gamme-step-validations.md)
 
 ---
 
@@ -197,6 +199,8 @@ Détail complet d'une intervention. **La structure est différente de la liste**
     "avg_complexity": 6.2,
     "purchase_count": 1
   },
+  "plan_id": null,
+  "gamme_progress": null,
   "actions": [
     {
       "id": "uuid",
@@ -245,6 +249,19 @@ Détail complet d'une intervention. **La structure est différente de la liste**
           "updated_at": "2026-01-14T08:00:00"
         }
       ],
+      "gamme_steps": [
+        {
+          "id": "550e8400-e29b-41d4-a716-446655440000",
+          "step_id": "660e8400-e29b-41d4-a716-446655440001",
+          "step_label": "Diagnostic initial",
+          "step_sort_order": 1,
+          "step_optional": false,
+          "status": "validated",
+          "skip_reason": null,
+          "validated_at": "2026-01-13T14:35:00",
+          "validated_by": "a1b2c3d4-..."
+        }
+      ],
       "created_at": "2026-01-13T14:30:00",
       "updated_at": "2026-01-13T15:00:00"
     }
@@ -267,9 +284,28 @@ Détail complet d'une intervention. **La structure est différente de la liste**
 | ---------------------- | ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `equipements`          | Léger : `id`, `code`, `name`, `health`, `parent_id`, `equipement_class` | Complet : + `no_machine`, `affectation`, `is_mere`, `fabricant`, `numero_serie`, `date_mise_service`, `notes`, `children_count`, `interventions` (paginées) |
 | `request`              | Objet `InterventionRequestListItem` (`null` si création manuelle)       | Idem                                                                                                                                                        |
-| `actions`              | Toujours `[]`                                                           | Tableau de [InterventionActionOut](intervention-actions.md) complet avec `subcategory`, `tech`, `purchase_requests`                                         |
+| `actions`              | Toujours `[]`                                                           | Tableau de [InterventionActionOut](intervention-actions.md) complet avec `subcategory`, `tech`, `purchase_requests`, **`gamme_steps`**                      |
 | `status_logs`          | Toujours `[]`                                                           | Tableau de [InterventionStatusLogOut](intervention-status-log.md)                                                                                           |
+| `plan_id`              | Absent (non retourné en liste)                                          | UUID du plan préventif si l'intervention provient de la maintenance préventive, `null` sinon                                                                |
+| `gamme_progress`       | Absent (non retourné en liste)                                          | Objet [GammeProgressOut](gamme-step-validations.md) (`total`, `validated`, `skipped`, `pending`, `is_complete`). `null` si `plan_id` est null               |
 | `stats.purchase_count` | Calculé en SQL (agrégat)                                                | Calculé depuis les `purchase_requests` chargées dans les actions                                                                                            |
+
+### Actions avec gamme_steps
+
+Chaque action dans `actions` inclut un champ `gamme_steps` (tableau optionnel) : les **steps de gamme validés/skippés par cette action**.
+
+**Contexte** : Si l'intervention est liée à un plan préventif (`plan_id` non null), les actions qui valident ou skippe des étapes de gamme incluent ces informations.
+
+| Champ | Type | Description |
+|-------|------|-------------|
+| `gamme_steps[].id` | uuid | ID de la validation de step (gamme_step_validation.id) |
+| `gamme_steps[].step_label` | string | Libellé du step (ex: "Diagnostic initial") |
+| `gamme_steps[].status` | string | `"validated"` (action lie le step) ou `"skipped"` (étape pas applicable) |
+| `gamme_steps[].skip_reason` | string \| null | Motif du skip si applicable (`null` pour validated) |
+| `gamme_steps[].validated_at` | datetime | Date/heure de la validation/skip |
+| `gamme_steps[].validated_by` | uuid | Technicien qui a validé |
+
+Voir [Intervention Actions - GammeStepValidationDetail](intervention-actions.md#gammestepvalidationdetail) pour tous les champs.
 
 ---
 
@@ -325,6 +361,8 @@ Intervention complète avec equipement, `request` (objet demande si liée), stat
 Met à jour une intervention. Même body que POST, tous les champs sont optionnels.
 
 > **Clôture automatique de la demande liée** : si `status_actual` est mis à jour vers le code `ferme` et qu'une demande d'intervention est liée (`request` non null), cette demande passe automatiquement à `cloturee`.
+
+> **Gamme incomplète** : si l'intervention a un plan préventif (`plan_id` non null) et que des étapes de gamme sont encore en statut `pending`, un trigger DB bloque la clôture et retourne `409` avec `"Des étapes de gamme sont en attente de validation"`. Utiliser `PATCH /gamme-step-validations` pour traiter les étapes avant de clôturer.
 
 ### Réponse `200`
 

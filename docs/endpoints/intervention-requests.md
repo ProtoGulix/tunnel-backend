@@ -88,14 +88,15 @@ Liste paginée des demandes avec filtres.
 
 ### Query params
 
-| Param              | Type   | Défaut | Description                                                    |
-| ------------------ | ------ | ------ | -------------------------------------------------------------- |
-| `skip`             | int    | 0      | Offset                                                         |
-| `limit`            | int    | 50     | Max: 500                                                       |
-| `statut`           | string | —      | Filtrer par code statut (`nouvelle`, `acceptee`, etc.)         |
-| `exclude_statuses` | csv    | —      | Statuts à exclure, séparés par virgule. Ex: `rejetee,cloturee` |
-| `machine_id`       | uuid   | —      | Filtrer par équipement                                         |
-| `search`           | string | —      | Recherche sur `code`, `demandeur_nom`, `description` (ILIKE)   |
+| Param              | Type    | Défaut | Description                                                    |
+| ------------------ | ------- | ------ | -------------------------------------------------------------- |
+| `skip`             | int     | 0      | Offset                                                         |
+| `limit`            | int     | 50     | Max: 500                                                       |
+| `statut`           | string  | —      | Filtrer par code statut (`nouvelle`, `acceptee`, etc.)         |
+| `exclude_statuses` | csv     | —      | Statuts à exclure, séparés par virgule. Ex: `rejetee,cloturee` |
+| `machine_id`       | uuid    | —      | Filtrer par équipement                                         |
+| `search`           | string  | —      | Recherche sur `code`, `demandeur_nom`, `description` (ILIKE)   |
+| `is_system`        | boolean | —      | `true` : DI générées automatiquement. `false` : DI humaines    |
 
 ### Réponse `200`
 
@@ -134,6 +135,8 @@ Liste paginée des demandes avec filtres.
       "statut_label": "Acceptée",
       "statut_color": "#10B981",
       "intervention_id": "uuid-de-l-intervention-liee",
+      "is_system": false,
+      "suggested_type_inter": null,
       "created_at": "2026-03-10T08:00:00",
       "updated_at": "2026-03-10T09:15:00"
     }
@@ -188,9 +191,11 @@ Liste paginée des demandes avec filtres.
 }
 ```
 
-| Champ             | Description                                                                                            |
-| ----------------- | ------------------------------------------------------------------------------------------------------ |
-| `intervention_id` | UUID de l'intervention GMAO créée lors de l'acceptation. `null` tant que la demande n'est pas acceptée |
+| Champ                  | Description                                                                                            |
+| ---------------------- | ------------------------------------------------------------------------------------------------------ |
+| `intervention_id`      | UUID de l'intervention GMAO créée lors de l'acceptation. `null` tant que la demande n'est pas acceptée |
+| `is_system`            | `true` si la DI a été générée automatiquement (ex : occurrence préventive). `false` par défaut         |
+| `suggested_type_inter` | Type d'intervention suggéré par le système (`CUR`, `PRE`, etc.). `null` pour les DI humaines           |
 
 > `facets.statut` : tous les statuts avec leur compteur. Les filtres `machine_id` et `search` sont appliqués, mais pas `statut` — permet d'afficher tous les onglets même quand un est sélectionné.
 
@@ -231,6 +236,8 @@ Détail complet avec historique des transitions de statut.
   "statut_label": "Acceptée",
   "statut_color": "#10B981",
   "intervention_id": "uuid-de-l-intervention-liee",
+  "is_system": false,
+  "suggested_type_inter": null,
   "created_at": "2026-03-10T08:00:00",
   "updated_at": "2026-03-10T09:15:00",
   "status_log": [
@@ -298,12 +305,14 @@ Crée une nouvelle demande d'intervention. Le code (`DI-YYYY-NNNN`) et le statut
 }
 ```
 
-| Champ           | Type   | Requis  | Description                              |
-| --------------- | ------ | ------- | ---------------------------------------- |
-| `machine_id`    | uuid   | **oui** | Équipement concerné                      |
-| `demandeur_nom` | string | **oui** | Nom du demandeur                         |
-| `description`   | string | **oui** | Description de l'intervention souhaitée  |
-| `service_id`    | uuid   | non     | UUID du service/département du demandeur |
+| Champ                  | Type    | Requis  | Description                                                            |
+| ---------------------- | ------- | ------- | ---------------------------------------------------------------------- |
+| `machine_id`           | uuid    | **oui** | Équipement concerné                                                    |
+| `demandeur_nom`        | string  | **oui** | Nom du demandeur                                                       |
+| `description`          | string  | **oui** | Description de l'intervention souhaitée                                |
+| `service_id`           | uuid    | non     | UUID du service/département du demandeur                               |
+| `is_system`            | boolean | non     | `true` si DI générée par le système. Défaut : `false`                  |
+| `suggested_type_inter` | string  | non     | Type suggéré parmi `CUR`, `PRE`, `REA`, `BAT`, `PRO`, `COF`, `PIL`, `MES`. `null` par défaut |
 
 ### Réponse `201` — `InterventionRequestDetail`
 
@@ -337,15 +346,17 @@ Pour la transition vers `acceptee`, une intervention GMAO est automatiquement cr
 }
 ```
 
-| Champ           | Type   | Requis                | Description                                                                    |
-| --------------- | ------ | --------------------- | ------------------------------------------------------------------------------ |
-| `status_to`     | string | **oui**               | Code du statut cible                                                           |
-| `notes`         | string | conditionnel          | **Obligatoire** si `status_to = "rejetee"`                                     |
-| `changed_by`    | uuid   | non                   | UUID de l'utilisateur Directus                                                 |
-| `type_inter`    | string | **oui si** `acceptee` | Type d'intervention (ex: `CUR`, `PRE`). Intégré dans le code de l'intervention |
-| `tech_initials` | string | **oui si** `acceptee` | Initiales du technicien. Intégrées dans le code de l'intervention              |
-| `priority`      | string | non (si `acceptee`)   | `faible`, `normale`, `important`, `urgent`. Défaut : `normale`                 |
-| `reported_date` | date   | non (si `acceptee`)   | Date de signalement (`YYYY-MM-DD`). Défaut : null                              |
+| Champ           | Type   | Requis                | Description                                                                                                             |
+| --------------- | ------ | --------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `status_to`     | string | **oui**               | Code du statut cible                                                                                                    |
+| `notes`         | string | conditionnel          | **Obligatoire** si `status_to = "rejetee"`                                                                              |
+| `changed_by`    | uuid   | non                   | UUID de l'utilisateur Directus                                                                                          |
+| `type_inter`    | string | conditionnel          | Type d'intervention. **Obligatoire** si `acceptee` et DI humaine sans `suggested_type_inter`. Ignoré pour les DI système |
+| `tech_initials` | string | **oui si** `acceptee` | Initiales du technicien. Intégrées dans le code de l'intervention                                                       |
+| `priority`      | string | non (si `acceptee`)   | `faible`, `normale`, `important`, `urgent`. Défaut : `normale`                                                          |
+| `reported_date` | date   | non (si `acceptee`)   | Date de signalement (`YYYY-MM-DD`). Défaut : null                                                                       |
+
+> **Résolution du `type_inter` pour les DI système** : si `is_system=true`, le type est résolu automatiquement depuis `suggested_type_inter`. Le champ `type_inter` du payload est ignoré. Si `suggested_type_inter` est aussi absent, une erreur `400` est levée.
 
 ### Transitions autorisées
 
@@ -363,10 +374,11 @@ Retourne la demande mise à jour. Si `acceptee`, le champ `intervention_id` est 
 
 ### Erreurs
 
-| Code | Cas                                                                |
-| ---- | ------------------------------------------------------------------ |
-| 404  | Demande introuvable                                                |
-| 422  | Transition non autorisée depuis le statut actuel                   |
-| 422  | `notes` manquant pour le statut `rejetee`                          |
-| 422  | `type_inter` ou `tech_initials` manquant pour le statut `acceptee` |
-| 422  | Code `status_to` inconnu dans le référentiel                       |
+| Code | Cas                                                                                                |
+| ---- | -------------------------------------------------------------------------------------------------- |
+| 404  | Demande introuvable                                                                                |
+| 422  | Transition non autorisée depuis le statut actuel                                                   |
+| 422  | `notes` manquant pour le statut `rejetee`                                                          |
+| 422  | `type_inter` ou `tech_initials` manquant pour le statut `acceptee` (DI humaine sans type suggéré)  |
+| 400  | DI système sans `suggested_type_inter` et sans `type_inter` dans le payload                        |
+| 422  | Code `status_to` inconnu dans le référentiel                                                       |

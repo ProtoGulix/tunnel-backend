@@ -89,6 +89,31 @@ class InterventionActionRepository:
         except Exception:
             return []
 
+    def _get_gamme_steps_for_action(self, action_id: str, conn) -> List[Dict[str, Any]]:
+        """Récupère les steps de gamme validés/skippés par cette action"""
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                SELECT
+                    gsv.id, gsv.step_id,
+                    gs.label AS step_label,
+                    gs.sort_order AS step_sort_order,
+                    gs.optional AS step_optional,
+                    gsv.status, gsv.skip_reason, gsv.validated_at, gsv.validated_by
+                FROM gamme_step_validation gsv
+                LEFT JOIN preventive_plan_gamme_step gs ON gs.id = gsv.step_id
+                WHERE gsv.action_id = %s
+                ORDER BY gs.sort_order ASC
+                """,
+                (action_id,)
+            )
+            rows = cur.fetchall()
+            cols = [d[0] for d in cur.description]
+            return [dict(zip(cols, row)) for row in rows]
+        except Exception:
+            return []
+
     def get_all(
         self,
         date_from: Optional[date] = None,
@@ -157,6 +182,7 @@ class InterventionActionRepository:
                     'equipement_name': action.pop('interv_equipement_name', None),
                 } if action.get('intervention_id') else None
                 action['purchase_requests'] = []
+                action['gamme_steps'] = []
                 all_actions.append(action)
 
             # Batch PR : 2 requêtes pour toutes les actions
@@ -186,6 +212,33 @@ class InterventionActionRepository:
                             pr_by_id[pid] for pid in action_pr_map.get(str(action['id']), [])
                             if pid in pr_by_id
                         ]
+
+                # Batch gamme steps : récupère les steps liés
+                cur.execute(
+                    f"""
+                    SELECT
+                        gsv.action_id, gsv.id, gsv.step_id,
+                        gs.label AS step_label,
+                        gs.sort_order AS step_sort_order,
+                        gs.optional AS step_optional,
+                        gsv.status, gsv.skip_reason, gsv.validated_at, gsv.validated_by
+                    FROM gamme_step_validation gsv
+                    LEFT JOIN preventive_plan_gamme_step gs ON gs.id = gsv.step_id
+                    WHERE gsv.action_id IN ({placeholders})
+                    ORDER BY gs.sort_order ASC
+                    """,
+                    action_ids
+                )
+                steps_rows = cur.fetchall()
+                if steps_rows:
+                    action_steps_map: Dict[str, List] = {}
+                    cols_steps = [d[0] for d in cur.description]
+                    for row in steps_rows:
+                        row_dict = dict(zip(cols_steps, row))
+                        action_id = str(row_dict.pop('action_id'))
+                        action_steps_map.setdefault(action_id, []).append(row_dict)
+                    for action in all_actions:
+                        action['gamme_steps'] = action_steps_map.get(str(action['id']), [])
 
             # Groupement par date
             groups: Dict[date, List[Dict[str, Any]]] = {}
@@ -253,6 +306,8 @@ class InterventionActionRepository:
             } if action.get('intervention_id') else None
             action['purchase_requests'] = self._get_linked_purchase_requests(
                 str(action['id']), conn)
+            action['gamme_steps'] = self._get_gamme_steps_for_action(
+                str(action['id']), conn)
             return action
         except NotFoundError:
             raise
@@ -299,6 +354,7 @@ class InterventionActionRepository:
                     dict(zip(cols, row)))
                 action = self._map_tech_user(action)
                 action['purchase_requests'] = []
+                action['gamme_steps'] = []
                 results.append(action)
 
             if not results:
@@ -334,6 +390,36 @@ class InterventionActionRepository:
                         pr_by_id[pid] for pid in action_pr_map.get(str(action['id']), [])
                         if pid in pr_by_id
                     ]
+
+            # Batch : récupère les steps de gamme liés à toutes les actions
+            cur.execute(
+                f"""
+                SELECT
+                    gsv.action_id, gsv.id, gsv.step_id,
+                    gs.label AS step_label,
+                    gs.sort_order AS step_sort_order,
+                    gs.optional AS step_optional,
+                    gsv.status, gsv.skip_reason, gsv.validated_at, gsv.validated_by
+                FROM gamme_step_validation gsv
+                LEFT JOIN preventive_plan_gamme_step gs ON gs.id = gsv.step_id
+                WHERE gsv.action_id IN ({placeholders})
+                ORDER BY gs.sort_order ASC
+                """,
+                action_ids
+            )
+            steps_rows = cur.fetchall()
+
+            if steps_rows:
+                # Index : action_id → [steps...]
+                action_steps_map: Dict[str, List] = {}
+                cols_steps = [d[0] for d in cur.description]
+                for row in steps_rows:
+                    row_dict = dict(zip(cols_steps, row))
+                    action_id = str(row_dict.pop('action_id'))
+                    action_steps_map.setdefault(action_id, []).append(row_dict)
+
+                for action in results:
+                    action['gamme_steps'] = action_steps_map.get(str(action['id']), [])
 
             return results
         except HTTPException:
@@ -387,7 +473,16 @@ class InterventionActionRepository:
             release_connection(conn)
 
     def add(self, action_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Ajoute une nouvelle action à une intervention"""
+        """Ajoute une nouvelle action à une intervention
+
+        Si gamme_step_validations est fourni (liste), valide/skippe les steps après création.
+        Chaque validatior peut être :
+          - status="validated" : lie l'action_id au step
+          - status="skipped" : skippe le step avec skip_reason
+        """
+        # Extraction des validations de gamme steps avant la validation
+        gamme_step_validations = action_data.pop('gamme_step_validations', None)
+
         # Validation et préparation des données — lève ValidationError (400) si invalide
         validated_data = InterventionActionValidator.validate_and_prepare(
             action_data)
@@ -430,6 +525,38 @@ class InterventionActionRepository:
                 )
             )
             conn.commit()
+
+            # Valider/skipper les gamme steps si fournis
+            if gamme_step_validations:
+                # Import lazy pour éviter la circularité
+                from api.gamme_step_validations.repo import GammeStepValidationRepository
+                from api.gamme_step_validations.schemas import GammeStepValidationPatch
+
+                gsv_repo = GammeStepValidationRepository()
+
+                for gsv_request in gamme_step_validations:
+                    if gsv_request.get('status') == "skipped":
+                        # Mode skip
+                        patch_data = GammeStepValidationPatch(
+                            status="skipped",
+                            skip_reason=gsv_request.get('skip_reason'),
+                            validated_by=validated_data['tech'],
+                            action_id=None
+                        )
+                    else:
+                        # Mode validation : lier à l'action créée
+                        patch_data = GammeStepValidationPatch(
+                            status="validated",
+                            action_id=_uuid.UUID(action_id),
+                            validated_by=validated_data['tech'],
+                            skip_reason=None
+                        )
+
+                    gsv_repo.patch_validation(
+                        str(gsv_request.get('step_validation_id')),
+                        patch_data
+                    )
+
             return self.get_by_id(action_id)
         except HTTPException:
             conn.rollback()
