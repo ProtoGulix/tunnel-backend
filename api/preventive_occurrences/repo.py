@@ -72,7 +72,15 @@ class PreventiveOccurrenceRepository:
             )
             rows = cur.fetchall()
             cols = [d[0] for d in cur.description]
-            return [dict(zip(cols, row)) for row in rows]
+            occurrences = [dict(zip(cols, row)) for row in rows]
+
+            # Attacher les gamme_step_validation en batch (évite le N+1)
+            if occurrences:
+                occ_ids = [str(o["id"]) for o in occurrences]
+                steps_by_occ = self._fetch_steps_batch(cur, occ_ids)
+                for occ in occurrences:
+                    occ["gamme_steps"] = steps_by_occ.get(str(occ["id"]), [])
+            return occurrences
         except HTTPException:
             raise
         except Exception as e:
@@ -106,13 +114,47 @@ class PreventiveOccurrenceRepository:
             if not row:
                 raise NotFoundError(f"Occurrence {occurrence_id} non trouvée")
             cols = [d[0] for d in cur.description]
-            return dict(zip(cols, row))
+            occ = dict(zip(cols, row))
+            steps_by_occ = self._fetch_steps_batch(cur, [occurrence_id])
+            occ["gamme_steps"] = steps_by_occ.get(occurrence_id, [])
+            return occ
         except HTTPException:
             raise
         except Exception as e:
             raise_db_error(e, "récupération de l'occurrence")
         finally:
             release_connection(conn)
+
+    def _fetch_steps_batch(self, cur: Any, occurrence_ids: List[str]) -> Dict[str, List[Dict[str, Any]]]:
+        """
+        Charge les gamme_step_validation pour une liste d'occurrence_ids en une seule requête.
+        Retourne un dict { occurrence_id: [steps...] }.
+        """
+        placeholders = ",".join(["%s"] * len(occurrence_ids))
+        cur.execute(
+            f"""
+            SELECT
+                gsv.id, gsv.step_id,
+                gs.label AS step_label,
+                gs.sort_order AS step_sort_order,
+                gs.optional AS step_optional,
+                gsv.occurrence_id, gsv.intervention_id, gsv.action_id,
+                gsv.status, gsv.skip_reason, gsv.validated_at, gsv.validated_by
+            FROM gamme_step_validation gsv
+            LEFT JOIN preventive_plan_gamme_step gs ON gs.id = gsv.step_id
+            WHERE gsv.occurrence_id IN ({placeholders})
+            ORDER BY gsv.occurrence_id, gs.sort_order ASC
+            """,
+            occurrence_ids,
+        )
+        rows = cur.fetchall()
+        cols = [d[0] for d in cur.description]
+        result: Dict[str, List[Dict[str, Any]]] = {}
+        for row in rows:
+            step = dict(zip(cols, row))
+            occ_key = str(step["occurrence_id"])
+            result.setdefault(occ_key, []).append(step)
+        return result
 
     # ── Skip ─────────────────────────────────────────────────────
 
@@ -451,6 +493,7 @@ class PreventiveOccurrenceRepository:
         """
         conn = self._get_connection()
         steps_relinked = 0
+        occurrences_relinked = 0
         occurrences_completed = 0
         requests_closed = 0
         details = []
@@ -484,13 +527,20 @@ class PreventiveOccurrenceRepository:
                 )
 
             # ── Bug 2 : occurrences bloquées à 'generated' ────────────────────
-            # Cas : l'intervention liée est fermée (status_actual = code 'ferme')
-            # mais l'occurrence est encore 'generated'.
+            # Inclut le cas où po.intervention_id est NULL mais ir.intervention_id
+            # est renseigné (ancien bug de curseur lors de l'acceptation manuelle).
             cur.execute(
                 """
-                SELECT po.id, po.intervention_id, po.di_id
+                SELECT
+                    po.id,
+                    COALESCE(po.intervention_id, ir.intervention_id) AS intervention_id,
+                    po.di_id,
+                    (po.intervention_id IS NULL) AS needs_relink
                 FROM preventive_occurrence po
-                JOIN intervention i ON i.id = po.intervention_id
+                LEFT JOIN intervention_request ir
+                    ON ir.id = po.di_id AND po.intervention_id IS NULL
+                JOIN intervention i
+                    ON i.id = COALESCE(po.intervention_id, ir.intervention_id)
                 JOIN intervention_status_ref isr ON isr.id = i.status_actual
                 WHERE po.status = 'generated'
                   AND isr.code = 'ferme'
@@ -498,9 +548,17 @@ class PreventiveOccurrenceRepository:
             )
             stale_occurrences = cur.fetchall()
 
-            for occ_id, intervention_id, di_id in stale_occurrences:
+            for occ_id, intervention_id, di_id, needs_relink in stale_occurrences:
                 occ_id = str(occ_id)
                 intervention_id = str(intervention_id)
+
+                # Rétablir intervention_id si manquant (ancien bug curseur)
+                if needs_relink:
+                    cur.execute(
+                        "UPDATE preventive_occurrence SET intervention_id = %s WHERE id = %s",
+                        (intervention_id, occ_id),
+                    )
+                    occurrences_relinked += 1
 
                 # Passer l'occurrence à 'completed'
                 cur.execute(
@@ -550,8 +608,8 @@ class PreventiveOccurrenceRepository:
 
             conn.commit()
             logger.info(
-                "Repair terminé : %s steps rattachés, %s occurrences complétées, %s demandes clôturées",
-                steps_relinked, occurrences_completed, requests_closed,
+                "Repair terminé : %s steps rattachés, %s occurrences reliées, %s complétées, %s demandes clôturées",
+                steps_relinked, occurrences_relinked, occurrences_completed, requests_closed,
             )
 
         except Exception as e:
@@ -562,6 +620,7 @@ class PreventiveOccurrenceRepository:
 
         return {
             "steps_relinked": steps_relinked,
+            "occurrences_relinked": occurrences_relinked,
             "occurrences_completed": occurrences_completed,
             "requests_closed": requests_closed,
             "details": details,

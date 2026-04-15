@@ -62,10 +62,28 @@ Liste les occurrences de maintenance préventive avec filtres optionnels.
     "intervention_id": null,
     "status": "generated",
     "skip_reason": null,
-    "created_at": "2026-04-13T08:00:00"
+    "created_at": "2026-04-13T08:00:00",
+    "gamme_steps": [
+      {
+        "id": "uuid-step-validation",
+        "step_id": "uuid-step",
+        "step_label": "Graisser palier gauche",
+        "step_sort_order": 1,
+        "step_optional": false,
+        "occurrence_id": "uuid-occurrence-1",
+        "intervention_id": null,
+        "action_id": null,
+        "status": "pending",
+        "skip_reason": null,
+        "validated_at": null,
+        "validated_by": null
+      }
+    ]
   }
 ]
 ```
+
+> **Diagnostic** : si `intervention_id` est `null` sur les steps alors que l'occurrence a un `intervention_id`, c'est le Bug 1 (corriger via `POST /repair`). Si tous les steps sont `pending` sur une occurrence dont l'intervention est fermée, c'est le Bug 2.
 
 ---
 
@@ -75,7 +93,7 @@ Détail d'une occurrence.
 
 ### Réponse `200`
 
-Même structure que la liste.
+Même structure que la liste, incluant `gamme_steps`.
 
 ### Erreurs
 
@@ -175,6 +193,7 @@ La fermeture d'une intervention via `PATCH /interventions/{id}` ne propageait pa
 ```json
 {
   "steps_relinked": 12,
+  "occurrences_relinked": 3,
   "occurrences_completed": 3,
   "requests_closed": 3,
   "details": [
@@ -185,9 +204,10 @@ La fermeture d'une intervention via `PATCH /interventions/{id}` ne propageait pa
 }
 ```
 
-| Champ                  | Description                                              |
-| ---------------------- | -------------------------------------------------------- |
-| `steps_relinked`       | Nombre de `gamme_step_validation` rattachés (Bug 1)      |
-| `occurrences_completed`| Nombre d'occurrences passées à `completed` (Bug 2)       |
-| `requests_closed`      | Nombre de DI clôturées en cascade (Bug 2)                |
-| `details`              | Journal détaillé de chaque correction appliquée          |
+| Champ                   | Description                                                                        |
+| ----------------------- | ---------------------------------------------------------------------------------- |
+| `steps_relinked`        | Nombre de `gamme_step_validation` rattachés (Bug 1)                                |
+| `occurrences_relinked`  | Occurrences dont `intervention_id` a été rétabli depuis la DI liée (pré-étape Bug 2) |
+| `occurrences_completed` | Nombre d'occurrences passées à `completed` (Bug 2)                                 |
+| `requests_closed`       | Nombre de DI clôturées en cascade (Bug 2)                                          |
+| `details`               | Journal détaillé de chaque correction appliquée                                    |

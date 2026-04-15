@@ -682,30 +682,28 @@ class InterventionRequestRepository:
                 (intervention_id,),
             )
             row = cur.fetchone()
-            if not row:
-                return  # Pas de demande liée en statut acceptee, rien à faire
+            if row:
+                request_id, current_statut = row[0], row[1]
 
-            request_id, current_statut = row[0], row[1]
+                cur.execute("SET LOCAL app.skip_request_status_log = 'true'")
+                cur.execute(
+                    "UPDATE intervention_request SET statut = 'cloturee' WHERE id = %s",
+                    (str(request_id),),
+                )
+                cur.execute(
+                    """
+                    INSERT INTO request_status_log (request_id, status_from, status_to, changed_by, notes)
+                    VALUES (%s, %s, %s, NULL, %s)
+                    """,
+                    (str(request_id), current_statut, "cloturee",
+                     "Clôture automatique suite à la fermeture de l'intervention"),
+                )
+                logger.info(
+                    "Demande %s automatiquement clôturée (intervention %s fermée)",
+                    request_id, intervention_id,
+                )
 
-            cur.execute("SET LOCAL app.skip_request_status_log = 'true'")
-            cur.execute(
-                "UPDATE intervention_request SET statut = 'cloturee' WHERE id = %s",
-                (str(request_id),),
-            )
-            cur.execute(
-                """
-                INSERT INTO request_status_log (request_id, status_from, status_to, changed_by, notes)
-                VALUES (%s, %s, %s, NULL, %s)
-                """,
-                (str(request_id), current_statut, "cloturee",
-                 "Clôture automatique suite à la fermeture de l'intervention"),
-            )
-            logger.info(
-                "Demande %s automatiquement clôturée (intervention %s fermée)",
-                request_id, intervention_id,
-            )
-
-            # 2. Passer l'occurrence préventive liée à 'completed'
+            # 2. Passer l'occurrence préventive liée à 'completed' (indépendant de l'étape 1)
             cur.execute(
                 """
                 UPDATE preventive_occurrence
