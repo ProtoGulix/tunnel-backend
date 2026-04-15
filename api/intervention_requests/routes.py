@@ -40,6 +40,7 @@ def list_requests(
     exclude_statuses: Optional[str] = Query(None, description="Statuts à exclure, séparés par virgule. Ex: rejetee,cloturee"),
     machine_id: Optional[UUID] = Query(None),
     search: Optional[str] = Query(None),
+    is_system: Optional[bool] = Query(None, description="Filtrer les DI système (true) ou humaines (false)"),
 ):
     """
     Liste les demandes d'intervention avec filtres.
@@ -50,9 +51,12 @@ def list_requests(
     items = repo.get_list(
         limit=limit, offset=skip,
         statut=statut, exclude_statuses=exclude_list, machine_id=machine_id_str, search=search,
+        is_system=is_system,
     )
     total = repo.count_list(
-        statut=statut, exclude_statuses=exclude_list, machine_id=machine_id_str, search=search)
+        statut=statut, exclude_statuses=exclude_list, machine_id=machine_id_str, search=search,
+        is_system=is_system,
+    )
     facets = repo.get_facets(machine_id=machine_id_str, search=search)
     return {
         "items": items,

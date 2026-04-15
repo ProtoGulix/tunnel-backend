@@ -2,6 +2,133 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [2.20.0] - 15 avril 2026
+
+### Nouveautés
+
+- **Statut `in_progress` sur les occurrences préventives** : nouveau statut intermédiaire entre `generated` et `completed`. Passage automatique quand la DI liée est acceptée (qu'elle passe à `acceptee`), dans les deux chemins : acceptation manuelle (`transition_status`) et auto-accept (`_auto_accept_occurrence`).
+
+- **Clôture de DI → `completed` sur l'occurrence** : la transition d'une DI vers `cloturee` passe maintenant directement l'occurrence associée à `completed`, sans nécessiter la fermeture de l'intervention.
+
+- **`gamme_steps` embarqués dans `GET /preventive-occurrences`** : chaque occurrence expose la liste de ses `gamme_step_validation` avec label, statut, `action_id` et `intervention_id`. Le chargement est fait en batch (une seule requête pour toutes les occurrences, sans N+1). Permet de diagnostiquer visuellement les bugs de rattachement.
+
+- **Repair amélioré (`POST /preventive-occurrences/repair`)** :
+  - Nouveau champ `occurrences_relinked` : occurrences dont `intervention_id` a été rétabli depuis la DI liée (bug curseur acceptation manuelle)
+  - Nouveau champ `occurrences_set_in_progress` : occurrences passées de `generated` à `in_progress` (DI déjà acceptée en base)
+  - Recherche étendue à `status IN ('generated', 'in_progress')` pour le Bug 2
+
+### Corrections
+
+- **`on_intervention_closed` ne passait pas l'occurrence à `completed` si la DI n'était plus `acceptee`** : le `return` prématuré de l'étape 1 bloquait l'étape 2. Les deux étapes sont maintenant indépendantes.
+
+### Migrations DB (`web.tunnel-db`)
+
+- `20260413_g2b3c4d5e6f7` : rétrolien interventions → plans via `preventive_occurrence`
+- `20260414_h3c4d5e6f7a8` : trigger `trg_sync_status_log_to_intervention` avec cascade fermeture
+- `20260415_i4d5e6f7a8b9` : suppression du trigger redondant `trg_sync_status_from_log`
+
+### Documentation
+
+- Cycle de vie des occurrences mis à jour avec les 4 statuts (`pending`, `generated`, `in_progress`, `completed`, `skipped`)
+- Schéma `gamme_steps` documenté dans `GET /preventive-occurrences`
+- `TODO.md` enrichi avec les points issus du bilan technique
+
+---
+
+## [2.19.0] - 15 avril 2026
+
+### Corrections critiques
+
+- **[BUG] Steps de gamme non liés à l'intervention lors d'une acceptation manuelle de DI préventive** (`api/intervention_requests/repo.py`) :
+  Le curseur partagé entre `_create_intervention_for_request()` et le bloc de rattachement causait un `fetchone()` vide sur la requête `SELECT id FROM preventive_occurrence`. Les `gamme_step_validation` restaient avec `intervention_id = NULL` et n'apparaissaient pas dans les actions. Correction : l'`occurrence_id` est maintenant résolu avant l'appel à `_create_intervention_for_request()`, pendant que le curseur est encore propre.
+
+- **[BUG] Fermeture d'intervention ne propageait pas l'état sur l'occurrence préventive** (`api/interventions/repo.py`, `api/intervention_requests/repo.py`) :
+  `_notify_if_closed()` comparait `status_actual` (UUID en base) au code texte `'ferme'` — toujours faux. De plus, `on_intervention_closed()` clôturait la DI mais pas l'occurrence préventive. Double correction :
+  1. Résolution du code via `SELECT code FROM intervention_status_ref WHERE id = %s` avant comparaison
+  2. Ajout d'un `UPDATE preventive_occurrence SET status = 'completed'` dans `on_intervention_closed()`
+
+### Nouveautés
+
+- **`POST /preventive-occurrences/repair`** : endpoint de réparation idempotent pour corriger les données corrompues par les deux bugs ci-dessus. Rattache les steps orphelins, passe les occurrences à `completed`, clôture les DI en cascade. Retourne un rapport détaillé (`steps_relinked`, `occurrences_completed`, `requests_closed`, `details`).
+
+- **Statut `completed` sur les occurrences préventives** : nouveau statut terminal indiquant qu'une occurrence a été traitée via fermeture de son intervention. Documenté dans le cycle de vie et exposé dans le filtre `status` de `GET /preventive-occurrences`.
+
+### Qualité
+
+- **Audit et standards** : ajout de `CLAUDE.md` (standards de développement, checklist avant merge, patterns obligatoires) et `BACKLOG.md` (liste priorisée des corrections et améliorations).
+- **Sécurité** : `/docs`, `/openapi.json`, `/redoc` masqués en production (`api/auth/middleware.py`).
+- **Nettoyage** : suppression de `python-jose` (inutilisé, `PyJWT` suffit), `DIRECTUS_KEY` (jamais utilisée), `get_active_status_ids()` (fonction morte dans `constants.py`).
+- **Correction doublon** : appel double à `repo.get_facets()` dans `api/equipements/routes.py` supprimé.
+
+### Migrations
+
+- `20260414_h3c4d5e6f7a8` : trigger `trg_sync_status_log_to_intervention` — synchronise `intervention.status_actual` après chaque INSERT dans `intervention_status_log`, et propage la fermeture sur l'occurrence préventive et la DI liée.
+
+---
+
+## [2.18.0] - 15 avril 2026
+
+### Nouveautés
+
+- **Enrichissement de `GET /equipements/{id}` avec 3 blocs contextuels** : la fiche équipement expose désormais des informations de maintenance et de demandes directement liées.
+  - **`preventive_plans`** : liste des plans de maintenance préventive applicables à l'équipement (via sa classe), avec la date de la prochaine occurrence pending/générée
+  - **`preventive_occurrences_summary`** : résumé agrégé (compteurs par statut, prochaine occurrence, dernier motif de skip)
+  - **`open_requests`** : liste des demandes d'intervention ouvertes (statuts actifs), triées par création descendante
+  - Les 3 blocs sont calculés uniquement dans `get_by_id()` (pas dans `get_all()` pour performances)
+  - Résilience : en cas d'erreur lors de la récupération d'un bloc, le endpoint retourne 200 avec le bloc vide/null plutôt que 500
+
+- **Documentation API enrichie** (`docs/endpoints/equipements.md`) :
+  - Détail des schémas pour les 3 blocs contextuels
+  - Exemples JSON complets
+  - Notes sur les cas limites (pas de classe → plans null, pas d'occurrence → compteurs zéro)
+
+### Scripts de diagnostic
+
+- **`diagnostic_gamme_steps.py`** : script complet de diagnostic pour investiguer les problèmes de gamme_steps non accessibles
+  - Vérifie : existence de l'intervention, des études de gamme, des tables requis, de la structure DB
+  - Teste les requêtes SQL directement
+  - Utile pour déboguer les problèmes de migration Alembic
+
+- **Documentation de diagnostic** :
+  - `QUICK_FIX_GAMME_STEPS.md` : guide rapide (2 pages) avec solutions probables
+  - `DIAGNOSIS_GAMME_STEPS.md` : documentation complète avec tous les cas possibles
+  - `test_gamme_steps_endpoint.sh` : test curl pour l'API
+
+### Migrations
+
+- Aucune (enrichissement de `get_by_id()` uniquement, pas de changement DB)
+
+## [2.17.0] - 14 avril 2026
+
+### Nouveautés
+
+- **Embarquement de validation de gamme steps dans `POST /intervention-actions`** : le endpoint permet maintenant de créer une action ET valider/skipper plusieurs steps de gamme en une seule requête atomique.
+  - Nouveau champ `gamme_step_validations` : tableau d'objets `GammeStepValidationRequest`
+  - Chaque objet : `step_validation_id`, `status` ("validated"/"skipped"), `skip_reason` (si skipped)
+  - L'action créée lie automatiquement les steps validés (`action_id = new_action.id`)
+  - Le technicien créateur est assigné comme `validated_by` pour tous les steps
+  - Mode validation atomique : une seule requête POST crée action + valide/skippe N steps
+
+- **Gamme steps propagés dans les réponses `GET /intervention-actions`** : chaque action retourne les steps de gamme qu'elle valide/skippe.
+  - Nouveau champ `gamme_steps` dans `InterventionActionOut` (tableau de `GammeStepValidationDetail`)
+  - Chaque step expose : `id`, `step_id`, `step_label`, `step_sort_order`, `step_optional`, `status`, `skip_reason`, `validated_at`, `validated_by`
+  - Endpoints enrichis : `GET /intervention-actions`, `GET /intervention-actions/{id}`, `GET /intervention-actions?tech_id=...`
+  - Optimisation batch : une requête SQL pour tous les steps de toutes les actions (pas de N+1)
+
+- **Documentation mise à jour** :
+  - `docs/endpoints/intervention-actions.md` : documenter l'embarquement multiple de validations de step
+  - `docs/endpoints/interventions.md` : documenter la propagation des gamme_steps dans les actions
+
+### Règles métier renforçées
+
+- **Validation de gamme step** : `action_id` est **OBLIGATOIRE** pour `status="validated"` (principe fondamental : l'action est la base de Tunnel)
+- **Skip de gamme step** : `action_id` doit être **NULL** et `skip_reason` **OBLIGATOIRE** pour `status="skipped"`
+- Validations appliquées au niveau Pydantic : rejet des requêtes invalides avec HTTP 422
+
+### Migrations
+
+- Nul (aucune migration DB requise - structure gamme_step_validation inchangée)
+
 ## [2.16.1] - 13 avril 2026
 
 ### Corrections

@@ -345,6 +345,17 @@ class InterventionRepository:
             intervention['status_logs'] = status_log_repo.get_by_intervention(
                 intervention_id)
 
+            # Calculer la progression de gamme si l'intervention a un plan préventif
+            if intervention.get('plan_id'):
+                # Import lazy pour éviter la circularité avec gamme_step_validations.repo
+                from api.gamme_step_validations.repo import GammeStepValidationRepository
+                gsv_repo = GammeStepValidationRepository()
+                intervention['gamme_progress'] = gsv_repo.get_progress(intervention_id)
+                intervention['gamme_steps'] = gsv_repo.get_by_intervention(intervention_id)
+            else:
+                intervention['gamme_progress'] = None
+                intervention['gamme_steps'] = []
+
             return intervention
         except NotFoundError:
             raise
@@ -378,8 +389,8 @@ class InterventionRepository:
                 INSERT INTO intervention
                 (id, title, machine_id, type_inter, priority,
                  reported_by, tech_initials, status_actual,
-                 printed_fiche, reported_date)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                 printed_fiche, reported_date, plan_id)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     intervention_id,
@@ -391,7 +402,8 @@ class InterventionRepository:
                     data.get('tech_initials'),
                     data.get('status_actual', 'ouvert'),
                     data.get('printed_fiche', False),
-                    data.get('reported_date')
+                    data.get('reported_date'),
+                    data.get('plan_id')
                 )
             )
 
@@ -518,11 +530,29 @@ class InterventionRepository:
         return result
 
     def _notify_if_closed(self, intervention_id: str, status_actual: Any) -> None:
-        """Notifie le repo des demandes si l'intervention vient d'être fermée."""
+        """Notifie le repo des demandes si l'intervention vient d'être fermée.
+
+        status_actual peut être un UUID (valeur DB brute) ou le code texte directement.
+        On résout toujours le code via la DB pour comparer proprement.
+        """
         if not status_actual:
             return
         try:
-            if str(status_actual) == CLOSED_STATUS_CODE:
+            conn = get_connection()
+            try:
+                with conn.cursor() as cur:
+                    # Résoudre le code depuis l'UUID — si c'est déjà un code texte,
+                    # le SELECT ne trouvera rien et on retombe sur la comparaison directe.
+                    cur.execute(
+                        "SELECT code FROM intervention_status_ref WHERE id = %s LIMIT 1",
+                        (str(status_actual),),
+                    )
+                    row = cur.fetchone()
+                    status_code = row[0] if row else str(status_actual)
+            finally:
+                release_connection(conn)
+
+            if status_code == CLOSED_STATUS_CODE:
                 from api.intervention_requests.repo import InterventionRequestRepository
                 InterventionRequestRepository().on_intervention_closed(intervention_id)
         except Exception:

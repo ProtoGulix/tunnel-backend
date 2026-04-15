@@ -129,6 +129,7 @@ class InterventionRequestRepository:
         exclude_statuses: Optional[List[str]] = None,
         machine_id: Optional[str] = None,
         search: Optional[str] = None,
+        is_system: Optional[bool] = None,
     ) -> List[Dict[str, Any]]:
         limit = min(limit, 500)
         conn = self._get_connection()
@@ -152,6 +153,9 @@ class InterventionRequestRepository:
                     "(ir.code ILIKE %s OR ir.demandeur_nom ILIKE %s OR ir.description ILIKE %s)"
                 )
                 params += [f"%{search}%", f"%{search}%", f"%{search}%"]
+            if is_system is not None:
+                where.append("ir.is_system = %s")
+                params.append(is_system)
 
             where_sql = ("WHERE " + " AND ".join(where)) if where else ""
 
@@ -163,6 +167,7 @@ class InterventionRequestRepository:
                     ir.statut,
                     rs.label AS statut_label, rs.color AS statut_color,
                     ir.intervention_id,
+                    ir.is_system, ir.suggested_type_inter,
                     ir.created_at, ir.updated_at,
                     {_EQUIPEMENT_COLS},
                     {_SERVICE_COLS}
@@ -196,6 +201,7 @@ class InterventionRequestRepository:
         exclude_statuses: Optional[List[str]] = None,
         machine_id: Optional[str] = None,
         search: Optional[str] = None,
+        is_system: Optional[bool] = None,
     ) -> int:
         conn = self._get_connection()
         try:
@@ -218,6 +224,9 @@ class InterventionRequestRepository:
                     "(code ILIKE %s OR demandeur_nom ILIKE %s OR description ILIKE %s)"
                 )
                 params += [f"%{search}%", f"%{search}%", f"%{search}%"]
+            if is_system is not None:
+                where.append("is_system = %s")
+                params.append(is_system)
 
             where_sql = ("WHERE " + " AND ".join(where)) if where else ""
             cur.execute(
@@ -286,6 +295,7 @@ class InterventionRequestRepository:
                     ir.statut,
                     rs.label AS statut_label, rs.color AS statut_color,
                     ir.intervention_id,
+                    ir.is_system, ir.suggested_type_inter,
                     ir.created_at, ir.updated_at,
                     {_EQUIPEMENT_COLS},
                     {_SERVICE_COLS}
@@ -343,6 +353,8 @@ class InterventionRequestRepository:
         demandeur_nom = (data.get("demandeur_nom") or "").strip()
         description = (data.get("description") or "").strip()
         service_id = data.get("service_id")
+        is_system = bool(data.get("is_system", False))
+        suggested_type_inter = data.get("suggested_type_inter") or None
 
         conn = self._get_connection()
         try:
@@ -350,8 +362,9 @@ class InterventionRequestRepository:
             cur.execute(
                 """
                 INSERT INTO intervention_request
-                    (machine_id, demandeur_nom, service_id, description, code, statut)
-                VALUES (%s, %s, %s, %s, 'PLACEHOLDER', 'nouvelle')
+                    (machine_id, demandeur_nom, service_id, description,
+                     is_system, suggested_type_inter, code, statut)
+                VALUES (%s, %s, %s, %s, %s, %s, 'PLACEHOLDER', 'nouvelle')
                 RETURNING id
                 """,
                 (
@@ -359,6 +372,8 @@ class InterventionRequestRepository:
                     demandeur_nom,
                     str(service_id) if service_id else None,
                     description,
+                    is_system,
+                    suggested_type_inter,
                 ),
             )
             new_id = cur.fetchone()[0]
@@ -404,6 +419,7 @@ class InterventionRequestRepository:
         conn = self._get_connection()
         try:
             cur = conn.cursor()
+            preventive_occurrence_id = None  # Résolu plus bas uniquement si status_to == "acceptee"
             cur.execute(
                 "SELECT code FROM request_status_ref WHERE code = %s", (
                     status_to,)
@@ -411,19 +427,58 @@ class InterventionRequestRepository:
             if not cur.fetchone():
                 raise ValidationError(f"Statut '{status_to}' inconnu")
 
-            # ── Acceptation : création de l'intervention ───────────────
+            # ── Acceptation : résolution du type_inter et création intervention ───
             if status_to == "acceptee":
+                # Résolution du type_inter effectif par priorité
+                payload_type = (intervention_data or {}).get("type_inter")
+                di_is_system = existing.get("is_system", False)
+                di_suggested = existing.get("suggested_type_inter")
+
+                if di_is_system and di_suggested:
+                    # DI système : suggested_type_inter est autoritaire
+                    if payload_type and payload_type != di_suggested:
+                        raise ValidationError(
+                            f"Cette demande système impose le type '{di_suggested}'. "
+                            f"Le type '{payload_type}' ne peut pas être substitué."
+                        )
+                    effective_type_inter = di_suggested
+                elif di_suggested and not payload_type:
+                    # DI humaine avec suggestion : utilisée par défaut si rien dans le payload
+                    effective_type_inter = di_suggested
+                elif payload_type:
+                    # Cas standard : le payload fournit le type
+                    effective_type_inter = payload_type
+                else:
+                    raise ValidationError(
+                        "Le type d'intervention est requis pour accepter cette demande."
+                    )
+
+                # Injecter le type résolu dans intervention_data
+                if intervention_data is None:
+                    intervention_data = {}
+                intervention_data["type_inter"] = effective_type_inter
+
+                # Récupérer l'occurrence_id ICI, avant d'appeler _create_intervention_for_request.
+                # Après cet appel le curseur partagé a été utilisé plusieurs fois (SELECT plan_id,
+                # INSERT intervention…) et un nouveau fetchone() retournerait None ou un résidu.
+                cur.execute(
+                    "SELECT id FROM preventive_occurrence WHERE di_id = %s LIMIT 1",
+                    (request_id,),
+                )
+                occ_row = cur.fetchone()
+                preventive_occurrence_id = str(occ_row[0]) if occ_row else None
+
                 intervention_id = self._create_intervention_for_request(
                     cur=cur,
                     request=existing,
                     intervention_data=intervention_data,
                 )
                 logger.info(
-                    "Demande %s acceptée : intervention %s créée",
-                    request_id, intervention_id,
+                    "Demande %s acceptée : intervention %s créée (type: %s)",
+                    request_id, intervention_id, effective_type_inter,
                 )
 
-            # ── Clôture : fermer l'intervention liée ──────────────────
+            # ── Clôture : fermer l'intervention liée + compléter l'occurrence ──
             elif status_to == "cloturee":
                 if intervention_id:
                     self._close_linked_intervention(
@@ -431,6 +486,37 @@ class InterventionRequestRepository:
                     logger.info(
                         "Demande %s clôturée : intervention %s fermée",
                         request_id, intervention_id,
+                    )
+                # Passer l'occurrence préventive liée à 'completed'
+                cur.execute(
+                    """
+                    UPDATE preventive_occurrence
+                    SET status = 'completed'
+                    WHERE di_id = %s
+                      AND status NOT IN ('completed', 'skipped')
+                    """,
+                    (request_id,),
+                )
+                if cur.rowcount:
+                    logger.info(
+                        "Occurrence préventive liée à la demande %s passée à 'completed'",
+                        request_id,
+                    )
+
+            # ── Rejet : remettre l'occurrence préventive liée en pending ──
+            elif status_to == "rejetee":
+                cur.execute(
+                    """
+                    UPDATE preventive_occurrence
+                    SET status = 'pending', di_id = NULL
+                    WHERE di_id = %s
+                    """,
+                    (request_id,),
+                )
+                if cur.rowcount:
+                    logger.info(
+                        "Demande %s rejetée : occurrence préventive remise en pending",
+                        request_id,
                     )
 
             # Appliquer la transition (flag pour éviter double-trigger)
@@ -449,6 +535,31 @@ class InterventionRequestRepository:
                     "UPDATE intervention_request SET intervention_id = %s WHERE id = %s",
                     (str(intervention_id), request_id),
                 )
+                # Rattacher l'occurrence et les gamme_step_validation à l'intervention créée.
+                # preventive_occurrence_id a été résolu AVANT _create_intervention_for_request
+                # pour éviter toute pollution du curseur partagé.
+                if preventive_occurrence_id:
+                    cur.execute(
+                        """
+                        UPDATE preventive_occurrence
+                        SET intervention_id = %s, status = 'in_progress'
+                        WHERE id = %s
+                        """,
+                        (str(intervention_id), preventive_occurrence_id),
+                    )
+                    cur.execute(
+                        """
+                        UPDATE gamme_step_validation
+                        SET intervention_id = %s
+                        WHERE occurrence_id = %s
+                        AND intervention_id IS NULL
+                        """,
+                        (str(intervention_id), preventive_occurrence_id),
+                    )
+                    logger.info(
+                        "Rattachement gamme : %s step(s) liés à l'intervention %s",
+                        cur.rowcount, intervention_id,
+                    )
 
             conn.commit()
             logger.info(
@@ -514,13 +625,21 @@ class InterventionRequestRepository:
 
         reported_date = intervention_data.get("reported_date") or None
 
+        # Récupérer plan_id depuis l'occurrence liée (DI système préventive)
+        cur.execute(
+            "SELECT plan_id FROM preventive_occurrence WHERE di_id = %s LIMIT 1",
+            (str(request["id"]),),
+        )
+        occ_row = cur.fetchone()
+        plan_id = str(occ_row[0]) if occ_row and occ_row[0] else None
+
         cur.execute(
             """
             INSERT INTO intervention
                 (id, title, machine_id, type_inter, priority,
                  reported_by, tech_initials, status_actual,
-                 printed_fiche, reported_date)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                 printed_fiche, reported_date, plan_id)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """,
             (
                 intervention_id,
@@ -534,6 +653,7 @@ class InterventionRequestRepository:
                 status_pris_en_charge_id,
                 False,
                 reported_date,
+                plan_id,
             ),
         )
         return intervention_id
@@ -562,13 +682,16 @@ class InterventionRequestRepository:
 
     def on_intervention_closed(self, intervention_id: str) -> None:
         """
-        Passe à 'cloturee' la demande liée à cette intervention (si elle existe
-        et est encore au statut 'acceptee').
-        Appelé depuis InterventionRepository.update() après fermeture d'une intervention.
+        Cascade de fermeture déclenchée quand une intervention est fermée (via PATCH direct).
+        - Passe la demande liée à 'cloturee' (si encore 'acceptee')
+        - Passe l'occurrence préventive liée à 'completed' (si elle existe)
+        Appelé depuis InterventionRepository._notify_if_closed().
         """
         conn = self._get_connection()
         try:
             cur = conn.cursor()
+
+            # 1. Clôturer la demande liée
             cur.execute(
                 """
                 SELECT id, statut FROM intervention_request
@@ -578,33 +701,48 @@ class InterventionRequestRepository:
                 (intervention_id,),
             )
             row = cur.fetchone()
-            if not row:
-                return  # Pas de demande liée en statut acceptee, rien à faire
+            if row:
+                request_id, current_statut = row[0], row[1]
 
-            request_id, current_statut = row[0], row[1]
+                cur.execute("SET LOCAL app.skip_request_status_log = 'true'")
+                cur.execute(
+                    "UPDATE intervention_request SET statut = 'cloturee' WHERE id = %s",
+                    (str(request_id),),
+                )
+                cur.execute(
+                    """
+                    INSERT INTO request_status_log (request_id, status_from, status_to, changed_by, notes)
+                    VALUES (%s, %s, %s, NULL, %s)
+                    """,
+                    (str(request_id), current_statut, "cloturee",
+                     "Clôture automatique suite à la fermeture de l'intervention"),
+                )
+                logger.info(
+                    "Demande %s automatiquement clôturée (intervention %s fermée)",
+                    request_id, intervention_id,
+                )
 
-            cur.execute("SET LOCAL app.skip_request_status_log = 'true'")
-            cur.execute(
-                "UPDATE intervention_request SET statut = 'cloturee' WHERE id = %s",
-                (str(request_id),),
-            )
+            # 2. Passer l'occurrence préventive liée à 'completed' (indépendant de l'étape 1)
             cur.execute(
                 """
-                INSERT INTO request_status_log (request_id, status_from, status_to, changed_by, notes)
-                VALUES (%s, %s, %s, NULL, %s)
+                UPDATE preventive_occurrence
+                SET status = 'completed'
+                WHERE intervention_id = %s
+                  AND status NOT IN ('completed', 'skipped')
                 """,
-                (str(request_id), current_statut, "cloturee",
-                 "Clôture automatique suite à la fermeture de l'intervention"),
+                (intervention_id,),
             )
+            if cur.rowcount:
+                logger.info(
+                    "Occurrence préventive liée à l'intervention %s passée à 'completed'",
+                    intervention_id,
+                )
+
             conn.commit()
-            logger.info(
-                "Demande %s automatiquement clôturée (intervention %s fermée)",
-                request_id, intervention_id,
-            )
         except Exception as e:
             conn.rollback()
             logger.error(
-                "Erreur clôture automatique demande pour intervention %s: %s",
+                "Erreur clôture automatique pour intervention %s: %s",
                 intervention_id, str(e),
             )
         finally:

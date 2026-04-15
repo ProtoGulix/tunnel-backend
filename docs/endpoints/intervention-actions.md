@@ -122,6 +122,30 @@ Détail d'une action avec sous-catégorie et demandes d'achat.
       "updated_at": "2026-01-13T10:00:00"
     }
   ],
+  "gamme_steps": [
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440000",
+      "step_id": "660e8400-e29b-41d4-a716-446655440001",
+      "step_label": "Diagnostic initial",
+      "step_sort_order": 1,
+      "step_optional": false,
+      "status": "validated",
+      "skip_reason": null,
+      "validated_at": "2026-01-13T14:35:00",
+      "validated_by": "a1b2c3d4-..."
+    },
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440001",
+      "step_id": "660e8400-e29b-41d4-a716-446655440002",
+      "step_label": "Remplacement pièce",
+      "step_sort_order": 2,
+      "step_optional": false,
+      "status": "validated",
+      "skip_reason": null,
+      "validated_at": "2026-01-13T15:00:00",
+      "validated_by": "a1b2c3d4-..."
+    }
+  ],
   "created_at": "2026-01-13T14:30:00",
   "updated_at": "2026-01-13T15:00:00"
 }
@@ -131,6 +155,21 @@ Détail d'une action avec sous-catégorie et demandes d'achat.
 >
 > - `tech` : [UserListItem](users.md#userlistitem) (informations du technicien)
 > - `purchase_requests` : tableau de [PurchaseRequestListItem](purchase-requests.md#get-purchase-requestslist-v120) — demandes d'achat liées à cette action via `intervention_action_purchase_request`. `intervention_code` est déduit via la jonction `→ intervention_action → intervention`.
+> - `gamme_steps` : tableau de [GammeStepValidationDetail](#gammestepvalidationdetail) — steps de gamme validés/skippés par cette action (liés via `gamme_step_validation.action_id`). Vide si l'action ne valide aucun step.
+
+### GammeStepValidationDetail
+
+| Champ | Type | Description |
+|-------|------|-------------|
+| `id` | uuid | ID de la validation de step (gamme_step_validation.id) |
+| `step_id` | uuid | ID du step de gamme (preventive_plan_gamme_step.id) |
+| `step_label` | string | Libellé du step (ex: "Diagnostic initial") |
+| `step_sort_order` | int | Ordre d'affichage du step dans la gamme |
+| `step_optional` | boolean | Si le step est optionnel |
+| `status` | string | `"validated"` ou `"skipped"` |
+| `skip_reason` | string \| null | Motif du skip si applicable (null pour validated) |
+| `validated_at` | datetime | Date/heure de la validation/skip |
+| `validated_by` | uuid | ID du technicien qui a validé |
 
 ---
 
@@ -144,6 +183,19 @@ Deux modes exclusifs pour saisir le temps — la logique est gérée par trigger
 - **Mode direct** : fournir `time_spent` → `action_start`/`action_end` sont ignorés
 
 Fournir les deux ou aucun des deux déclenche une erreur `400` avec le message du trigger.
+
+### Embarquement de la validation de gamme steps (optionnel)
+
+Vous pouvez **valider ou skipper automatiquement plusieurs steps de gamme** lors de la création de l'action, en un seul appel.
+
+Fournissez `gamme_step_validations` (liste d'objets) avec :
+- `step_validation_id` : UUID du step à traiter
+- `status` : `"validated"` ou `"skipped"`
+- `skip_reason` : **Requis si status="skipped"**; ignoré sinon
+
+**Comportement** :
+- **Status "validated"** : L'action créée lie ce step (`action_id = new_action.id`), `validated_by = tech`
+- **Status "skipped"** : Skip le step avec motif, pas d'action_id, `validated_by = tech`
 
 ### Entrée — mode bornes
 
@@ -175,6 +227,38 @@ Fournir les deux ou aucun des deux déclenche une erreur `400` avec le message d
 }
 ```
 
+### Entrée — mode direct avec validation de gamme steps
+
+L'exemple ci-dessous crée une action **ET valide 2 steps de gamme + skippe 1 step** en un seul appel :
+
+```json
+{
+  "intervention_id": "5ecf60d5-8471-4739-8ba8-0fdad7b51781",
+  "description": "Remplacement du roulement SKF 6205",
+  "time_spent": 1.5,
+  "action_subcategory": 30,
+  "tech": "a1b2c3d4-...",
+  "complexity_score": 7,
+  "complexity_factor": "PCE",
+  "created_at": "2026-01-13T14:30:00",
+  "gamme_step_validations": [
+    {
+      "step_validation_id": "550e8400-e29b-41d4-a716-446655440000",
+      "status": "validated"
+    },
+    {
+      "step_validation_id": "550e8400-e29b-41d4-a716-446655440001",
+      "status": "validated"
+    },
+    {
+      "step_validation_id": "550e8400-e29b-41d4-a716-446655440002",
+      "status": "skipped",
+      "skip_reason": "Pièce de rechange non disponible"
+    }
+  ]
+}
+```
+
 | Champ                | Type     | Requis       | Description                                                                                                             |
 | -------------------- | -------- | ------------ | ----------------------------------------------------------------------------------------------------------------------- |
 | `intervention_id`    | uuid     | oui          | Intervention parente                                                                                                    |
@@ -187,6 +271,15 @@ Fournir les deux ou aucun des deux déclenche une erreur `400` avec le message d
 | `complexity_score`   | int      | oui          | Score 1-10                                                                                                              |
 | `complexity_factor`  | string   | conditionnel | **Requis si score > 5**. Code existant dans [complexity_factors](complexity-factors.md)                                 |
 | `created_at`         | datetime | non          | Défaut: `now()`. Permet le backdating                                                                                   |
+| `gamme_step_validations` | array | non | Liste optionnelle de steps à valider/skipper. Voir schéma ci-dessous |
+
+#### Schéma `GammeStepValidationRequest`
+
+| Champ | Type | Requis | Description |
+|-------|------|--------|-------------|
+| `step_validation_id` | uuid | oui | ID du gamme_step_validation à traiter |
+| `status` | string | oui | `"validated"` ou `"skipped"` |
+| `skip_reason` | string | conditionnel | **Requis si status="skipped"**. Raison du skip (non-vide). Ignoré sinon |
 
 ### Réponse `201`
 
@@ -200,6 +293,11 @@ Action complète avec sous-catégorie enrichie.
 | 400  | Ni `action_start`/`action_end` ni `time_spent` fournis |
 | 400  | `action_end` ≤ `action_start`                          |
 | 400  | Bornes ou `time_spent` non multiples de 0.25h          |
+| 400  | Step dans `gamme_step_validations` inexistant          |
+| 400  | Step n'appartient pas à la même intervention           |
+| 400  | `skip_reason` vide/whitespace quand status="skipped"   |
+| 400  | Step déjà validé/skippé (`status != 'pending'`)        |
+| 422  | Validation d'un step échoue (ex: action_id invalide)   |
 
 ---
 

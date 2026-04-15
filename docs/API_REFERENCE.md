@@ -1,7 +1,7 @@
 # Référence Complète API — Tunnel GMAO
 
-**Version API :** 2.6.0  
-**Date :** 2026-03-02  
+**Version API :** 2.16.1  
+**Date :** 2026-04-13  
 **Base URL :** `http://<host>:8000`
 
 ---
@@ -22,7 +22,8 @@
 12. [Statistiques & KPIs](#12-statistiques--kpis)
 13. [Exports](#13-exports)
 14. [Référentiels](#14-référentiels)
-15. [Conventions transversales](#15-conventions-transversales)
+15. [**Maintenance Préventive**](#15-maintenance-préventive)
+16. [Conventions transversales](#16-conventions-transversales)
 
 ---
 
@@ -1477,7 +1478,62 @@ Exemples :
 
 ---
 
-## 15. Conventions transversales
+## 15. Maintenance Préventive
+
+Gestion complète du cycle de vie de la maintenance préventive : plans de gamme, génération automatique d'occurrences et validation des étapes lors de l'exécution.
+
+### Flux
+
+```
+Plan préventif → Génération → Occurrence → DI créée automatiquement
+                                               ↓
+                                    Intervention (si auto_accept)
+                                               ↓
+                              Validation des étapes de gamme
+                                               ↓
+                                  is_complete → Clôture autorisée
+```
+
+### Endpoints
+
+| Méthode  | Endpoint                                  | Description                                           |
+| -------- | ----------------------------------------- | ----------------------------------------------------- |
+| `GET`    | `/preventive-plans`                       | Liste les plans actifs (+ steps embarqués)            |
+| `GET`    | `/preventive-plans/{id}`                  | Détail d'un plan                                      |
+| `POST`   | `/preventive-plans`                       | Crée un plan avec ses étapes                          |
+| `PUT`    | `/preventive-plans/{id}`                  | Met à jour un plan (PATCH sémantique, code immuable)  |
+| `PATCH`  | `/preventive-plans/{id}/steps`            | Remplace entièrement les étapes d'un plan             |
+| `DELETE` | `/preventive-plans/{id}`                  | Désactive un plan (soft delete → `active = false`)    |
+| `GET`    | `/preventive-occurrences`                 | Liste les occurrences (5 filtres)                     |
+| `GET`    | `/preventive-occurrences/{id}`            | Détail d'une occurrence                               |
+| `POST`   | `/preventive-occurrences/generate`        | Déclenche la génération pour tous les plans actifs    |
+| `PATCH`  | `/preventive-occurrences/{id}/skip`       | Ignore une occurrence `pending`                       |
+| `GET`    | `/gamme-step-validations`                 | Liste les validations d'une intervention              |
+| `GET`    | `/gamme-step-validations/progress`        | Progression gamme d'une intervention                  |
+| `PATCH`  | `/gamme-step-validations/{id}`            | Valide ou ignore une étape                            |
+
+> Documentation complète : [Preventive Plans](endpoints/preventive-plans.md) | [Preventive Occurrences](endpoints/preventive-occurrences.md) | [Gamme Step Validations](endpoints/gamme-step-validations.md)
+
+### Impact sur `GET /interventions/{id}`
+
+Les interventions issues d'un plan préventif exposent deux champs supplémentaires :
+
+| Champ            | Description                                                                    |
+| ---------------- | ------------------------------------------------------------------------------ |
+| `plan_id`        | UUID du plan préventif d'origine (`null` si intervention manuelle)             |
+| `gamme_progress` | `{ total, validated, skipped, pending, is_complete }` — `null` si pas de plan |
+
+### Clôture avec gamme incomplète
+
+Si `plan_id` est renseigné et que `pending > 0`, le passage en statut `ferme` retourne `409` :
+
+```json
+{ "detail": "Des étapes de gamme sont en attente de validation" }
+```
+
+---
+
+## 16. Conventions transversales
 
 ### Pagination
 

@@ -1,5 +1,5 @@
 """Schémas Pydantic pour le domaine équipements"""
-from datetime import date
+from datetime import date, datetime
 from typing import Any
 from uuid import UUID
 
@@ -95,6 +95,46 @@ class EquipementChildItem(BaseModel):
         from_attributes = True
 
 
+class PreventivePlanSummary(BaseModel):
+    """Résumé d'un plan de maintenance préventive applicable"""
+    id: UUID
+    code: str
+    label: str
+    trigger_type: str  # "periodicity" | "hours"
+    periodicity_days: int | None = None
+    hours_threshold: int | None = None
+    active: bool
+    # date de la prochaine occurrence pending/générée
+    next_occurrence: date | None = None
+
+    class Config:
+        from_attributes = True
+
+
+class PreventiveOccurrencesSummary(BaseModel):
+    """Résumé des occurrences préventives récentes/en cours"""
+    pending_count: int = 0
+    generated_count: int = 0
+    skipped_count: int = 0
+    next_scheduled: date | None = None  # prochaine occurrence pending
+    last_skipped_reason: str | None = None
+
+
+class OpenRequestSummary(BaseModel):
+    """Résumé d'une demande d'intervention ouverte"""
+    id: UUID
+    code: str | None = None
+    description: str | None = None
+    statut: str
+    statut_label: str | None = None
+    statut_color: str | None = None
+    is_system: bool
+    created_at: datetime | None = None
+
+    class Config:
+        from_attributes = True
+
+
 class EquipementDetail(BaseModel):
     """Équipement détaillé avec tous les champs, children_count et interventions paginées"""
     id: UUID
@@ -113,6 +153,9 @@ class EquipementDetail(BaseModel):
     statut: EquipementStatutRef | None = None
     children_count: int = 0
     interventions: InterventionsPaginated
+    preventive_plans: list[PreventivePlanSummary] | None = None
+    preventive_occurrences_summary: PreventiveOccurrencesSummary | None = None
+    open_requests: list[OpenRequestSummary] | None = None
 
     class Config:
         from_attributes = True

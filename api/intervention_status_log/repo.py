@@ -2,9 +2,11 @@ from fastapi import HTTPException
 from typing import Any, Dict, List
 from uuid import uuid4
 
+import psycopg2
+
 from api.settings import settings
 from api.db import get_connection, release_connection
-from api.errors.exceptions import DatabaseError, raise_db_error, NotFoundError
+from api.errors.exceptions import ConflictError, DatabaseError, raise_db_error, NotFoundError
 from api.intervention_status_log.validators import InterventionStatusLogValidator
 
 
@@ -207,7 +209,13 @@ class InterventionStatusLogRepository:
         return self.get_all(intervention_id=intervention_id, limit=1000, offset=0)
 
     def add(self, log_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Crée un nouveau log de changement de statut"""
+        """Crée un nouveau log de changement de statut.
+
+        Le trigger trg_sync_status_log_to_intervention se déclenche après l'INSERT et :
+        - met à jour intervention.status_actual avec status_to
+        - si status_to = 'ferme' : passe preventive_occurrence.status à 'completed'
+          et clôture automatiquement la demande liée (intervention_request.statut → 'cloturee')
+        """
         # Validation via validators
         validated_data = InterventionStatusLogValidator.validate_and_prepare(log_data)
 
@@ -243,6 +251,13 @@ class InterventionStatusLogRepository:
             # Les ValueError viennent des validateurs, on les re-lève telles quelles
             conn.rollback()
             raise
+        except psycopg2.Error as e:
+            conn.rollback()
+            # Un trigger DB peut bloquer la clôture quand la gamme est incomplète
+            msg = getattr(getattr(e, "diag", None), "message_primary", None) or str(e)
+            if msg.startswith("GAMME_INCOMPLETE"):
+                raise ConflictError("Des étapes de gamme sont en attente de validation")
+            raise_db_error(e, "ajout du log de statut")
         except Exception as e:
             conn.rollback()
             raise DatabaseError(f"Erreur lors de l'ajout du log: {str(e)}") from e
