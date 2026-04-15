@@ -2,6 +2,37 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [2.19.0] - 15 avril 2026
+
+### Corrections critiques
+
+- **[BUG] Steps de gamme non liés à l'intervention lors d'une acceptation manuelle de DI préventive** (`api/intervention_requests/repo.py`) :
+  Le curseur partagé entre `_create_intervention_for_request()` et le bloc de rattachement causait un `fetchone()` vide sur la requête `SELECT id FROM preventive_occurrence`. Les `gamme_step_validation` restaient avec `intervention_id = NULL` et n'apparaissaient pas dans les actions. Correction : l'`occurrence_id` est maintenant résolu avant l'appel à `_create_intervention_for_request()`, pendant que le curseur est encore propre.
+
+- **[BUG] Fermeture d'intervention ne propageait pas l'état sur l'occurrence préventive** (`api/interventions/repo.py`, `api/intervention_requests/repo.py`) :
+  `_notify_if_closed()` comparait `status_actual` (UUID en base) au code texte `'ferme'` — toujours faux. De plus, `on_intervention_closed()` clôturait la DI mais pas l'occurrence préventive. Double correction :
+  1. Résolution du code via `SELECT code FROM intervention_status_ref WHERE id = %s` avant comparaison
+  2. Ajout d'un `UPDATE preventive_occurrence SET status = 'completed'` dans `on_intervention_closed()`
+
+### Nouveautés
+
+- **`POST /preventive-occurrences/repair`** : endpoint de réparation idempotent pour corriger les données corrompues par les deux bugs ci-dessus. Rattache les steps orphelins, passe les occurrences à `completed`, clôture les DI en cascade. Retourne un rapport détaillé (`steps_relinked`, `occurrences_completed`, `requests_closed`, `details`).
+
+- **Statut `completed` sur les occurrences préventives** : nouveau statut terminal indiquant qu'une occurrence a été traitée via fermeture de son intervention. Documenté dans le cycle de vie et exposé dans le filtre `status` de `GET /preventive-occurrences`.
+
+### Qualité
+
+- **Audit et standards** : ajout de `CLAUDE.md` (standards de développement, checklist avant merge, patterns obligatoires) et `BACKLOG.md` (liste priorisée des corrections et améliorations).
+- **Sécurité** : `/docs`, `/openapi.json`, `/redoc` masqués en production (`api/auth/middleware.py`).
+- **Nettoyage** : suppression de `python-jose` (inutilisé, `PyJWT` suffit), `DIRECTUS_KEY` (jamais utilisée), `get_active_status_ids()` (fonction morte dans `constants.py`).
+- **Correction doublon** : appel double à `repo.get_facets()` dans `api/equipements/routes.py` supprimé.
+
+### Migrations
+
+- `20260414_h3c4d5e6f7a8` : trigger `trg_sync_status_log_to_intervention` — synchronise `intervention.status_actual` après chaque INSERT dans `intervention_status_log`, et propage la fermeture sur l'occurrence préventive et la DI liée.
+
+---
+
 ## [2.18.0] - 15 avril 2026
 
 ### Nouveautés
