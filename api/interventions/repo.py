@@ -530,11 +530,29 @@ class InterventionRepository:
         return result
 
     def _notify_if_closed(self, intervention_id: str, status_actual: Any) -> None:
-        """Notifie le repo des demandes si l'intervention vient d'être fermée."""
+        """Notifie le repo des demandes si l'intervention vient d'être fermée.
+
+        status_actual peut être un UUID (valeur DB brute) ou le code texte directement.
+        On résout toujours le code via la DB pour comparer proprement.
+        """
         if not status_actual:
             return
         try:
-            if str(status_actual) == CLOSED_STATUS_CODE:
+            conn = get_connection()
+            try:
+                with conn.cursor() as cur:
+                    # Résoudre le code depuis l'UUID — si c'est déjà un code texte,
+                    # le SELECT ne trouvera rien et on retombe sur la comparaison directe.
+                    cur.execute(
+                        "SELECT code FROM intervention_status_ref WHERE id = %s LIMIT 1",
+                        (str(status_actual),),
+                    )
+                    row = cur.fetchone()
+                    status_code = row[0] if row else str(status_actual)
+            finally:
+                release_connection(conn)
+
+            if status_code == CLOSED_STATUS_CODE:
                 from api.intervention_requests.repo import InterventionRequestRepository
                 InterventionRequestRepository().on_intervention_closed(intervention_id)
         except Exception:

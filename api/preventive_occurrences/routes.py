@@ -9,6 +9,7 @@ from api.preventive_occurrences.schemas import (
     GenerateOccurrencesResult,
     OccurrenceSkipIn,
     PreventiveOccurrenceOut,
+    RepairOccurrencesResult,
 )
 
 router = APIRouter(
@@ -59,3 +60,23 @@ def skip_occurrence(occurrence_id: str, data: OccurrenceSkipIn):
     """Ignore une occurrence en statut 'pending'"""
     repo = PreventiveOccurrenceRepository()
     return repo.skip_occurrence(occurrence_id, data.skip_reason)
+
+
+@router.post("/repair", response_model=RepairOccurrencesResult)
+def repair_occurrences():
+    """
+    Répare les données corrompues par deux bugs désormais corrigés (fix 2026-04-15).
+
+    **Bug 1 — steps de gamme non liés à l'intervention** :
+    Lors de l'acceptation manuelle d'une DI préventive, un problème de curseur partagé
+    empêchait le rattachement des `gamme_step_validation` à l'intervention créée.
+    Les steps restaient avec `intervention_id = NULL` et n'apparaissaient pas dans les actions.
+
+    **Bug 2 — occurrence préventive bloquée à 'generated' après fermeture** :
+    La fermeture d'une intervention (via PATCH) ne propageait pas l'état `completed`
+    sur l'occurrence préventive liée, ni ne clôturait la demande associée.
+
+    Cette procédure est **idempotente** : elle peut être appelée plusieurs fois sans effet secondaire.
+    """
+    repo = PreventiveOccurrenceRepository()
+    return repo.repair_orphaned_data()

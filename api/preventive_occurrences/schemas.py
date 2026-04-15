@@ -41,3 +41,15 @@ class GenerateOccurrencesResult(BaseModel):
     generated: int
     skipped_conflicts: int
     errors: list[str] = []
+
+
+class RepairOccurrencesResult(BaseModel):
+    """Résultat de la procédure de réparation des occurrences corrompues."""
+    # Bug 1 : gamme_step_validation sans intervention_id malgré occurrence liée à une intervention
+    steps_relinked: int
+    # Bug 2 : occurrence encore 'generated' alors que l'intervention est fermée
+    occurrences_completed: int
+    # Demandes liées à une intervention fermée mais encore 'acceptee'
+    requests_closed: int
+    # Détail des occurrences et interventions traitées (pour audit)
+    details: list[str] = []
