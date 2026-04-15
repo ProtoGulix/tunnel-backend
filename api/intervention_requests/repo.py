@@ -478,7 +478,7 @@ class InterventionRequestRepository:
                     request_id, intervention_id, effective_type_inter,
                 )
 
-            # ── Clôture : fermer l'intervention liée ──────────────────
+            # ── Clôture : fermer l'intervention liée + compléter l'occurrence ──
             elif status_to == "cloturee":
                 if intervention_id:
                     self._close_linked_intervention(
@@ -486,6 +486,21 @@ class InterventionRequestRepository:
                     logger.info(
                         "Demande %s clôturée : intervention %s fermée",
                         request_id, intervention_id,
+                    )
+                # Passer l'occurrence préventive liée à 'completed'
+                cur.execute(
+                    """
+                    UPDATE preventive_occurrence
+                    SET status = 'completed'
+                    WHERE di_id = %s
+                      AND status NOT IN ('completed', 'skipped')
+                    """,
+                    (request_id,),
+                )
+                if cur.rowcount:
+                    logger.info(
+                        "Occurrence préventive liée à la demande %s passée à 'completed'",
+                        request_id,
                     )
 
             # ── Rejet : remettre l'occurrence préventive liée en pending ──
@@ -525,7 +540,11 @@ class InterventionRequestRepository:
                 # pour éviter toute pollution du curseur partagé.
                 if preventive_occurrence_id:
                     cur.execute(
-                        "UPDATE preventive_occurrence SET intervention_id = %s WHERE id = %s",
+                        """
+                        UPDATE preventive_occurrence
+                        SET intervention_id = %s, status = 'in_progress'
+                        WHERE id = %s
+                        """,
                         (str(intervention_id), preventive_occurrence_id),
                     )
                     cur.execute(

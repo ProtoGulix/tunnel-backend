@@ -446,7 +446,11 @@ class PreventiveOccurrenceRepository:
             try:
                 cur = conn.cursor()
                 cur.execute(
-                    "UPDATE preventive_occurrence SET intervention_id = %s WHERE id = %s",
+                    """
+                    UPDATE preventive_occurrence
+                    SET intervention_id = %s, status = 'in_progress'
+                    WHERE id = %s
+                    """,
                     (intervention_id, occurrence_id),
                 )
                 # ✅ Mettre à jour les gamme_step_validation avec l'intervention_id
@@ -494,6 +498,7 @@ class PreventiveOccurrenceRepository:
         conn = self._get_connection()
         steps_relinked = 0
         occurrences_relinked = 0
+        occurrences_set_in_progress = 0
         occurrences_completed = 0
         requests_closed = 0
         details = []
@@ -526,7 +531,31 @@ class PreventiveOccurrenceRepository:
                     "Repair Bug 1 : %s gamme_step_validation rattachés", steps_relinked
                 )
 
-            # ── Bug 2 : occurrences bloquées à 'generated' ────────────────────
+            # ── Étape 3 : occurrences bloquées à 'generated' malgré DI acceptée ──
+            # Règle : DI 'acceptee' → occurrence doit être 'in_progress'
+            cur.execute(
+                """
+                UPDATE preventive_occurrence po
+                SET status = 'in_progress'
+                FROM intervention_request ir
+                WHERE po.di_id = ir.id
+                  AND po.status = 'generated'
+                  AND ir.statut = 'acceptee'
+                RETURNING po.id
+                """
+            )
+            in_progress_rows = cur.fetchall()
+            occurrences_set_in_progress = len(in_progress_rows)
+            if in_progress_rows:
+                details.append(
+                    f"Étape 3 : {occurrences_set_in_progress} occurrence(s) → 'in_progress' (DI acceptée)"
+                )
+                logger.info(
+                    "Repair étape 3 : %s occurrence(s) passées à 'in_progress'",
+                    occurrences_set_in_progress,
+                )
+
+            # ── Bug 2 : occurrences bloquées à 'generated' ou 'in_progress' ──────
             # Inclut le cas où po.intervention_id est NULL mais ir.intervention_id
             # est renseigné (ancien bug de curseur lors de l'acceptation manuelle).
             cur.execute(
@@ -542,7 +571,7 @@ class PreventiveOccurrenceRepository:
                 JOIN intervention i
                     ON i.id = COALESCE(po.intervention_id, ir.intervention_id)
                 JOIN intervention_status_ref isr ON isr.id = i.status_actual
-                WHERE po.status = 'generated'
+                WHERE po.status IN ('generated', 'in_progress')
                   AND isr.code = 'ferme'
                 """
             )
@@ -608,8 +637,8 @@ class PreventiveOccurrenceRepository:
 
             conn.commit()
             logger.info(
-                "Repair terminé : %s steps rattachés, %s occurrences reliées, %s complétées, %s demandes clôturées",
-                steps_relinked, occurrences_relinked, occurrences_completed, requests_closed,
+                "Repair terminé : %s steps rattachés, %s occurrences reliées, %s → in_progress, %s complétées, %s demandes clôturées",
+                steps_relinked, occurrences_relinked, occurrences_set_in_progress, occurrences_completed, requests_closed,
             )
 
         except Exception as e:
@@ -621,6 +650,7 @@ class PreventiveOccurrenceRepository:
         return {
             "steps_relinked": steps_relinked,
             "occurrences_relinked": occurrences_relinked,
+            "occurrences_set_in_progress": occurrences_set_in_progress,
             "occurrences_completed": occurrences_completed,
             "requests_closed": requests_closed,
             "details": details,

@@ -50,6 +50,7 @@ class RepairOccurrencesResult(BaseModel):
     """Résultat de la procédure de réparation des occurrences corrompues."""
     steps_relinked: int
     occurrences_relinked: int
+    occurrences_set_in_progress: int
     occurrences_completed: int
     requests_closed: int
     details: list[str] = []

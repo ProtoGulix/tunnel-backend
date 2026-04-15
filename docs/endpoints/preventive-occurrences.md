@@ -9,22 +9,26 @@ Occurrences de maintenance préventive générées par les plans actifs. Chaque 
 ## Cycle de vie d'une occurrence
 
 ```
-pending → generated → completed
-       ↘ skipped       ↑
-         (via PATCH     └─ fermeture de l'intervention liée
-          /:id/skip)       (automatique en cascade)
+pending → generated → in_progress → completed
+       ↘ skipped          ↑               ↑
+         (via PATCH   DI acceptée    DI clôturée
+          /:id/skip)  OU intervention  OU intervention
+                         fermée (cascade)
 ```
 
-| Statut      | Description                                                                    |
-| ----------- | ------------------------------------------------------------------------------ |
-| `pending`   | Générée, en attente de création de DI                                          |
-| `generated` | DI créée et liée via `di_id`; intervention liée via `intervention_id` si acceptée |
-| `completed` | Intervention fermée — passage automatique lors de la fermeture de l'intervention |
-| `skipped`   | Ignorée manuellement (raison obligatoire)                                      |
+| Statut        | Description                                                                       |
+| ------------- | --------------------------------------------------------------------------------- |
+| `pending`     | Générée, en attente de création de DI                                             |
+| `generated`   | DI créée et liée via `di_id` (statut DI : `nouvelle`)                            |
+| `in_progress` | DI acceptée — intervention liée via `intervention_id`, travaux en cours           |
+| `completed`   | DI clôturée ou intervention fermée — passage automatique en cascade               |
+| `skipped`     | Ignorée manuellement (raison obligatoire)                                         |
 
-> **Rejet de la DI** : si la DI liée passe en `rejetee`, l'occurrence revient automatiquement à `pending` et `di_id` est vidé. Elle pourra être régénérée au prochain appel de `POST /generate`.
+> **Rejet de la DI** : si la DI liée passe en `rejetee`, l'occurrence revient automatiquement à `pending` et `di_id` est vidé.
 
-> **Fermeture en cascade** : la fermeture d'une intervention (via `PATCH /interventions/{id}` ou `POST /intervention-status-log`) passe automatiquement l'occurrence à `completed` et clôture la DI liée si elle est encore `acceptee`.
+> **Acceptation en cascade** : DI `nouvelle` → `acceptee` passe l'occurrence à `in_progress` et renseigne `intervention_id`.
+
+> **Clôture en cascade** : DI → `cloturee` **ou** fermeture de l'intervention (via PATCH ou POST /intervention-status-log) passent l'occurrence à `completed`.
 
 ---
 
@@ -194,20 +198,22 @@ La fermeture d'une intervention via `PATCH /interventions/{id}` ne propageait pa
 {
   "steps_relinked": 12,
   "occurrences_relinked": 3,
-  "occurrences_completed": 3,
-  "requests_closed": 3,
+  "occurrences_set_in_progress": 3,
+  "occurrences_completed": 2,
+  "requests_closed": 2,
   "details": [
     "Bug 1 : 12 step(s) rattaché(s) aux interventions : abc-123, def-456",
-    "Bug 2 : occurrence xyz-789 → 'completed' (intervention fermée : aaa-111)",
-    "Bug 2 : demande zzz-222 → 'cloturee' (liée à l'occurrence xyz-789)"
+    "Étape 3 : 3 occurrence(s) → 'in_progress' (DI acceptée)",
+    "Bug 2 : occurrence xyz-789 → 'completed' (intervention fermée : aaa-111)"
   ]
 }
 ```
 
-| Champ                   | Description                                                                        |
-| ----------------------- | ---------------------------------------------------------------------------------- |
-| `steps_relinked`        | Nombre de `gamme_step_validation` rattachés (Bug 1)                                |
-| `occurrences_relinked`  | Occurrences dont `intervention_id` a été rétabli depuis la DI liée (pré-étape Bug 2) |
-| `occurrences_completed` | Nombre d'occurrences passées à `completed` (Bug 2)                                 |
-| `requests_closed`       | Nombre de DI clôturées en cascade (Bug 2)                                          |
-| `details`               | Journal détaillé de chaque correction appliquée                                    |
+| Champ                        | Description                                                                        |
+| ---------------------------- | ---------------------------------------------------------------------------------- |
+| `steps_relinked`             | Nombre de `gamme_step_validation` rattachés (Bug 1)                                |
+| `occurrences_relinked`       | Occurrences dont `intervention_id` a été rétabli depuis la DI liée                 |
+| `occurrences_set_in_progress`| Occurrences passées de `generated` à `in_progress` (DI déjà acceptée)             |
+| `occurrences_completed`      | Occurrences passées à `completed` (intervention fermée)                            |
+| `requests_closed`            | DI clôturées en cascade                                                            |
+| `details`                    | Journal détaillé de chaque correction appliquée                                    |
