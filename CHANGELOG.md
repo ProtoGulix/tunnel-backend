@@ -2,6 +2,39 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [2.20.0] - 15 avril 2026
+
+### Nouveautés
+
+- **Statut `in_progress` sur les occurrences préventives** : nouveau statut intermédiaire entre `generated` et `completed`. Passage automatique quand la DI liée est acceptée (qu'elle passe à `acceptee`), dans les deux chemins : acceptation manuelle (`transition_status`) et auto-accept (`_auto_accept_occurrence`).
+
+- **Clôture de DI → `completed` sur l'occurrence** : la transition d'une DI vers `cloturee` passe maintenant directement l'occurrence associée à `completed`, sans nécessiter la fermeture de l'intervention.
+
+- **`gamme_steps` embarqués dans `GET /preventive-occurrences`** : chaque occurrence expose la liste de ses `gamme_step_validation` avec label, statut, `action_id` et `intervention_id`. Le chargement est fait en batch (une seule requête pour toutes les occurrences, sans N+1). Permet de diagnostiquer visuellement les bugs de rattachement.
+
+- **Repair amélioré (`POST /preventive-occurrences/repair`)** :
+  - Nouveau champ `occurrences_relinked` : occurrences dont `intervention_id` a été rétabli depuis la DI liée (bug curseur acceptation manuelle)
+  - Nouveau champ `occurrences_set_in_progress` : occurrences passées de `generated` à `in_progress` (DI déjà acceptée en base)
+  - Recherche étendue à `status IN ('generated', 'in_progress')` pour le Bug 2
+
+### Corrections
+
+- **`on_intervention_closed` ne passait pas l'occurrence à `completed` si la DI n'était plus `acceptee`** : le `return` prématuré de l'étape 1 bloquait l'étape 2. Les deux étapes sont maintenant indépendantes.
+
+### Migrations DB (`web.tunnel-db`)
+
+- `20260413_g2b3c4d5e6f7` : rétrolien interventions → plans via `preventive_occurrence`
+- `20260414_h3c4d5e6f7a8` : trigger `trg_sync_status_log_to_intervention` avec cascade fermeture
+- `20260415_i4d5e6f7a8b9` : suppression du trigger redondant `trg_sync_status_from_log`
+
+### Documentation
+
+- Cycle de vie des occurrences mis à jour avec les 4 statuts (`pending`, `generated`, `in_progress`, `completed`, `skipped`)
+- Schéma `gamme_steps` documenté dans `GET /preventive-occurrences`
+- `TODO.md` enrichi avec les points issus du bilan technique
+
+---
+
 ## [2.19.0] - 15 avril 2026
 
 ### Corrections critiques
