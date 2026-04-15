@@ -419,6 +419,7 @@ class InterventionRequestRepository:
         conn = self._get_connection()
         try:
             cur = conn.cursor()
+            preventive_occurrence_id = None  # Résolu plus bas uniquement si status_to == "acceptee"
             cur.execute(
                 "SELECT code FROM request_status_ref WHERE code = %s", (
                     status_to,)
@@ -456,6 +457,16 @@ class InterventionRequestRepository:
                 if intervention_data is None:
                     intervention_data = {}
                 intervention_data["type_inter"] = effective_type_inter
+
+                # Récupérer l'occurrence_id ICI, avant d'appeler _create_intervention_for_request.
+                # Après cet appel le curseur partagé a été utilisé plusieurs fois (SELECT plan_id,
+                # INSERT intervention…) et un nouveau fetchone() retournerait None ou un résidu.
+                cur.execute(
+                    "SELECT id FROM preventive_occurrence WHERE di_id = %s LIMIT 1",
+                    (request_id,),
+                )
+                occ_row = cur.fetchone()
+                preventive_occurrence_id = str(occ_row[0]) if occ_row else None
 
                 intervention_id = self._create_intervention_for_request(
                     cur=cur,
@@ -509,20 +520,14 @@ class InterventionRequestRepository:
                     "UPDATE intervention_request SET intervention_id = %s WHERE id = %s",
                     (str(intervention_id), request_id),
                 )
-                # Rattacher les gamme_step_validation de l'occurrence à cette intervention
-                cur.execute(
-                    "SELECT id FROM preventive_occurrence WHERE di_id = %s LIMIT 1",
-                    (request_id,),
-                )
-                occurrence_row = cur.fetchone()
-                if occurrence_row:
-                    occurrence_id = str(occurrence_row[0])
-                    # Mettre à jour l'occurrence pour lier l'intervention
+                # Rattacher l'occurrence et les gamme_step_validation à l'intervention créée.
+                # preventive_occurrence_id a été résolu AVANT _create_intervention_for_request
+                # pour éviter toute pollution du curseur partagé.
+                if preventive_occurrence_id:
                     cur.execute(
                         "UPDATE preventive_occurrence SET intervention_id = %s WHERE id = %s",
-                        (str(intervention_id), occurrence_id),
+                        (str(intervention_id), preventive_occurrence_id),
                     )
-                    # Mettre à jour les gamme_step_validation
                     cur.execute(
                         """
                         UPDATE gamme_step_validation
@@ -530,7 +535,7 @@ class InterventionRequestRepository:
                         WHERE occurrence_id = %s
                         AND intervention_id IS NULL
                         """,
-                        (str(intervention_id), occurrence_id),
+                        (str(intervention_id), preventive_occurrence_id),
                     )
                     logger.info(
                         "Rattachement gamme : %s step(s) liés à l'intervention %s",
@@ -658,13 +663,16 @@ class InterventionRequestRepository:
 
     def on_intervention_closed(self, intervention_id: str) -> None:
         """
-        Passe à 'cloturee' la demande liée à cette intervention (si elle existe
-        et est encore au statut 'acceptee').
-        Appelé depuis InterventionRepository.update() après fermeture d'une intervention.
+        Cascade de fermeture déclenchée quand une intervention est fermée (via PATCH direct).
+        - Passe la demande liée à 'cloturee' (si encore 'acceptee')
+        - Passe l'occurrence préventive liée à 'completed' (si elle existe)
+        Appelé depuis InterventionRepository._notify_if_closed().
         """
         conn = self._get_connection()
         try:
             cur = conn.cursor()
+
+            # 1. Clôturer la demande liée
             cur.execute(
                 """
                 SELECT id, statut FROM intervention_request
@@ -692,15 +700,32 @@ class InterventionRequestRepository:
                 (str(request_id), current_statut, "cloturee",
                  "Clôture automatique suite à la fermeture de l'intervention"),
             )
-            conn.commit()
             logger.info(
                 "Demande %s automatiquement clôturée (intervention %s fermée)",
                 request_id, intervention_id,
             )
+
+            # 2. Passer l'occurrence préventive liée à 'completed'
+            cur.execute(
+                """
+                UPDATE preventive_occurrence
+                SET status = 'completed'
+                WHERE intervention_id = %s
+                  AND status NOT IN ('completed', 'skipped')
+                """,
+                (intervention_id,),
+            )
+            if cur.rowcount:
+                logger.info(
+                    "Occurrence préventive liée à l'intervention %s passée à 'completed'",
+                    intervention_id,
+                )
+
+            conn.commit()
         except Exception as e:
             conn.rollback()
             logger.error(
-                "Erreur clôture automatique demande pour intervention %s: %s",
+                "Erreur clôture automatique pour intervention %s: %s",
                 intervention_id, str(e),
             )
         finally:

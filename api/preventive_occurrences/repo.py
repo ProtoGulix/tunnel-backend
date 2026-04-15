@@ -430,3 +430,139 @@ class PreventiveOccurrenceRepository:
         except Exception as e:
             logger.warning(
                 "Auto-accept échoué pour l'occurrence %s: %s", occurrence_id, e)
+
+    # ── Repair ───────────────────────────────────────────────────
+
+    def repair_orphaned_data(self) -> dict:
+        """
+        Répare les données corrompues par deux bugs désormais corrigés :
+
+        Bug 1 — gamme_step_validation sans intervention_id :
+          Lors de l'acceptation manuelle d'une DI préventive, le curseur partagé
+          causait un fetchone() vide → les steps restaient avec intervention_id = NULL
+          même si l'occurrence était liée à une intervention.
+          Fix : UPDATE gamme_step_validation SET intervention_id depuis l'occurrence.
+
+        Bug 2 — occurrence préventive bloquée à 'generated' après fermeture :
+          _notify_if_closed() comparait un UUID au code texte 'ferme' → toujours faux
+          → on_intervention_closed() jamais appelé → occurrence jamais passée à 'completed'.
+          Fix : détecter les interventions fermées liées à une occurrence 'generated'
+          et les passer à 'completed' + clôturer la demande liée si encore 'acceptee'.
+        """
+        conn = self._get_connection()
+        steps_relinked = 0
+        occurrences_completed = 0
+        requests_closed = 0
+        details = []
+
+        try:
+            cur = conn.cursor()
+
+            # ── Bug 1 : steps orphelins sans intervention_id ──────────────────
+            # Cas : occurrence a un intervention_id, mais ses gamme_step_validation non.
+            cur.execute(
+                """
+                UPDATE gamme_step_validation gsv
+                SET intervention_id = po.intervention_id
+                FROM preventive_occurrence po
+                WHERE gsv.occurrence_id = po.id
+                  AND po.intervention_id IS NOT NULL
+                  AND gsv.intervention_id IS NULL
+                RETURNING gsv.id, po.intervention_id
+                """
+            )
+            rows = cur.fetchall()
+            steps_relinked = len(rows)
+            if rows:
+                affected_interventions = list({str(r[1]) for r in rows})
+                details.append(
+                    f"Bug 1 : {steps_relinked} step(s) rattaché(s) aux interventions : "
+                    + ", ".join(affected_interventions)
+                )
+                logger.info(
+                    "Repair Bug 1 : %s gamme_step_validation rattachés", steps_relinked
+                )
+
+            # ── Bug 2 : occurrences bloquées à 'generated' ────────────────────
+            # Cas : l'intervention liée est fermée (status_actual = code 'ferme')
+            # mais l'occurrence est encore 'generated'.
+            cur.execute(
+                """
+                SELECT po.id, po.intervention_id, po.di_id
+                FROM preventive_occurrence po
+                JOIN intervention i ON i.id = po.intervention_id
+                JOIN intervention_status_ref isr ON isr.id = i.status_actual
+                WHERE po.status = 'generated'
+                  AND isr.code = 'ferme'
+                """
+            )
+            stale_occurrences = cur.fetchall()
+
+            for occ_id, intervention_id, di_id in stale_occurrences:
+                occ_id = str(occ_id)
+                intervention_id = str(intervention_id)
+
+                # Passer l'occurrence à 'completed'
+                cur.execute(
+                    "UPDATE preventive_occurrence SET status = 'completed' WHERE id = %s",
+                    (occ_id,),
+                )
+                occurrences_completed += 1
+                details.append(
+                    f"Bug 2 : occurrence {occ_id} → 'completed' "
+                    f"(intervention fermée : {intervention_id})"
+                )
+
+                # Clôturer la demande liée si encore 'acceptee'
+                if di_id:
+                    cur.execute(
+                        """
+                        SELECT id, statut FROM intervention_request
+                        WHERE id = %s AND statut = 'acceptee'
+                        LIMIT 1
+                        """,
+                        (str(di_id),),
+                    )
+                    req_row = cur.fetchone()
+                    if req_row:
+                        req_id, req_statut = str(req_row[0]), req_row[1]
+                        cur.execute("SET LOCAL app.skip_request_status_log = 'true'")
+                        cur.execute(
+                            "UPDATE intervention_request SET statut = 'cloturee' WHERE id = %s",
+                            (req_id,),
+                        )
+                        cur.execute(
+                            """
+                            INSERT INTO request_status_log
+                                (request_id, status_from, status_to, changed_by, notes)
+                            VALUES (%s, %s, 'cloturee', NULL, %s)
+                            """,
+                            (
+                                req_id,
+                                req_statut,
+                                "Clôture automatique — procédure de réparation (bug cascade fermeture)",
+                            ),
+                        )
+                        requests_closed += 1
+                        details.append(
+                            f"Bug 2 : demande {req_id} → 'cloturee' (liée à l'occurrence {occ_id})"
+                        )
+
+            conn.commit()
+            logger.info(
+                "Repair terminé : %s steps rattachés, %s occurrences complétées, %s demandes clôturées",
+                steps_relinked, occurrences_completed, requests_closed,
+            )
+
+        except Exception as e:
+            conn.rollback()
+            raise_db_error(e, "procédure de réparation des occurrences")
+        finally:
+            release_connection(conn)
+
+        return {
+            "steps_relinked": steps_relinked,
+            "occurrences_completed": occurrences_completed,
+            "requests_closed": requests_closed,
+            "details": details,
+        }
