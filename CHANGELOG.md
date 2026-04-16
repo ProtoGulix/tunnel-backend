@@ -2,6 +2,21 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [2.21.0] - 16 avril 2026
+
+### Corrections
+
+- **[BUG] Steps de gamme absents lors de l'acceptation manuelle d'une DI préventive** (`api/interventions/repo.py`) :
+  Lors de la création manuelle d'une intervention sur une DI préventive, `_link_request()` ne mettait pas à jour l'occurrence ni les `gamme_step_validation`. Résultat : `intervention.plan_id = NULL`, les steps n'apparaissaient ni dans le formulaire d'action ni dans la vue intervention. Correction : `_link_request()` détecte désormais l'occurrence liée à la DI et effectue dans la même transaction :
+  1. `UPDATE preventive_occurrence SET intervention_id, status = 'in_progress'`
+  2. `UPDATE gamme_step_validation SET intervention_id`
+  3. `UPDATE intervention SET plan_id` (pour activer le bloc gamme dans `get_by_id`)
+
+- **Repair étendu (`POST /preventive-occurrences/repair`)** (`api/preventive_occurrences/repo.py`) :
+  L'ancienne « Étape 3 » ne faisait que passer l'occurrence à `in_progress` sans lier `intervention_id`. Elle est remplacée par une réparation complète qui retrouve toutes les occurrences dont la DI est acceptée mais `intervention_id` est null, et effectue les 3 mises à jour ci-dessus pour rétablir les données existantes.
+
+---
+
 ## [2.20.0] - 15 avril 2026
 
 ### Nouveautés
