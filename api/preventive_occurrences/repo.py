@@ -531,28 +531,45 @@ class PreventiveOccurrenceRepository:
                     "Repair Bug 1 : %s gamme_step_validation rattachés", steps_relinked
                 )
 
-            # ── Étape 3 : occurrences bloquées à 'generated' malgré DI acceptée ──
-            # Règle : DI 'acceptee' → occurrence doit être 'in_progress'
+            # ── Étape 3 : occurrences dont la DI est acceptée mais intervention_id manquant ──
+            # Cas : acceptation manuelle de DI préventive sans mise à jour de l'occurrence.
+            # Fix : lier occurrence + gamme_steps + plan_id de l'intervention.
             cur.execute(
                 """
-                UPDATE preventive_occurrence po
-                SET status = 'in_progress'
-                FROM intervention_request ir
-                WHERE po.di_id = ir.id
-                  AND po.status = 'generated'
-                  AND ir.statut = 'acceptee'
-                RETURNING po.id
+                SELECT po.id, po.plan_id, ir.intervention_id, po.status
+                FROM preventive_occurrence po
+                JOIN intervention_request ir ON ir.id = po.di_id
+                WHERE po.intervention_id IS NULL
+                  AND ir.intervention_id IS NOT NULL
                 """
             )
-            in_progress_rows = cur.fetchall()
-            occurrences_set_in_progress = len(in_progress_rows)
-            if in_progress_rows:
-                details.append(
-                    f"Étape 3 : {occurrences_set_in_progress} occurrence(s) → 'in_progress' (DI acceptée)"
+            orphan_rows = cur.fetchall()
+            for occ_id, occ_plan_id, linked_intervention_id, occ_status in orphan_rows:
+                occ_id = str(occ_id)
+                linked_intervention_id = str(linked_intervention_id)
+                new_status = 'in_progress' if occ_status in ('pending', 'generated') else occ_status
+
+                cur.execute(
+                    "UPDATE preventive_occurrence SET intervention_id = %s, status = %s WHERE id = %s",
+                    (linked_intervention_id, new_status, occ_id),
                 )
+                cur.execute(
+                    "UPDATE gamme_step_validation SET intervention_id = %s WHERE occurrence_id = %s AND intervention_id IS NULL",
+                    (linked_intervention_id, occ_id),
+                )
+                if occ_plan_id:
+                    cur.execute(
+                        "UPDATE intervention SET plan_id = %s WHERE id = %s AND plan_id IS NULL",
+                        (str(occ_plan_id), linked_intervention_id),
+                    )
+                occurrences_set_in_progress += 1
+                details.append(
+                    f"Étape 3 : occurrence {occ_id} liée à l'intervention {linked_intervention_id} (acceptation manuelle)"
+                )
+            if orphan_rows:
                 logger.info(
-                    "Repair étape 3 : %s occurrence(s) passées à 'in_progress'",
-                    occurrences_set_in_progress,
+                    "Repair étape 3 : %s occurrence(s) liées à leur intervention (acceptation manuelle)",
+                    len(orphan_rows),
                 )
 
             # ── Bug 2 : occurrences bloquées à 'generated' ou 'in_progress' ──────
