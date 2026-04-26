@@ -2,6 +2,50 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [2.21.0] - 25 avril 2026
+
+### Breaking changes
+
+- **`GET /gamme-step-validations` supprimé** : remplacé par `GET /intervention-tasks`. Les anciens endpoints `/gamme-step-validations/*` n'existent plus.
+- **`InterventionActionIn.gamme_step_validations` supprimé** : remplacé par `task_id: Optional[UUID]`. Le mécanisme d'embarquement de validations multiples est supprimé.
+- **`InterventionActionOut.gamme_steps` renommé en `task`** : était un tableau, c'est maintenant un objet `InterventionTaskRef` (ou `null`).
+- **`InterventionOut.gamme_progress` renommé en `task_progress`** et **`gamme_steps` renommé en `tasks`** : mêmes données, nouveaux noms de champs.
+
+### Nouveautés
+
+- **Nouveau domaine `intervention_task`** : conversion in-place de `gamme_step_validation`. Chaque tâche a un `label`, une `origin` (`plan`/`resp`/`tech`), un `status` (`todo`/`in_progress`/`done`/`skipped`), des champs `assigned_to`, `due_date`, `sort_order`, `created_by`, `closed_by`.
+
+- **`POST /intervention-tasks`** : création manuelle de tâches (`origin = resp` ou `tech`).
+
+- **`GET /intervention-tasks`** : liste avec filtres `intervention_id`, `assigned_to`, `status`, `origin`, `include_done`. Inclut les agrégats `action_count` et `time_spent`.
+
+- **`PATCH /intervention-tasks/{id}`** : mise à jour partielle (label, status, skip_reason, assigned_to, due_date, sort_order).
+
+- **`DELETE /intervention-tasks/{id}`** : suppression autorisée uniquement si `status = todo` et aucune action liée.
+
+- **`GET /intervention-tasks/progress`** : remplace `GET /gamme-step-validations/progress`. Nouveaux champs `todo`, `in_progress`, `done` en lieu et place de `validated`, `pending`.
+
+- **Transition automatique `todo → in_progress`** : à la création d'une action avec `task_id`, la tâche passe automatiquement en `in_progress` si elle était en `todo`.
+
+- **Règle de clôture renforcée** : le passage au statut `ferme` est bloqué (`400`) si des tâches non-optionnelles sont en `todo` ou `in_progress`. Message : `"Impossible de fermer : X tâche(s) non-optionnelle(s) en attente."`.
+
+### Migrations DB (`web.tunnel-db`)
+
+- `20260425_i4d5e6f7g8h9` : conversion in-place de `gamme_step_validation` → `intervention_task`
+  - Renommage table, colonnes (`step_id→gamme_step_id`, `validated_at→updated_at`, `validated_by→closed_by`)
+  - Migration statuts (`pending→todo`, `validated→done`)
+  - Ajout colonnes : `label`, `origin`, `optional`, `sort_order`, `assigned_to`, `due_date`, `created_by`, `created_at`
+  - Ajout colonne `task_id` sur `intervention_action` avec migration des données existantes
+  - Renommage contraintes et index
+
+### Documentation
+
+- `docs/endpoints/gamme-step-validations.md` → `docs/endpoints/intervention-tasks.md` (réécrit intégralement)
+- `docs/endpoints/interventions.md`, `intervention-actions.md`, `preventive-occurrences.md` mis à jour
+- `docs/API_REFERENCE.md` mis à jour (section 15)
+
+---
+
 ## [2.20.0] - 15 avril 2026
 
 ### Nouveautés

@@ -2,7 +2,7 @@
 
 Occurrences de maintenance préventive générées par les plans actifs. Chaque occurrence lie un plan à une machine avec une date planifiée. Lors de la génération, une demande d'intervention (DI) est créée automatiquement.
 
-> Voir aussi : [Preventive Plans](preventive-plans.md) | [Intervention Requests](intervention-requests.md) | [Gamme Step Validations](gamme-step-validations.md)
+> Voir aussi : [Preventive Plans](preventive-plans.md) | [Intervention Requests](intervention-requests.md) | [Intervention Tasks](intervention-tasks.md)
 
 ---
 
@@ -67,27 +67,27 @@ Liste les occurrences de maintenance préventive avec filtres optionnels.
     "status": "generated",
     "skip_reason": null,
     "created_at": "2026-04-13T08:00:00",
-    "gamme_steps": [
+    "tasks": [
       {
-        "id": "uuid-step-validation",
-        "step_id": "uuid-step",
-        "step_label": "Graisser palier gauche",
-        "step_sort_order": 1,
-        "step_optional": false,
+        "id": "uuid-task",
+        "gamme_step_id": "uuid-step",
+        "label": "Graisser palier gauche",
+        "sort_order": 1,
+        "optional": false,
         "occurrence_id": "uuid-occurrence-1",
         "intervention_id": null,
         "action_id": null,
-        "status": "pending",
+        "status": "todo",
         "skip_reason": null,
-        "validated_at": null,
-        "validated_by": null
+        "updated_at": null,
+        "closed_by": null
       }
     ]
   }
 ]
 ```
 
-> **Diagnostic** : si `intervention_id` est `null` sur les steps alors que l'occurrence a un `intervention_id`, c'est le Bug 1 (corriger via `POST /repair`). Si tous les steps sont `pending` sur une occurrence dont l'intervention est fermée, c'est le Bug 2.
+> **Diagnostic** : si `intervention_id` est `null` sur les tâches alors que l'occurrence a un `intervention_id`, c'est le Bug 1 (corriger via `POST /repair`). Si toutes les tâches sont en `todo` sur une occurrence dont l'intervention est fermée, c'est le Bug 2.
 
 ---
 
@@ -97,7 +97,7 @@ Détail d'une occurrence.
 
 ### Réponse `200`
 
-Même structure que la liste, incluant `gamme_steps`.
+Même structure que la liste, incluant `tasks`.
 
 ### Erreurs
 
@@ -174,35 +174,43 @@ Occurrence mise à jour avec `status = "skipped"`.
 
 ## `POST /preventive-occurrences/repair`
 
-Répare les données corrompues par deux bugs présents avant le fix du 2026-04-15.
+Répare les données corrompues par plusieurs bugs. 
 
 Cette procédure est **idempotente** — elle peut être appelée plusieurs fois sans effet secondaire. Elle ne modifie que les enregistrements réellement dans un état incohérent.
 
-### Bug 1 — Steps de gamme non liés à l'intervention
+### Bug 1 — Tâches non liées à l'intervention
 
-Lors de l'acceptation manuelle d'une DI préventive, un problème de curseur partagé empêchait le rattachement des `gamme_step_validation` à l'intervention créée. Les steps restaient avec `intervention_id = NULL` et n'apparaissaient pas dans les actions de l'intervention.
+Lors de l'acceptation manuelle d'une DI préventive, un problème de curseur partagé empêchait le rattachement des `intervention_task` à l'intervention créée. Les tâches restaient avec `intervention_id = NULL` et n'apparaissaient pas dans l'intervention.
 
-**Correction appliquée** : pour chaque occurrence ayant un `intervention_id`, les `gamme_step_validation` dont `intervention_id` est encore `NULL` sont rattachées.
+**Correction appliquée** : pour chaque occurrence ayant un `intervention_id` (direct ou via la DI liée), les `intervention_task` dont `intervention_id` est encore `NULL` sont rattachées.
 
 ### Bug 2 — Occurrence bloquée à `generated` après fermeture de l'intervention
 
 La fermeture d'une intervention via `PATCH /interventions/{id}` ne propageait pas l'état sur l'occurrence préventive liée ni sur la demande associée.
 
-**Correction appliquée** : pour chaque occurrence en `generated` dont l'intervention liée est fermée (code `ferme`) :
+**Correction appliquée** : pour chaque occurrence en `generated` ou `in_progress` dont l'intervention liée est fermée (code `ferme`) :
 - l'occurrence passe à `completed`
 - la DI liée passe à `cloturee` (si encore `acceptee`) avec log dans `request_status_log`
+
+### Bug 3 — `plan_id` null sur une intervention préventive
+
+Lors de l'acceptation manuelle d'une DI préventive via `POST /interventions` (chemin direct, sans passer par `PATCH /intervention-requests/{id}/status`), le `plan_id` n'était pas résolu depuis l'occurrence. Conséquence : les tâches préventives n'apparaissaient pas dans la réponse `GET /interventions/{id}`.
+
+**Correction appliquée** : pour chaque intervention dont `plan_id` est `NULL` mais qui est liée à une occurrence préventive ayant un `plan_id`, le `plan_id` est rétabli.
 
 ### Réponse `200`
 
 ```json
 {
-  "steps_relinked": 12,
+  "tasks_relinked": 12,
   "occurrences_relinked": 3,
   "occurrences_set_in_progress": 3,
   "occurrences_completed": 2,
   "requests_closed": 2,
+  "interventions_plan_fixed": 1,
   "details": [
-    "Bug 1 : 12 step(s) rattaché(s) aux interventions : abc-123, def-456",
+    "Bug 3 : 1 intervention(s) — plan_id rétabli",
+    "Bug 1 : 12 tâche(s) rattachée(s) aux interventions : abc-123, def-456",
     "Étape 3 : 3 occurrence(s) → 'in_progress' (DI acceptée)",
     "Bug 2 : occurrence xyz-789 → 'completed' (intervention fermée : aaa-111)"
   ]
@@ -211,9 +219,10 @@ La fermeture d'une intervention via `PATCH /interventions/{id}` ne propageait pa
 
 | Champ                        | Description                                                                        |
 | ---------------------------- | ---------------------------------------------------------------------------------- |
-| `steps_relinked`             | Nombre de `gamme_step_validation` rattachés (Bug 1)                                |
+| `tasks_relinked`             | Nombre de `intervention_task` rattachées (Bug 1)                                   |
 | `occurrences_relinked`       | Occurrences dont `intervention_id` a été rétabli depuis la DI liée                 |
 | `occurrences_set_in_progress`| Occurrences passées de `generated` à `in_progress` (DI déjà acceptée)             |
 | `occurrences_completed`      | Occurrences passées à `completed` (intervention fermée)                            |
 | `requests_closed`            | DI clôturées en cascade                                                            |
+| `interventions_plan_fixed`   | Interventions dont `plan_id` a été rétabli depuis l'occurrence liée (Bug 3)        |
 | `details`                    | Journal détaillé de chaque correction appliquée                                    |

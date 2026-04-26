@@ -74,12 +74,11 @@ class PreventiveOccurrenceRepository:
             cols = [d[0] for d in cur.description]
             occurrences = [dict(zip(cols, row)) for row in rows]
 
-            # Attacher les gamme_step_validation en batch (évite le N+1)
             if occurrences:
                 occ_ids = [str(o["id"]) for o in occurrences]
-                steps_by_occ = self._fetch_steps_batch(cur, occ_ids)
+                tasks_by_occ = self._fetch_tasks_batch(cur, occ_ids)
                 for occ in occurrences:
-                    occ["gamme_steps"] = steps_by_occ.get(str(occ["id"]), [])
+                    occ["tasks"] = tasks_by_occ.get(str(occ["id"]), [])
             return occurrences
         except HTTPException:
             raise
@@ -115,8 +114,8 @@ class PreventiveOccurrenceRepository:
                 raise NotFoundError(f"Occurrence {occurrence_id} non trouvée")
             cols = [d[0] for d in cur.description]
             occ = dict(zip(cols, row))
-            steps_by_occ = self._fetch_steps_batch(cur, [occurrence_id])
-            occ["gamme_steps"] = steps_by_occ.get(occurrence_id, [])
+            tasks_by_occ = self._fetch_tasks_batch(cur, [occurrence_id])
+            occ["tasks"] = tasks_by_occ.get(occurrence_id, [])
             return occ
         except HTTPException:
             raise
@@ -125,25 +124,24 @@ class PreventiveOccurrenceRepository:
         finally:
             release_connection(conn)
 
-    def _fetch_steps_batch(self, cur: Any, occurrence_ids: List[str]) -> Dict[str, List[Dict[str, Any]]]:
+    def _fetch_tasks_batch(self, cur: Any, occurrence_ids: List[str]) -> Dict[str, List[Dict[str, Any]]]:
         """
-        Charge les gamme_step_validation pour une liste d'occurrence_ids en une seule requête.
-        Retourne un dict { occurrence_id: [steps...] }.
+        Charge les intervention_task pour une liste d'occurrence_ids en une seule requête.
+        Retourne un dict { occurrence_id: [tasks...] }.
         """
         placeholders = ",".join(["%s"] * len(occurrence_ids))
         cur.execute(
             f"""
             SELECT
-                gsv.id, gsv.step_id,
-                gs.label AS step_label,
-                gs.sort_order AS step_sort_order,
-                gs.optional AS step_optional,
-                gsv.occurrence_id, gsv.intervention_id, gsv.action_id,
-                gsv.status, gsv.skip_reason, gsv.validated_at, gsv.validated_by
-            FROM gamme_step_validation gsv
-            LEFT JOIN preventive_plan_gamme_step gs ON gs.id = gsv.step_id
-            WHERE gsv.occurrence_id IN ({placeholders})
-            ORDER BY gsv.occurrence_id, gs.sort_order ASC
+                it.id, it.gamme_step_id,
+                it.label, it.origin,
+                it.sort_order,
+                it.optional,
+                it.occurrence_id, it.intervention_id, it.action_id,
+                it.status, it.skip_reason, it.updated_at, it.closed_by
+            FROM intervention_task it
+            WHERE it.occurrence_id IN ({placeholders})
+            ORDER BY it.occurrence_id, it.sort_order ASC
             """,
             occurrence_ids,
         )
@@ -151,9 +149,9 @@ class PreventiveOccurrenceRepository:
         cols = [d[0] for d in cur.description]
         result: Dict[str, List[Dict[str, Any]]] = {}
         for row in rows:
-            step = dict(zip(cols, row))
-            occ_key = str(step["occurrence_id"])
-            result.setdefault(occ_key, []).append(step)
+            task = dict(zip(cols, row))
+            occ_key = str(task["occurrence_id"])
+            result.setdefault(occ_key, []).append(task)
         return result
 
     # ── Skip ─────────────────────────────────────────────────────
@@ -287,7 +285,6 @@ class PreventiveOccurrenceRepository:
         try:
             cur = conn.cursor()
 
-            # Calcul de la date/seuil selon le trigger_type
             if plan["trigger_type"] == "periodicity":
                 cur.execute(
                     """
@@ -337,7 +334,6 @@ class PreventiveOccurrenceRepository:
 
                 scheduled_date = today
 
-            # INSERT occurrence avec ON CONFLICT DO NOTHING
             occurrence_id = str(uuid4())
             cur.execute(
                 """
@@ -359,7 +355,6 @@ class PreventiveOccurrenceRepository:
                 conn.rollback()
                 return "conflict"
 
-            # INSERT intervention_request liée
             cur.execute(
                 """
                 INSERT INTO intervention_request
@@ -371,14 +366,12 @@ class PreventiveOccurrenceRepository:
             )
             di_id = str(cur.fetchone()[0])
 
-            # UPDATE occurrence : lier la DI et passer en 'generated'
             cur.execute(
                 "UPDATE preventive_occurrence SET di_id = %s, status = 'generated' WHERE id = %s",
                 (di_id, occurrence_id),
             )
 
-            # Générer les gamme_step_validation liées à l'occurrence
-            # (le trigger DB est supprimé — génération manuelle depuis ici)
+            # Générer les intervention_task liées (une par step de gamme du plan)
             cur.execute(
                 """
                 SELECT id FROM preventive_plan_gamme_step
@@ -389,17 +382,22 @@ class PreventiveOccurrenceRepository:
             )
             steps = cur.fetchall()
             for step_row in steps:
+                step_id = str(step_row[0])
                 cur.execute(
                     """
-                    INSERT INTO gamme_step_validation
-                        (step_id, occurrence_id, intervention_id, status)
-                    VALUES (%s, %s, NULL, 'pending')
-                    ON CONFLICT (step_id, occurrence_id) DO NOTHING
+                    INSERT INTO intervention_task
+                        (gamme_step_id, occurrence_id, intervention_id, label, origin, status,
+                         optional, sort_order)
+                    SELECT
+                        %s, %s, NULL, pgs.label, 'plan', 'todo', pgs.optional, pgs.sort_order
+                    FROM preventive_plan_gamme_step pgs
+                    WHERE pgs.id = %s
+                    ON CONFLICT (gamme_step_id, occurrence_id) DO NOTHING
                     """,
-                    (str(step_row[0]), occurrence_id),
+                    (step_id, occurrence_id, step_id),
                 )
             logger.info(
-                "Gamme : %s step(s) générés pour l'occurrence %s",
+                "Tâches préventives : %s tâche(s) générée(s) pour l'occurrence %s",
                 len(steps), occurrence_id,
             )
 
@@ -414,9 +412,9 @@ class PreventiveOccurrenceRepository:
         finally:
             release_connection(conn)
 
-        # Auto-accept : dans une transaction séparée après le commit ci-dessus
         if plan["auto_accept"]:
-            self._auto_accept_occurrence(occurrence_id, di_id, machine_id, plan["id"])
+            self._auto_accept_occurrence(
+                occurrence_id, di_id, machine_id, plan["id"])
 
         return "generated"
 
@@ -453,10 +451,9 @@ class PreventiveOccurrenceRepository:
                     """,
                     (intervention_id, occurrence_id),
                 )
-                # ✅ Mettre à jour les gamme_step_validation avec l'intervention_id
                 cur.execute(
                     """
-                    UPDATE gamme_step_validation
+                    UPDATE intervention_task
                     SET intervention_id = %s
                     WHERE occurrence_id = %s AND intervention_id IS NULL
                     """,
@@ -464,7 +461,7 @@ class PreventiveOccurrenceRepository:
                 )
                 conn.commit()
                 logger.info(
-                    "Rattachement gamme auto-accept : intervention %s liée à l'occurrence %s",
+                    "Rattachement tâches auto-accept : intervention %s liée à l'occurrence %s",
                     intervention_id, occurrence_id,
                 )
             except Exception:
@@ -481,66 +478,151 @@ class PreventiveOccurrenceRepository:
 
     def repair_orphaned_data(self) -> dict:
         """
-        Répare les données corrompues par deux bugs désormais corrigés :
+        Répare les données corrompues par plusieurs bugs désormais corrigés :
 
-        Bug 1 — gamme_step_validation sans intervention_id :
+        Bug 1 — intervention_task sans intervention_id :
           Lors de l'acceptation manuelle d'une DI préventive, le curseur partagé
-          causait un fetchone() vide → les steps restaient avec intervention_id = NULL
+          causait un fetchone() vide → les tâches restaient avec intervention_id = NULL
           même si l'occurrence était liée à une intervention.
-          Fix : UPDATE gamme_step_validation SET intervention_id depuis l'occurrence.
+          Fix : UPDATE intervention_task SET intervention_id depuis l'occurrence.
 
         Bug 2 — occurrence préventive bloquée à 'generated' après fermeture :
           _notify_if_closed() comparait un UUID au code texte 'ferme' → toujours faux
           → on_intervention_closed() jamais appelé → occurrence jamais passée à 'completed'.
           Fix : détecter les interventions fermées liées à une occurrence 'generated'
           et les passer à 'completed' + clôturer la demande liée si encore 'acceptee'.
+
+        Bug 3 — plan_id null sur une intervention préventive :
+          Lors de l'acceptation manuelle via POST /interventions (chemin direct sans
+          passer par transition_status), plan_id n'était pas résolu depuis l'occurrence.
+          Fix : UPDATE intervention SET plan_id depuis preventive_occurrence.
+
+        Bug 4 — tâches orphelines non rattachées à une intervention acceptée via DI :
+          Même origine que Bug 1 mais côté DI : si l'acceptation passait par
+          transition_status et que le curseur partagé plantait le rattachement.
+          Fix : couvrir aussi le cas où occurrence.intervention_id IS NULL mais
+          la DI a un intervention_id.
         """
         conn = self._get_connection()
-        steps_relinked = 0
+        tasks_relinked = 0
         occurrences_relinked = 0
         occurrences_set_in_progress = 0
         occurrences_completed = 0
         requests_closed = 0
+        interventions_plan_fixed = 0
         details = []
 
         try:
             cur = conn.cursor()
 
-            # ── Bug 1 : steps orphelins sans intervention_id ──────────────────
-            # Cas : occurrence a un intervention_id, mais ses gamme_step_validation non.
+            # ── Bug 3 : plan_id null sur intervention préventive ───────────────
+            # Interventions créées via POST /interventions avec request_id avant le fix
+            # qui résout plan_id depuis l'occurrence liée.
             cur.execute(
                 """
-                UPDATE gamme_step_validation gsv
+                UPDATE intervention i
+                SET plan_id = po.plan_id
+                FROM preventive_occurrence po
+                WHERE po.intervention_id = i.id
+                  AND i.plan_id IS NULL
+                  AND po.plan_id IS NOT NULL
+                RETURNING i.id, po.plan_id
+                """
+            )
+            plan_rows = cur.fetchall()
+            interventions_plan_fixed = len(plan_rows)
+            if plan_rows:
+                details.append(
+                    f"Bug 3 : {interventions_plan_fixed} intervention(s) — plan_id rétabli"
+                )
+                logger.info(
+                    "Repair Bug 3 : %s intervention(s) avec plan_id corrigé",
+                    interventions_plan_fixed,
+                )
+
+            # Couvrir aussi le chemin DI → occurrence.intervention_id NULL mais
+            # ir.intervention_id renseigné (Bug 3 via transition_status)
+            cur.execute(
+                """
+                UPDATE intervention i
+                SET plan_id = po.plan_id
+                FROM preventive_occurrence po
+                JOIN intervention_request ir ON ir.id = po.di_id
+                WHERE ir.intervention_id = i.id
+                  AND po.intervention_id IS NULL
+                  AND i.plan_id IS NULL
+                  AND po.plan_id IS NOT NULL
+                RETURNING i.id, po.plan_id
+                """
+            )
+            plan_rows2 = cur.fetchall()
+            if plan_rows2:
+                interventions_plan_fixed += len(plan_rows2)
+                details.append(
+                    f"Bug 3b : {len(plan_rows2)} intervention(s) — plan_id rétabli via DI"
+                )
+
+            # ── Bug 1 : tâches orphelines sans intervention_id ──────────────────
+            cur.execute(
+                """
+                UPDATE intervention_task it
                 SET intervention_id = po.intervention_id
                 FROM preventive_occurrence po
-                WHERE gsv.occurrence_id = po.id
+                WHERE it.occurrence_id = po.id
                   AND po.intervention_id IS NOT NULL
-                  AND gsv.intervention_id IS NULL
-                RETURNING gsv.id, po.intervention_id
+                  AND it.intervention_id IS NULL
+                RETURNING it.id, po.intervention_id
                 """
             )
             rows = cur.fetchall()
-            steps_relinked = len(rows)
+            tasks_relinked = len(rows)
             if rows:
                 affected_interventions = list({str(r[1]) for r in rows})
                 details.append(
-                    f"Bug 1 : {steps_relinked} step(s) rattaché(s) aux interventions : "
+                    f"Bug 1 : {tasks_relinked} tâche(s) rattachée(s) aux interventions : "
                     + ", ".join(affected_interventions)
                 )
                 logger.info(
-                    "Repair Bug 1 : %s gamme_step_validation rattachés", steps_relinked
+                    "Repair Bug 1 : %s intervention_task rattachés", tasks_relinked
+                )
+
+            # Bug 1 variante : occurrence sans intervention_id mais DI a intervention_id
+            cur.execute(
+                """
+                UPDATE intervention_task it
+                SET intervention_id = ir.intervention_id
+                FROM preventive_occurrence po
+                JOIN intervention_request ir ON ir.id = po.di_id
+                WHERE it.occurrence_id = po.id
+                  AND po.intervention_id IS NULL
+                  AND ir.intervention_id IS NOT NULL
+                  AND it.intervention_id IS NULL
+                RETURNING it.id, ir.intervention_id
+                """
+            )
+            rows2 = cur.fetchall()
+            if rows2:
+                tasks_relinked += len(rows2)
+                affected_interventions2 = list({str(r[1]) for r in rows2})
+                details.append(
+                    f"Bug 1b : {len(rows2)} tâche(s) rattachée(s) via DI → interventions : "
+                    + ", ".join(affected_interventions2)
+                )
+                logger.info(
+                    "Repair Bug 1b : %s intervention_task rattachés via DI", len(rows2)
                 )
 
             # ── Étape 3 : occurrences bloquées à 'generated' malgré DI acceptée ──
-            # Règle : DI 'acceptee' → occurrence doit être 'in_progress'
             cur.execute(
                 """
                 UPDATE preventive_occurrence po
-                SET status = 'in_progress'
+                SET status = 'in_progress',
+                    intervention_id = COALESCE(po.intervention_id, ir.intervention_id)
                 FROM intervention_request ir
                 WHERE po.di_id = ir.id
                   AND po.status = 'generated'
                   AND ir.statut = 'acceptee'
+                  AND ir.intervention_id IS NOT NULL
                 RETURNING po.id
                 """
             )
@@ -556,8 +638,6 @@ class PreventiveOccurrenceRepository:
                 )
 
             # ── Bug 2 : occurrences bloquées à 'generated' ou 'in_progress' ──────
-            # Inclut le cas où po.intervention_id est NULL mais ir.intervention_id
-            # est renseigné (ancien bug de curseur lors de l'acceptation manuelle).
             cur.execute(
                 """
                 SELECT
@@ -581,7 +661,6 @@ class PreventiveOccurrenceRepository:
                 occ_id = str(occ_id)
                 intervention_id = str(intervention_id)
 
-                # Rétablir intervention_id si manquant (ancien bug curseur)
                 if needs_relink:
                     cur.execute(
                         "UPDATE preventive_occurrence SET intervention_id = %s WHERE id = %s",
@@ -589,7 +668,6 @@ class PreventiveOccurrenceRepository:
                     )
                     occurrences_relinked += 1
 
-                # Passer l'occurrence à 'completed'
                 cur.execute(
                     "UPDATE preventive_occurrence SET status = 'completed' WHERE id = %s",
                     (occ_id,),
@@ -600,7 +678,6 @@ class PreventiveOccurrenceRepository:
                     f"(intervention fermée : {intervention_id})"
                 )
 
-                # Clôturer la demande liée si encore 'acceptee'
                 if di_id:
                     cur.execute(
                         """
@@ -613,7 +690,8 @@ class PreventiveOccurrenceRepository:
                     req_row = cur.fetchone()
                     if req_row:
                         req_id, req_statut = str(req_row[0]), req_row[1]
-                        cur.execute("SET LOCAL app.skip_request_status_log = 'true'")
+                        cur.execute(
+                            "SET LOCAL app.skip_request_status_log = 'true'")
                         cur.execute(
                             "UPDATE intervention_request SET statut = 'cloturee' WHERE id = %s",
                             (req_id,),
@@ -637,8 +715,10 @@ class PreventiveOccurrenceRepository:
 
             conn.commit()
             logger.info(
-                "Repair terminé : %s steps rattachés, %s occurrences reliées, %s → in_progress, %s complétées, %s demandes clôturées",
-                steps_relinked, occurrences_relinked, occurrences_set_in_progress, occurrences_completed, requests_closed,
+                "Repair terminé : %s tâches rattachées, %s occurrences reliées, "
+                "%s → in_progress, %s complétées, %s demandes clôturées, %s plan_id corrigés",
+                tasks_relinked, occurrences_relinked, occurrences_set_in_progress,
+                occurrences_completed, requests_closed, interventions_plan_fixed,
             )
 
         except Exception as e:
@@ -648,10 +728,11 @@ class PreventiveOccurrenceRepository:
             release_connection(conn)
 
         return {
-            "steps_relinked": steps_relinked,
+            "tasks_relinked": tasks_relinked,
             "occurrences_relinked": occurrences_relinked,
             "occurrences_set_in_progress": occurrences_set_in_progress,
             "occurrences_completed": occurrences_completed,
             "requests_closed": requests_closed,
+            "interventions_plan_fixed": interventions_plan_fixed,
             "details": details,
         }
