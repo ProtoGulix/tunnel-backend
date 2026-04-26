@@ -2,7 +2,41 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
-<<<<<<< HEAD
+## [2.22.0] - 26 avril 2026
+
+### Breaking changes
+
+- **`InterventionActionIn.task_id` supprimé** : remplacé par `tasks: Optional[List[InterventionTaskValidationRequest]]`. Une action peut désormais tagger N tâches en une seule requête.
+- **`InterventionActionOut.task` renommé en `tasks`** : était un objet nullable, c'est maintenant une liste (vide si aucune tâche liée).
+- **`InterventionTaskPatch.status`** : seule la valeur `skipped` est désormais acceptée via PATCH direct. Les transitions `in_progress` et `done` passent obligatoirement par `POST /intervention-actions`.
+
+### Correction modèle relation action ↔ tâche
+
+Le modèle de relation entre `intervention_action` et `intervention_task` a été corrigé :
+
+- **Avant** : `intervention_action.task_id` → FK vers `intervention_task.id` (une action = une tâche)
+- **Après** : `intervention_task.action_id` → FK vers `intervention_action.id` (une action peut tagger N tâches)
+
+### Nouveautés
+
+- **`POST /intervention-actions` — champ `tasks`** : liste optionnelle de tâches à tagger simultanément à la création de l'action. Chaque item supporte `close_task` (clôture immédiate) et `skip` + `skip_reason` (passage à `skipped`).
+- **Trigger `trg_task_status_on_action_link`** : transition `todo → in_progress` gérée directement en DB au SET `action_id` sur `intervention_task` (plus de transition Python).
+
+### Corrections
+
+- **`interventions/repo.py`** : référence stale `gamme_step_validation` corrigée en `intervention_task` dans `_link_request()`.
+- **`intervention_tasks/repo.py`** : agrégats `action_count`/`time_spent` corrigés (jointure `ia.id = it.action_id` au lieu de `ia.task_id = it.id`). Méthode `transition_to_in_progress()` supprimée (trigger DB).
+- **`intervention_tasks/repo.py` `delete()`** : vérification stale `intervention_action.task_id` supprimée.
+
+### Migrations DB (`web.tunnel-db`)
+
+- `20260426_j5e6f7a8b9c0` : correction du modèle action ↔ tâche
+  - `DROP COLUMN intervention_action.task_id` (+ index)
+  - Vérification défensive `intervention_task.action_id` (existait déjà)
+  - Création trigger `trg_task_status_on_action_link` + fonction `fn_task_status_on_action_link`
+
+---
+
 ## [2.21.0] - 25 avril 2026
 
 ### Breaking changes
@@ -26,9 +60,16 @@ Toutes les modifications importantes de l'API sont documentées ici.
 
 - **`GET /intervention-tasks/progress`** : remplace `GET /gamme-step-validations/progress`. Nouveaux champs `todo`, `in_progress`, `done` en lieu et place de `validated`, `pending`.
 
-- **Transition automatique `todo → in_progress`** : à la création d'une action avec `task_id`, la tâche passe automatiquement en `in_progress` si elle était en `todo`.
+- **Transition automatique `todo → in_progress`** : à la création d'une action, la tâche passe automatiquement en `in_progress` si elle était en `todo`.
 
 - **Règle de clôture renforcée** : le passage au statut `ferme` est bloqué (`400`) si des tâches non-optionnelles sont en `todo` ou `in_progress`. Message : `"Impossible de fermer : X tâche(s) non-optionnelle(s) en attente."`.
+
+### Corrections
+
+- **[BUG] Steps de gamme absents lors de l'acceptation manuelle d'une DI préventive** (`api/interventions/repo.py`) :
+  `_link_request()` ne mettait pas à jour l'occurrence ni les `gamme_step_validation`. Correction : détecte l'occurrence liée à la DI et effectue dans la même transaction : `UPDATE preventive_occurrence`, `UPDATE intervention_task`, `UPDATE intervention SET plan_id`.
+
+- **Repair étendu (`POST /preventive-occurrences/repair`)** : retrouve toutes les occurrences dont la DI est acceptée mais `intervention_id` est null et effectue les 3 mises à jour ci-dessus.
 
 ### Migrations DB (`web.tunnel-db`)
 
@@ -36,7 +77,6 @@ Toutes les modifications importantes de l'API sont documentées ici.
   - Renommage table, colonnes (`step_id→gamme_step_id`, `validated_at→updated_at`, `validated_by→closed_by`)
   - Migration statuts (`pending→todo`, `validated→done`)
   - Ajout colonnes : `label`, `origin`, `optional`, `sort_order`, `assigned_to`, `due_date`, `created_by`, `created_at`
-  - Ajout colonne `task_id` sur `intervention_action` avec migration des données existantes
   - Renommage contraintes et index
 
 ### Documentation
@@ -44,20 +84,6 @@ Toutes les modifications importantes de l'API sont documentées ici.
 - `docs/endpoints/gamme-step-validations.md` → `docs/endpoints/intervention-tasks.md` (réécrit intégralement)
 - `docs/endpoints/interventions.md`, `intervention-actions.md`, `preventive-occurrences.md` mis à jour
 - `docs/API_REFERENCE.md` mis à jour (section 15)
-=======
-## [2.21.0] - 16 avril 2026
-
-### Corrections
-
-- **[BUG] Steps de gamme absents lors de l'acceptation manuelle d'une DI préventive** (`api/interventions/repo.py`) :
-  Lors de la création manuelle d'une intervention sur une DI préventive, `_link_request()` ne mettait pas à jour l'occurrence ni les `gamme_step_validation`. Résultat : `intervention.plan_id = NULL`, les steps n'apparaissaient ni dans le formulaire d'action ni dans la vue intervention. Correction : `_link_request()` détecte désormais l'occurrence liée à la DI et effectue dans la même transaction :
-  1. `UPDATE preventive_occurrence SET intervention_id, status = 'in_progress'`
-  2. `UPDATE gamme_step_validation SET intervention_id`
-  3. `UPDATE intervention SET plan_id` (pour activer le bloc gamme dans `get_by_id`)
-
-- **Repair étendu (`POST /preventive-occurrences/repair`)** (`api/preventive_occurrences/repo.py`) :
-  L'ancienne « Étape 3 » ne faisait que passer l'occurrence à `in_progress` sans lier `intervention_id`. Elle est remplacée par une réparation complète qui retrouve toutes les occurrences dont la DI est acceptée mais `intervention_id` est null, et effectue les 3 mises à jour ci-dessus pour rétablir les données existantes.
->>>>>>> 71a2fb2a96ffd95c40c5eb3c1ccdf6b047d0099c
 
 ---
 

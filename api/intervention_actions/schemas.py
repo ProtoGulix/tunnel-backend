@@ -12,14 +12,39 @@ class InterventionTaskRef(BaseModel):
     label: str
     status: str
     origin: str
+    optional: bool = False
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class InterventionTaskValidationRequest(BaseModel):
+    """Tâche à tagger/valider/skipper lors de la création d'une action"""
+    task_id: UUID
+    close_task: bool = Field(
+        default=False,
+        description="Si true, passe la tâche à 'done' après liaison",
+    )
+    skip: bool = Field(
+        default=False,
+        description="Si true, passe la tâche à 'skipped' (close_task ignoré)",
+    )
+    skip_reason: Optional[str] = Field(
+        default=None,
+        description="Obligatoire si skip=true",
+    )
+
+    @model_validator(mode="after")
+    def validate_logic(self) -> "InterventionTaskValidationRequest":
+        if self.skip and not (self.skip_reason or "").strip():
+            raise ValueError("skip_reason obligatoire si skip=true")
+        if self.skip and self.close_task:
+            raise ValueError("skip et close_task sont mutuellement exclusifs")
+        return self
 
 
 class InterventionActionIn(BaseModel):
     """Schéma d'entrée pour créer une action d'intervention"""
     intervention_id: UUID
-    task_id: UUID
     description: Optional[str] = Field(
         default=None, description="Note optionnelle sur l'action")
     time_spent: Optional[float] = Field(default=None)
@@ -30,6 +55,20 @@ class InterventionActionIn(BaseModel):
     created_at: Optional[str] = Field(default=None)
     action_start: Optional[time] = Field(default=None)
     action_end: Optional[time] = Field(default=None)
+    tasks: Optional[List[InterventionTaskValidationRequest]] = Field(
+        default=None,
+        description="Tâches à tagger/valider en même temps que cette action",
+    )
+
+    @model_validator(mode="after")
+    def validate_tasks(self) -> "InterventionActionIn":
+        if self.tasks is not None and len(self.tasks) == 0:
+            raise ValueError("tasks ne peut pas être une liste vide")
+        if self.tasks:
+            ids = [str(t.task_id) for t in self.tasks]
+            if len(ids) != len(set(ids)):
+                raise ValueError("task_id en double dans le lot tasks")
+        return self
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -65,6 +104,20 @@ class InterventionActionPatch(BaseModel):
     action_start: Optional[time] = Field(default=None)
     action_end: Optional[time] = Field(default=None)
     created_at: Optional[str] = Field(default=None)
+    tasks: Optional[List[InterventionTaskValidationRequest]] = Field(
+        default=None,
+        description="Tâches à tagger/valider/skipper sur cette action",
+    )
+
+    @model_validator(mode="after")
+    def validate_tasks(self) -> "InterventionActionPatch":
+        if self.tasks is not None and len(self.tasks) == 0:
+            raise ValueError("tasks ne peut pas être une liste vide")
+        if self.tasks:
+            ids = [str(t.task_id) for t in self.tasks]
+            if len(ids) != len(set(ids)):
+                raise ValueError("task_id en double dans le lot tasks")
+        return self
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -97,9 +150,9 @@ class InterventionActionOut(BaseModel):
     action_end: Optional[time] = None
     purchase_requests: List[PurchaseRequestListItem] = Field(
         default_factory=list)
-    task: Optional[InterventionTaskRef] = Field(
-        default=None,
-        description="Tâche liée à cette action"
+    tasks: List[InterventionTaskRef] = Field(
+        default_factory=list,
+        description="Tâches taggées par cette action",
     )
     created_at: Optional[datetime] = Field(default=None)
     updated_at: Optional[datetime] = Field(default=None)

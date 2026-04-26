@@ -122,12 +122,15 @@ Détail d'une action avec sous-catégorie et demandes d'achat.
       "updated_at": "2026-01-13T10:00:00"
     }
   ],
-  "task": {
-    "id": "550e8400-e29b-41d4-a716-446655440000",
-    "label": "Diagnostic initial",
-    "status": "in_progress",
-    "origin": "plan"
-  },
+  "tasks": [
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440000",
+      "label": "Diagnostic initial",
+      "status": "in_progress",
+      "origin": "plan",
+      "optional": false
+    }
+  ],
   "created_at": "2026-01-13T14:30:00",
   "updated_at": "2026-01-13T15:00:00"
 }
@@ -141,12 +144,13 @@ Détail d'une action avec sous-catégorie et demandes d'achat.
 
 ### InterventionTaskRef
 
-| Champ    | Type   | Description                              |
-| -------- | ------ | ---------------------------------------- |
-| `id`     | uuid   | ID de la tâche                           |
-| `label`  | string | Intitulé de la tâche                     |
-| `status` | string | `todo`, `in_progress`, `done`, `skipped` |
-| `origin` | string | `plan`, `resp`, `tech`                   |
+| Champ      | Type   | Description                              |
+| ---------- | ------ | ---------------------------------------- |
+| `id`       | uuid   | ID de la tâche                           |
+| `label`    | string | Intitulé de la tâche                     |
+| `status`   | string | `todo`, `in_progress`, `done`, `skipped` |
+| `origin`   | string | `plan`, `resp`, `tech`                   |
+| `optional` | bool   | La tâche est-elle optionnelle            |
 
 ---
 
@@ -161,21 +165,30 @@ Deux modes exclusifs pour saisir le temps — la logique est gérée par trigger
 
 Fournir les deux ou aucun des deux déclenche une erreur `400` avec le message du trigger.
 
-### Lien obligatoire à une tâche
+### Association à des tâches (optionnel)
 
-Chaque action doit être liée à une tâche via `task_id`. La tâche doit appartenir à la même intervention.
+Fournissez `tasks` (liste) pour tagger une ou plusieurs tâches de l'intervention en même temps que la création de l'action.
 
 **Comportement** :
 
-- La tâche est liée à l'action via `intervention_action.task_id`
-- Si la tâche est en `todo`, elle passe automatiquement en `in_progress`
+- Chaque tâche reçoit `action_id = cette_action.id`
+- Le trigger DB gère automatiquement `todo → in_progress` au SET action_id
+- `close_task=true` clôt la tâche à `done` après liaison
+- `skip=true` passe la tâche à `skipped` (mutuellement exclusif avec `close_task`)
+- Le `time_spent` est porté par l'action — non divisé entre les tâches
+
+| Champ         | Type   | Description                                                          |
+| ------------- | ------ | -------------------------------------------------------------------- |
+| `task_id`     | uuid   | ID de la tâche à lier (doit appartenir à la même intervention)       |
+| `close_task`  | bool   | Passe la tâche à `done` après liaison. Défaut : `false`              |
+| `skip`        | bool   | Passe la tâche à `skipped` — mutuellement exclusif avec `close_task` |
+| `skip_reason` | string | Obligatoire si `skip=true`                                           |
 
 ### Entrée — mode bornes
 
 ```json
 {
   "intervention_id": "5ecf60d5-8471-4739-8ba8-0fdad7b51781",
-  "task_id": "550e8400-e29b-41d4-a716-446655440000",
   "action_start": "08:00:00",
   "action_end": "09:30:00",
   "action_subcategory": 30,
@@ -185,18 +198,25 @@ Chaque action doit être liée à une tâche via `task_id`. La tâche doit appar
 }
 ```
 
-### Entrée — mode direct
+### Entrée — mode direct avec tâches
 
 ```json
 {
   "intervention_id": "5ecf60d5-8471-4739-8ba8-0fdad7b51781",
-  "task_id": "550e8400-e29b-41d4-a716-446655440000",
   "time_spent": 1.5,
   "action_subcategory": 30,
   "tech": "a1b2c3d4-...",
   "complexity_score": 7,
   "complexity_factor": "PCE",
-  "created_at": "2026-01-13T14:30:00"
+  "created_at": "2026-01-13T14:30:00",
+  "tasks": [
+    { "task_id": "550e8400-e29b-41d4-a716-446655440000", "close_task": true },
+    {
+      "task_id": "661f9511-f3ac-52e5-b827-557766551111",
+      "skip": true,
+      "skip_reason": "Non nécessaire"
+    }
+  ]
 }
 ```
 
@@ -205,7 +225,6 @@ Chaque action doit être liée à une tâche via `task_id`. La tâche doit appar
 ```json
 {
   "intervention_id": "5ecf60d5-8471-4739-8ba8-0fdad7b51781",
-  "task_id": "550e8400-e29b-41d4-a716-446655440000",
   "description": "Roulement remplacé par un SKF 6205 de secours",
   "time_spent": 1.5,
   "action_subcategory": 30,
@@ -219,7 +238,6 @@ Chaque action doit être liée à une tâche via `task_id`. La tâche doit appar
 | Champ                | Type     | Requis       | Description                                                                                                             |
 | -------------------- | -------- | ------------ | ----------------------------------------------------------------------------------------------------------------------- |
 | `intervention_id`    | uuid     | **oui**      | Intervention parente                                                                                                    |
-| `task_id`            | uuid     | **oui**      | Tâche parente (doit appartenir à la même intervention)                                                                  |
 | `description`        | string   | non          | Note libre sur l'action (HTML nettoyé)                                                                                  |
 | `time_spent`         | float    | conditionnel | Mode direct : quarts d'heure uniquement (0.25, 0.5…). Min: 0.25. Mutuellement exclusif avec `action_start`/`action_end` |
 | `action_start`       | time     | conditionnel | Mode bornes : heure de début (HH:MM:SS). Mutuellement exclusif avec `time_spent`                                        |
@@ -229,21 +247,27 @@ Chaque action doit être liée à une tâche via `task_id`. La tâche doit appar
 | `complexity_score`   | int      | **oui**      | Score 1-10                                                                                                              |
 | `complexity_factor`  | string   | conditionnel | **Requis si score > 5**. Code existant dans [complexity_factors](complexity-factors.md)                                 |
 | `created_at`         | datetime | non          | Défaut: `now()`. Permet le backdating                                                                                   |
+| `tasks`              | array    | non          | Liste de tâches à tagger (voir tableau ci-dessus). Liste vide interdite                                                 |
 
 ### Réponse `201`
 
-Action complète avec sous-catégorie enrichie et champ `task` hydraté si `task_id` fourni.
+Action complète avec sous-catégorie enrichie et champ `tasks` hydraté (liste vide si pas de tâches liées).
 
 ### Erreurs
 
-| Code | Cas                                                    |
-| ---- | ------------------------------------------------------ |
-| 400  | `action_start` et `time_spent` tous les deux fournis   |
-| 400  | Ni `action_start`/`action_end` ni `time_spent` fournis |
-| 400  | `action_end` ≤ `action_start`                          |
-| 400  | Bornes ou `time_spent` non multiples de 0.25h          |
-| 404  | `task_id` introuvable                                  |
-| 400  | La tâche n'appartient pas à la même intervention       |
+| Code | Cas                                                      |
+| ---- | -------------------------------------------------------- |
+| 400  | `action_start` et `time_spent` tous les deux fournis     |
+| 400  | Ni `action_start`/`action_end` ni `time_spent` fournis   |
+| 400  | `action_end` ≤ `action_start`                            |
+| 400  | Bornes ou `time_spent` non multiples de 0.25h            |
+| 400  | `tasks` est une liste vide                               |
+| 400  | `task_id` en double dans le lot `tasks`                  |
+| 404  | Une tâche du lot introuvable                             |
+| 400  | Une tâche du lot n'appartient pas à la même intervention |
+| 400  | Une tâche du lot est déjà clôturée                       |
+| 400  | `skip=true` et `close_task=true` simultanés              |
+| 400  | `skip=true` sans `skip_reason`                           |
 
 ---
 

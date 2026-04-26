@@ -45,7 +45,11 @@ class InterventionTaskIn(BaseModel):
 
 class InterventionTaskPatch(BaseModel):
     label: Optional[str] = None
-    status: Optional[str] = None
+    status: Optional[str] = Field(
+        default=None,
+        pattern="^skipped$",
+        description="Seule la transition vers 'skipped' est autorisée via PATCH direct",
+    )
     skip_reason: Optional[str] = None
     assigned_to: Optional[UUID] = None
     due_date: Optional[date] = None
@@ -55,11 +59,8 @@ class InterventionTaskPatch(BaseModel):
 
     @model_validator(mode="after")
     def validate_status_rules(self) -> "InterventionTaskPatch":
-        if self.status is not None:
-            if self.status not in ("todo", "in_progress", "done", "skipped"):
-                raise ValueError("status invalide")
-            if self.status == "skipped" and not (self.skip_reason or "").strip():
-                raise ValueError("skip_reason obligatoire si status=skipped")
+        if self.status == "skipped" and not (self.skip_reason or "").strip():
+            raise ValueError("skip_reason obligatoire si status=skipped")
         return self
 
 

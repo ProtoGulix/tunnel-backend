@@ -169,7 +169,7 @@ class InterventionRepository:
                     ec_code = row_dict.pop('ec_code', None)
                     ec_label = row_dict.pop('ec_label', None)
 
-                    p_id   = row_dict.pop('m_parent_id',   None)
+                    p_id = row_dict.pop('m_parent_id',   None)
                     p_code = row_dict.pop('m_parent_code', None)
                     p_name = row_dict.pop('m_parent_name', None)
 
@@ -354,7 +354,8 @@ class InterventionRepository:
             tasks = task_repo.get_by_intervention(intervention_id)
             intervention['tasks'] = tasks
             if tasks:
-                intervention['task_progress'] = task_repo.get_progress(intervention_id)
+                intervention['task_progress'] = task_repo.get_progress(
+                    intervention_id)
             else:
                 intervention['task_progress'] = None
 
@@ -503,7 +504,7 @@ class InterventionRepository:
                 (intervention_id, occ_id),
             )
             cur.execute(
-                "UPDATE gamme_step_validation SET intervention_id = %s WHERE occurrence_id = %s AND intervention_id IS NULL",
+                "UPDATE intervention_task SET intervention_id = %s WHERE occurrence_id = %s AND intervention_id IS NULL",
                 (intervention_id, occ_id),
             )
             if occ_plan_id:

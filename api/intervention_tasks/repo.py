@@ -33,7 +33,7 @@ _TASK_SELECT = """
             COUNT(ia.id)            AS action_count,
             COALESCE(SUM(ia.time_spent), 0) AS time_spent
         FROM intervention_action ia
-        WHERE ia.task_id = it.id
+        WHERE ia.id = it.action_id
     ) agg ON TRUE
 """
 
@@ -214,7 +214,8 @@ class InterventionTaskRepository:
         except HTTPException:
             raise
         except Exception as e:
-            raise_db_error(e, "calcul de la progression des tâches par occurrence")
+            raise_db_error(
+                e, "calcul de la progression des tâches par occurrence")
         finally:
             release_connection(conn)
 
@@ -291,7 +292,8 @@ class InterventionTaskRepository:
         conn = self._get_connection()
         try:
             cur = conn.cursor()
-            cur.execute("SELECT status FROM intervention_task WHERE id = %s", (task_id,))
+            cur.execute(
+                "SELECT status FROM intervention_task WHERE id = %s", (task_id,))
             row = cur.fetchone()
             if not row:
                 raise NotFoundError(f"Tâche {task_id} non trouvée")
@@ -363,19 +365,14 @@ class InterventionTaskRepository:
 
             status, action_id = row[0], row[1]
             if status != "todo":
-                raise ValidationError("Seule une tâche en statut 'todo' peut être supprimée")
+                raise ValidationError(
+                    "Seule une tâche en statut 'todo' peut être supprimée")
             if action_id is not None:
-                raise ValidationError("Impossible de supprimer une tâche liée à une action")
+                raise ValidationError(
+                    "Impossible de supprimer une tâche liée à une action")
 
-            # Vérifier aussi via task_id sur intervention_action
             cur.execute(
-                "SELECT COUNT(*) FROM intervention_action WHERE task_id = %s",
-                (task_id,),
-            )
-            if cur.fetchone()[0] > 0:
-                raise ValidationError("Impossible de supprimer une tâche liée à une action")
-
-            cur.execute("DELETE FROM intervention_task WHERE id = %s", (task_id,))
+                "DELETE FROM intervention_task WHERE id = %s", (task_id,))
             conn.commit()
         except (NotFoundError, ValidationError):
             conn.rollback()
@@ -390,17 +387,6 @@ class InterventionTaskRepository:
             release_connection(conn)
 
     # ── Transition automatique ────────────────────────────────────
-
-    def transition_to_in_progress(self, task_id: str, conn: Any) -> None:
-        """Passe une tâche de 'todo' à 'in_progress' si c'est encore son statut.
-        Appelé depuis InterventionActionRepository.add() avec connexion partagée.
-        """
-        cur = conn.cursor()
-        cur.execute(
-            """
-            UPDATE intervention_task
-            SET status = 'in_progress', updated_at = NOW()
-            WHERE id = %s AND status = 'todo'
-            """,
-            (task_id,),
-        )
+    # La transition todo→in_progress est gérée par le trigger DB
+    # trg_task_status_on_action_link (migration j5e6f7a8b9c0).
+    # Cette méthode Python n'est plus nécessaire.

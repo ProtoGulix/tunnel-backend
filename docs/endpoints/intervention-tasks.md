@@ -260,7 +260,7 @@ Tâche mise à jour.
 Supprime une tâche. La suppression n'est autorisée que si :
 
 - `status = "todo"` (tâche pas encore commencée)
-- Aucune action liée (`action_id IS NULL` et pas de `intervention_action.task_id` référençant cette tâche)
+- Aucune action liée (`action_id IS NULL`)
 
 ### Réponse `204`
 
