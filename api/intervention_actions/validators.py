@@ -35,7 +35,6 @@ class InterventionActionValidator:
         """
         required_fields = [
             'intervention_id',
-            'task_id',
             'action_subcategory',
             'tech',
             'complexity_score',
@@ -78,12 +77,11 @@ class InterventionActionValidator:
         return code
 
     @staticmethod
-    def sanitize_description(description: str) -> str:
-        """Nettoie la description en supprimant le HTML"""
+    def sanitize_description(description: str) -> str | None:
+        """Nettoie la description en supprimant le HTML. Retourne None si vide (effacement)."""
         sanitized = strip_html(description).strip()
         if not sanitized:
-            raise ValidationError(
-                "description ne peut pas être vide")
+            return None
 
         return sanitized
 

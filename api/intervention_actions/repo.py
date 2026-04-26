@@ -162,7 +162,8 @@ class InterventionActionRepository:
 
             all_actions = []
             for row in rows:
-                action = self._map_action_with_subcategory(dict(zip(cols, row)))
+                action = self._map_action_with_subcategory(
+                    dict(zip(cols, row)))
                 action = self._map_tech_user(action)
                 action['intervention'] = {
                     'id': action['intervention_id'],
@@ -230,7 +231,8 @@ class InterventionActionRepository:
             # Groupement par date
             groups: Dict[date, List[Dict[str, Any]]] = {}
             for action in all_actions:
-                day = action['created_at'].date() if action.get('created_at') else None
+                day = action['created_at'].date() if action.get(
+                    'created_at') else None
                 if day is not None:
                     groups.setdefault(day, []).append(action)
 
@@ -334,7 +336,8 @@ class InterventionActionRepository:
 
             results = []
             for row in rows:
-                action = self._map_action_with_subcategory(dict(zip(cols, row)))
+                action = self._map_action_with_subcategory(
+                    dict(zip(cols, row)))
                 action = self._map_tech_user(action)
                 action['purchase_requests'] = []
                 action['task'] = None
@@ -365,7 +368,8 @@ class InterventionActionRepository:
 
                 action_pr_map: Dict[str, List] = {}
                 for action_id, pr_id in links:
-                    action_pr_map.setdefault(str(action_id), []).append(str(pr_id))
+                    action_pr_map.setdefault(
+                        str(action_id), []).append(str(pr_id))
 
                 for action in results:
                     action['purchase_requests'] = [
@@ -433,7 +437,8 @@ class InterventionActionRepository:
             cols = [desc[0] for desc in cur.description]
             action = self._map_action_with_subcategory(dict(zip(cols, row)))
             action = self._map_tech_user(action)
-            action['purchase_requests'] = self._get_linked_purchase_requests(action_id, conn)
+            action['purchase_requests'] = self._get_linked_purchase_requests(
+                action_id, conn)
             return action
         except NotFoundError:
             raise
@@ -451,10 +456,12 @@ class InterventionActionRepository:
         lie l'action à la tâche et passe la tâche todo→in_progress.
         """
         task_id = action_data.pop('task_id', None)
-        if task_id is not None:
-            task_id = str(task_id)
+        if task_id is None:
+            raise ValidationError("Champs obligatoires manquants : task_id")
+        task_id = str(task_id)
 
-        validated_data = InterventionActionValidator.validate_and_prepare(action_data)
+        validated_data = InterventionActionValidator.validate_and_prepare(
+            action_data)
 
         import uuid as _uuid
 
@@ -467,18 +474,17 @@ class InterventionActionRepository:
             created_at = validated_data.get('created_at', now)
 
             # Vérifier que la tâche appartient à la même intervention
-            if task_id:
-                cur.execute(
-                    "SELECT intervention_id FROM intervention_task WHERE id = %s",
-                    (task_id,)
+            cur.execute(
+                "SELECT intervention_id FROM intervention_task WHERE id = %s",
+                (task_id,)
+            )
+            task_row = cur.fetchone()
+            if not task_row:
+                raise ValidationError(f"Tâche {task_id} introuvable")
+            if str(task_row[0]) != str(validated_data['intervention_id']):
+                raise ValidationError(
+                    "La tâche fournie n'appartient pas à la même intervention"
                 )
-                task_row = cur.fetchone()
-                if not task_row:
-                    raise ValidationError(f"Tâche {task_id} introuvable")
-                if str(task_row[0]) != str(validated_data['intervention_id']):
-                    raise ValidationError(
-                        "La tâche fournie n'appartient pas à la même intervention"
-                    )
 
             cur.execute(
                 """
@@ -564,15 +570,19 @@ class InterventionActionRepository:
             updates['description'] = InterventionActionValidator.sanitize_description(
                 updates['description'])
         if 'time_spent' in updates:
-            InterventionActionValidator.validate_time_spent(updates['time_spent'])
+            InterventionActionValidator.validate_time_spent(
+                updates['time_spent'])
         if 'complexity_score' in updates:
-            InterventionActionValidator.validate_complexity_score(updates['complexity_score'])
+            InterventionActionValidator.validate_complexity_score(
+                updates['complexity_score'])
         if 'complexity_factor' in updates:
             updates['complexity_factor'] = InterventionActionValidator.validate_complexity_factor(
                 updates['complexity_factor'])
 
-        score = updates.get('complexity_score', current.get('complexity_score'))
-        factor = updates.get('complexity_factor', current.get('complexity_factor'))
+        score = updates.get('complexity_score',
+                            current.get('complexity_score'))
+        factor = updates.get('complexity_factor',
+                             current.get('complexity_factor'))
         if isinstance(score, int) and score > 5 and (not factor or not str(factor).strip()):
             raise ValidationError(
                 "complexity_factor est obligatoire quand complexity_score > 5"
