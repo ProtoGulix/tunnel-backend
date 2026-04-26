@@ -35,7 +35,7 @@ class InterventionActionValidator:
         """
         required_fields = [
             'intervention_id',
-            'description',
+            'task_id',
             'action_subcategory',
             'tech',
             'complexity_score',
@@ -51,7 +51,8 @@ class InterventionActionValidator:
         if isinstance(score, int) and score > 5:
             factor = action_data.get('complexity_factor')
             if not factor or not str(factor).strip():
-                missing.append('complexity_factor (obligatoire si complexity_score > 5)')
+                missing.append(
+                    'complexity_factor (obligatoire si complexity_score > 5)')
 
         if missing:
             raise ValidationError(
@@ -96,9 +97,10 @@ class InterventionActionValidator:
         # Vérifie les champs obligatoires (incluant complexity_factor si score > 5)
         cls.validate_required_fields(action_data)
 
-        # Valide et sanitise la description
-        action_data['description'] = cls.sanitize_description(
-            action_data['description'])
+        # Valide et sanitise la description (note optionnelle)
+        if action_data.get('description'):
+            action_data['description'] = cls.sanitize_description(
+                action_data['description'])
 
         # Valide time_spent si fourni (sinon le trigger calcule depuis action_start/action_end)
         if action_data.get('time_spent') is not None:

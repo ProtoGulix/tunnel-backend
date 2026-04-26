@@ -34,7 +34,7 @@ class InterventionTaskOut(BaseModel):
 class InterventionTaskIn(BaseModel):
     intervention_id: UUID
     label: str
-    origin: str = Field(pattern="^(resp|tech)$")
+    origin: str = Field(default="tech", pattern="^(plan|resp|tech)$")
     optional: bool = False
     assigned_to: Optional[UUID] = None
     due_date: Optional[date] = None

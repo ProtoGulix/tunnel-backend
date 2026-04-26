@@ -12,11 +12,11 @@ Liste les actions groupées par date (`created_at::date`), du plus récent au pl
 
 ### Query params
 
-| Param        | Type | Défaut      | Description                               |
-| ------------ | ---- | ----------- | ----------------------------------------- |
-| `start_date` | date | aujourd'hui | Date de début incluse (ex: `2026-03-10`)  |
-| `end_date`   | date | aujourd'hui | Date de fin incluse (ex: `2026-03-15`)    |
-| `tech_id`    | uuid | —           | Filtre sur le technicien                  |
+| Param        | Type | Défaut      | Description                              |
+| ------------ | ---- | ----------- | ---------------------------------------- |
+| `start_date` | date | aujourd'hui | Date de début incluse (ex: `2026-03-10`) |
+| `end_date`   | date | aujourd'hui | Date de fin incluse (ex: `2026-03-15`)   |
+| `tech_id`    | uuid | —           | Filtre sur le technicien                 |
 
 > Sans paramètre, retourne uniquement les actions du jour. Pour une semaine : `start_date=2026-03-10&end_date=2026-03-15`.
 
@@ -141,12 +141,12 @@ Détail d'une action avec sous-catégorie et demandes d'achat.
 
 ### InterventionTaskRef
 
-| Champ | Type | Description |
-|-------|------|-------------|
-| `id` | uuid | ID de la tâche |
-| `label` | string | Intitulé de la tâche |
+| Champ    | Type   | Description                              |
+| -------- | ------ | ---------------------------------------- |
+| `id`     | uuid   | ID de la tâche                           |
+| `label`  | string | Intitulé de la tâche                     |
 | `status` | string | `todo`, `in_progress`, `done`, `skipped` |
-| `origin` | string | `plan`, `resp`, `tech` |
+| `origin` | string | `plan`, `resp`, `tech`                   |
 
 ---
 
@@ -161,11 +161,12 @@ Deux modes exclusifs pour saisir le temps — la logique est gérée par trigger
 
 Fournir les deux ou aucun des deux déclenche une erreur `400` avec le message du trigger.
 
-### Lien optionnel à une tâche
+### Lien obligatoire à une tâche
 
-Vous pouvez **lier l'action à une tâche** en fournissant `task_id`. La tâche doit appartenir à la même intervention.
+Chaque action doit être liée à une tâche via `task_id`. La tâche doit appartenir à la même intervention.
 
 **Comportement** :
+
 - La tâche est liée à l'action via `intervention_action.task_id`
 - Si la tâche est en `todo`, elle passe automatiquement en `in_progress`
 
@@ -174,7 +175,7 @@ Vous pouvez **lier l'action à une tâche** en fournissant `task_id`. La tâche 
 ```json
 {
   "intervention_id": "5ecf60d5-8471-4739-8ba8-0fdad7b51781",
-  "description": "Remplacement du roulement SKF 6205",
+  "task_id": "550e8400-e29b-41d4-a716-446655440000",
   "action_start": "08:00:00",
   "action_end": "09:30:00",
   "action_subcategory": 30,
@@ -189,7 +190,7 @@ Vous pouvez **lier l'action à une tâche** en fournissant `task_id`. La tâche 
 ```json
 {
   "intervention_id": "5ecf60d5-8471-4739-8ba8-0fdad7b51781",
-  "description": "Remplacement du roulement SKF 6205",
+  "task_id": "550e8400-e29b-41d4-a716-446655440000",
   "time_spent": 1.5,
   "action_subcategory": 30,
   "tech": "a1b2c3d4-...",
@@ -199,35 +200,35 @@ Vous pouvez **lier l'action à une tâche** en fournissant `task_id`. La tâche 
 }
 ```
 
-### Entrée — mode direct avec lien à une tâche
+### Entrée — mode direct avec note
 
 ```json
 {
   "intervention_id": "5ecf60d5-8471-4739-8ba8-0fdad7b51781",
-  "description": "Remplacement du roulement SKF 6205",
+  "task_id": "550e8400-e29b-41d4-a716-446655440000",
+  "description": "Roulement remplacé par un SKF 6205 de secours",
   "time_spent": 1.5,
   "action_subcategory": 30,
   "tech": "a1b2c3d4-...",
   "complexity_score": 7,
   "complexity_factor": "PCE",
-  "created_at": "2026-01-13T14:30:00",
-  "task_id": "550e8400-e29b-41d4-a716-446655440000"
+  "created_at": "2026-01-13T14:30:00"
 }
 ```
 
 | Champ                | Type     | Requis       | Description                                                                                                             |
 | -------------------- | -------- | ------------ | ----------------------------------------------------------------------------------------------------------------------- |
-| `intervention_id`    | uuid     | oui          | Intervention parente                                                                                                    |
-| `description`        | string   | oui          | Description (HTML nettoyé)                                                                                              |
+| `intervention_id`    | uuid     | **oui**      | Intervention parente                                                                                                    |
+| `task_id`            | uuid     | **oui**      | Tâche parente (doit appartenir à la même intervention)                                                                  |
+| `description`        | string   | non          | Note libre sur l'action (HTML nettoyé)                                                                                  |
 | `time_spent`         | float    | conditionnel | Mode direct : quarts d'heure uniquement (0.25, 0.5…). Min: 0.25. Mutuellement exclusif avec `action_start`/`action_end` |
 | `action_start`       | time     | conditionnel | Mode bornes : heure de début (HH:MM:SS). Mutuellement exclusif avec `time_spent`                                        |
 | `action_end`         | time     | conditionnel | Mode bornes : heure de fin (HH:MM:SS). Doit être > `action_start`                                                       |
-| `action_subcategory` | int      | oui          | ID de la sous-catégorie                                                                                                 |
-| `tech`               | uuid     | oui          | Technicien                                                                                                              |
-| `complexity_score`   | int      | oui          | Score 1-10                                                                                                              |
+| `action_subcategory` | int      | **oui**      | ID de la sous-catégorie                                                                                                 |
+| `tech`               | uuid     | **oui**      | Technicien                                                                                                              |
+| `complexity_score`   | int      | **oui**      | Score 1-10                                                                                                              |
 | `complexity_factor`  | string   | conditionnel | **Requis si score > 5**. Code existant dans [complexity_factors](complexity-factors.md)                                 |
 | `created_at`         | datetime | non          | Défaut: `now()`. Permet le backdating                                                                                   |
-| `task_id`            | uuid     | non          | ID d'une tâche à lier (doit appartenir à la même intervention)                                                         |
 
 ### Réponse `201`
 
@@ -241,7 +242,7 @@ Action complète avec sous-catégorie enrichie et champ `task` hydraté si `task
 | 400  | Ni `action_start`/`action_end` ni `time_spent` fournis |
 | 400  | `action_end` ≤ `action_start`                          |
 | 400  | Bornes ou `time_spent` non multiples de 0.25h          |
-| 400  | `task_id` introuvable                                  |
+| 404  | `task_id` introuvable                                  |
 | 400  | La tâche n'appartient pas à la même intervention       |
 
 ---
@@ -265,17 +266,17 @@ Met à jour partiellement une action existante. Seuls les champs fournis sont mo
 }
 ```
 
-| Champ                | Type     | Requis       | Description                                                                                                              |
-| -------------------- | -------- | ------------ | ------------------------------------------------------------------------------------------------------------------------ |
-| `description`        | string   | non          | Description (HTML nettoyé)                                                                                               |
-| `time_spent`         | float    | conditionnel | Mode direct : quarts d'heure uniquement (0.25, 0.5…). Mutuellement exclusif avec `action_start`/`action_end`             |
-| `action_start`       | time     | conditionnel | Mode bornes : heure de début (HH:MM:SS). Mutuellement exclusif avec `time_spent`                                         |
-| `action_end`         | time     | conditionnel | Mode bornes : heure de fin (HH:MM:SS). Doit être > `action_start`                                                        |
-| `action_subcategory` | int      | non          | ID de la sous-catégorie                                                                                                  |
-| `tech`               | uuid     | non          | Technicien                                                                                                               |
-| `complexity_score`   | int      | non          | Score 1-10                                                                                                               |
-| `complexity_factor`  | string   | non          | **Obligatoire si le score résultant > 5**. Code dans [complexity_factors](complexity-factors.md)                         |
-| `created_at`         | datetime | non          | Date de l'action. Modifiable pour corriger une erreur de saisie (backdating)                                             |
+| Champ                | Type     | Requis       | Description                                                                                                  |
+| -------------------- | -------- | ------------ | ------------------------------------------------------------------------------------------------------------ |
+| `description`        | string   | non          | Description (HTML nettoyé)                                                                                   |
+| `time_spent`         | float    | conditionnel | Mode direct : quarts d'heure uniquement (0.25, 0.5…). Mutuellement exclusif avec `action_start`/`action_end` |
+| `action_start`       | time     | conditionnel | Mode bornes : heure de début (HH:MM:SS). Mutuellement exclusif avec `time_spent`                             |
+| `action_end`         | time     | conditionnel | Mode bornes : heure de fin (HH:MM:SS). Doit être > `action_start`                                            |
+| `action_subcategory` | int      | non          | ID de la sous-catégorie                                                                                      |
+| `tech`               | uuid     | non          | Technicien                                                                                                   |
+| `complexity_score`   | int      | non          | Score 1-10                                                                                                   |
+| `complexity_factor`  | string   | non          | **Obligatoire si le score résultant > 5**. Code dans [complexity_factors](complexity-factors.md)             |
+| `created_at`         | datetime | non          | Date de l'action. Modifiable pour corriger une erreur de saisie (backdating)                                 |
 
 > Les règles métier s'appliquent également sur les champs partiels : si `complexity_score > 5` (valeur finale), `complexity_factor` doit être renseigné (valeur courante ou fournie).
 >

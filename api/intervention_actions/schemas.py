@@ -19,7 +19,9 @@ class InterventionTaskRef(BaseModel):
 class InterventionActionIn(BaseModel):
     """Schéma d'entrée pour créer une action d'intervention"""
     intervention_id: UUID
-    description: str
+    task_id: UUID
+    description: Optional[str] = Field(
+        default=None, description="Note optionnelle sur l'action")
     time_spent: Optional[float] = Field(default=None)
     action_subcategory: int
     tech: UUID
@@ -28,10 +30,6 @@ class InterventionActionIn(BaseModel):
     created_at: Optional[str] = Field(default=None)
     action_start: Optional[time] = Field(default=None)
     action_end: Optional[time] = Field(default=None)
-    task_id: Optional[UUID] = Field(
-        default=None,
-        description="ID de la tâche à lier à cette action (optionnel)"
-    )
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -97,7 +95,8 @@ class InterventionActionOut(BaseModel):
     complexity_factor: Optional[str] = Field(default=None)
     action_start: Optional[time] = None
     action_end: Optional[time] = None
-    purchase_requests: List[PurchaseRequestListItem] = Field(default_factory=list)
+    purchase_requests: List[PurchaseRequestListItem] = Field(
+        default_factory=list)
     task: Optional[InterventionTaskRef] = Field(
         default=None,
         description="Tâche liée à cette action"
