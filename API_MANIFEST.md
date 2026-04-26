@@ -21,6 +21,8 @@ Documentation OpenAPI interactive : `http://localhost:8000/docs`
 | Méthode | Endpoint                                               | Description                   | Documentation                                                           |
 | ------- | ------------------------------------------------------ | ----------------------------- | ----------------------------------------------------------------------- |
 | GET     | `/health`                                              | Health check                  | [health.md](docs/endpoints/health.md)                                   |
+| GET     | `/dashboard/summary`                                   | Compteurs badges menu         | [dashboard.md](docs/endpoints/dashboard.md)                             |
+| GET     | `/tasks/workspace`                                     | Endpoint unifié page Tasks    | [tasks.md](docs/endpoints/tasks.md)                                     |
 | POST    | `/auth/login`                                          | Authentification              | [auth.md](docs/endpoints/auth.md)                                       |
 | GET     | `/interventions`                                       | Liste interventions           | [interventions.md](docs/endpoints/interventions.md)                     |
 | GET     | `/interventions/{id}`                                  | Détail intervention           | [interventions.md](docs/endpoints/interventions.md)                     |
