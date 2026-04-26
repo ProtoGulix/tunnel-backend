@@ -488,6 +488,30 @@ class InterventionRepository:
             (request_id, current_statut, "Intervention créée manuellement"),
         )
 
+        # Vérifier si la DI appartient à une occurrence préventive non encore liée
+        cur.execute(
+            "SELECT id, plan_id FROM preventive_occurrence WHERE di_id = %s AND intervention_id IS NULL",
+            (request_id,),
+        )
+        occ_row = cur.fetchone()
+        if occ_row:
+            occ_id = str(occ_row[0])
+            occ_plan_id = occ_row[1]
+
+            cur.execute(
+                "UPDATE preventive_occurrence SET intervention_id = %s, status = 'in_progress' WHERE id = %s",
+                (intervention_id, occ_id),
+            )
+            cur.execute(
+                "UPDATE gamme_step_validation SET intervention_id = %s WHERE occurrence_id = %s AND intervention_id IS NULL",
+                (intervention_id, occ_id),
+            )
+            if occ_plan_id:
+                cur.execute(
+                    "UPDATE intervention SET plan_id = %s WHERE id = %s",
+                    (str(occ_plan_id), intervention_id),
+                )
+
     def update(self, intervention_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
         """Met à jour une intervention existante"""
         existing = self.get_by_id(intervention_id, include_actions=False)
