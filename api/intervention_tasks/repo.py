@@ -15,7 +15,7 @@ _TASK_SELECT = """
     SELECT
         it.id, it.intervention_id, it.label, it.origin, it.status,
         it.optional, it.due_date, it.sort_order, it.skip_reason,
-        it.gamme_step_id, it.occurrence_id, it.action_id,
+        it.gamme_step_id, it.occurrence_id,
         it.closed_by, it.created_by, it.created_at, it.updated_at,
         COALESCE(agg.action_count, 0)  AS action_count,
         COALESCE(agg.time_spent, 0.0)  AS time_spent,
@@ -30,10 +30,10 @@ _TASK_SELECT = """
     LEFT JOIN directus_users u ON u.id = it.assigned_to
     LEFT JOIN LATERAL (
         SELECT
-            COUNT(ia.id)            AS action_count,
+            COUNT(ia.id)                    AS action_count,
             COALESCE(SUM(ia.time_spent), 0) AS time_spent
         FROM intervention_action ia
-        WHERE ia.id = it.action_id
+        WHERE ia.task_id = it.id
     ) agg ON TRUE
 """
 
@@ -356,18 +356,23 @@ class InterventionTaskRepository:
         try:
             cur = conn.cursor()
             cur.execute(
-                "SELECT status, action_id FROM intervention_task WHERE id = %s",
+                "SELECT status FROM intervention_task WHERE id = %s",
                 (task_id,),
             )
             row = cur.fetchone()
             if not row:
                 raise NotFoundError(f"Tâche {task_id} non trouvée")
 
-            status, action_id = row[0], row[1]
+            status = row[0]
             if status != "todo":
                 raise ValidationError(
                     "Seule une tâche en statut 'todo' peut être supprimée")
-            if action_id is not None:
+
+            cur.execute(
+                "SELECT COUNT(*) FROM intervention_action WHERE task_id = %s",
+                (task_id,),
+            )
+            if cur.fetchone()[0] > 0:
                 raise ValidationError(
                     "Impossible de supprimer une tâche liée à une action")
 

@@ -88,14 +88,15 @@ class InterventionActionRepository:
             return []
 
     def _get_tasks_for_action(self, action_id: str, conn) -> List[Dict[str, Any]]:
-        """Récupère les tâches liées à cette action via intervention_task.action_id."""
+        """Récupère la tâche liée à cette action via intervention_action.task_id."""
         try:
             cur = conn.cursor()
             cur.execute(
                 """
                 SELECT it.id, it.label, it.status, it.origin, it.optional
-                FROM intervention_task it
-                WHERE it.action_id = %s
+                FROM intervention_action ia
+                JOIN intervention_task it ON it.id = ia.task_id
+                WHERE ia.id = %s
                 """,
                 (action_id,)
             )
@@ -204,12 +205,13 @@ class InterventionActionRepository:
                             if pid in pr_by_id
                         ]
 
-                # Batch tâches liées via intervention_task.action_id
+                # Batch tâches liées via intervention_action.task_id
                 cur.execute(
                     f"""
-                    SELECT it.action_id, it.id, it.label, it.status, it.origin, it.optional
-                    FROM intervention_task it
-                    WHERE it.action_id IN ({placeholders})
+                    SELECT ia.id AS action_id, it.id, it.label, it.status, it.origin, it.optional
+                    FROM intervention_action ia
+                    JOIN intervention_task it ON it.id = ia.task_id
+                    WHERE ia.id IN ({placeholders})
                     """,
                     action_ids
                 )
@@ -375,12 +377,13 @@ class InterventionActionRepository:
                         if pid in pr_by_id
                     ]
 
-            # Batch tâches liées via intervention_task.action_id
+            # Batch tâches liées via intervention_action.task_id (une action → une tâche)
             cur.execute(
                 f"""
-                SELECT it.action_id, it.id, it.label, it.status, it.origin, it.optional
-                FROM intervention_task it
-                WHERE it.action_id IN ({placeholders})
+                SELECT ia.id AS action_id, it.id, it.label, it.status, it.origin, it.optional
+                FROM intervention_action ia
+                JOIN intervention_task it ON it.id = ia.task_id
+                WHERE ia.id IN ({placeholders})
                 """,
                 action_ids
             )
@@ -451,8 +454,9 @@ class InterventionActionRepository:
         """Ajoute une nouvelle action à une intervention.
 
         Si tasks est fourni, chaque tâche du lot est vérifiée (appartenance à
-        l'intervention) puis liée à l'action via intervention_task.action_id.
-        Le trigger trg_task_status_on_action_link gère la transition todo→in_progress.
+        l'intervention) puis l'action est liée à la tâche via intervention_action.task_id.
+        Une tâche peut avoir plusieurs actions (one-to-many).
+        La transition todo→in_progress est gérée en Python sur la première action liée.
         """
         import uuid as _uuid
         # Extraire tasks avant validation (champ non géré par le validateur)
@@ -468,13 +472,18 @@ class InterventionActionRepository:
             now = datetime.now()
             created_at = validated_data.get('created_at', now)
 
+            # Résoudre task_id si une seule tâche fournie (champ simple, rétrocompat)
+            task_id_single = None
+            if not tasks and validated_data.get('task_id'):
+                task_id_single = str(validated_data.pop('task_id'))
+
             cur.execute(
                 """
                 INSERT INTO intervention_action
                 (id, intervention_id, description, time_spent, action_subcategory,
                  tech, complexity_score, complexity_factor, action_start, action_end,
-                 created_at, updated_at)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                 task_id, created_at, updated_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     action_id,
@@ -489,10 +498,22 @@ class InterventionActionRepository:
                     validated_data.get('complexity_factor'),
                     validated_data.get('action_start'),
                     validated_data.get('action_end'),
+                    task_id_single,
                     created_at,
                     now,
                 )
             )
+
+            # Transition todo→in_progress si première action sur cette tâche simple
+            if task_id_single:
+                cur.execute(
+                    """
+                    UPDATE intervention_task
+                    SET status = 'in_progress', updated_at = NOW()
+                    WHERE id = %s AND status = 'todo'
+                    """,
+                    (task_id_single,),
+                )
 
             intervention_id_str = str(validated_data['intervention_id']) if isinstance(
                 validated_data['intervention_id'], _uuid.UUID) else validated_data['intervention_id']
@@ -525,23 +546,37 @@ class InterventionActionRepository:
                         raise ValidationError(
                             f"Tâche « {task_label} » déjà clôturée — impossible de la skipper"
                         )
+                    # Lier l'action à la tâche + skipper
+                    cur.execute(
+                        "UPDATE intervention_action SET task_id = %s WHERE id = %s",
+                        (tid, action_id),
+                    )
                     cur.execute(
                         """
                         UPDATE intervention_task
-                        SET action_id = %s, status = 'skipped', skip_reason = %s, updated_at = NOW()
+                        SET status = 'skipped', skip_reason = %s, updated_at = NOW()
                         WHERE id = %s
                         """,
-                        (action_id, task_req_data.get('skip_reason'), tid),
+                        (task_req_data.get('skip_reason'), tid),
                     )
                 else:
                     if task_status in ('done', 'skipped'):
                         raise ValidationError(
                             f"Tâche « {task_label} » déjà clôturée — impossible de la tagger"
                         )
-                    # SET action_id — le trigger gère todo→in_progress
+                    # Lier l'action à la tâche
                     cur.execute(
-                        "UPDATE intervention_task SET action_id = %s, updated_at = NOW() WHERE id = %s",
-                        (action_id, tid),
+                        "UPDATE intervention_action SET task_id = %s WHERE id = %s",
+                        (tid, action_id),
+                    )
+                    # Transition todo→in_progress sur la tâche si c'est sa première action
+                    cur.execute(
+                        """
+                        UPDATE intervention_task
+                        SET status = 'in_progress', updated_at = NOW()
+                        WHERE id = %s AND status = 'todo'
+                        """,
+                        (tid,),
                     )
                     if task_req_data.get('close_task', False):
                         cur.execute(
@@ -664,21 +699,17 @@ class InterventionActionRepository:
                 tid = str(task_req_data['task_id'])
 
                 cur.execute(
-                    "SELECT intervention_id, status, label, action_id FROM intervention_task WHERE id = %s",
+                    "SELECT intervention_id, status, label FROM intervention_task WHERE id = %s",
                     (tid,)
                 )
                 task_row = cur.fetchone()
                 if not task_row:
                     raise NotFoundError(f"Tâche {tid} introuvable")
 
-                task_intervention, task_status, task_label, existing_action_id = task_row
+                task_intervention, task_status, task_label = task_row
                 if str(task_intervention) != intervention_id_str:
                     raise ValidationError(
                         f"Tâche « {task_label} » n'appartient pas à cette intervention"
-                    )
-                if existing_action_id and str(existing_action_id) != action_id:
-                    raise ValidationError(
-                        f"Tâche « {task_label} » déjà liée à une autre action"
                     )
 
                 if task_req_data.get('skip', False):
@@ -687,12 +718,16 @@ class InterventionActionRepository:
                             f"Tâche « {task_label} » déjà clôturée — impossible de la skipper"
                         )
                     cur.execute(
+                        "UPDATE intervention_action SET task_id = %s WHERE id = %s",
+                        (tid, action_id),
+                    )
+                    cur.execute(
                         """
                         UPDATE intervention_task
-                        SET action_id = %s, status = 'skipped', skip_reason = %s, updated_at = NOW()
+                        SET status = 'skipped', skip_reason = %s, updated_at = NOW()
                         WHERE id = %s
                         """,
-                        (action_id, task_req_data.get('skip_reason'), tid),
+                        (task_req_data.get('skip_reason'), tid),
                     )
                 else:
                     if task_status in ('done', 'skipped'):
@@ -700,8 +735,16 @@ class InterventionActionRepository:
                             f"Tâche « {task_label} » déjà clôturée — impossible de la tagger"
                         )
                     cur.execute(
-                        "UPDATE intervention_task SET action_id = %s, updated_at = NOW() WHERE id = %s",
-                        (action_id, tid),
+                        "UPDATE intervention_action SET task_id = %s WHERE id = %s",
+                        (tid, action_id),
+                    )
+                    cur.execute(
+                        """
+                        UPDATE intervention_task
+                        SET status = 'in_progress', updated_at = NOW()
+                        WHERE id = %s AND status = 'todo'
+                        """,
+                        (tid,),
                     )
                     if task_req_data.get('close_task', False):
                         cur.execute(

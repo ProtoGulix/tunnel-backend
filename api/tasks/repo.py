@@ -239,7 +239,7 @@ class TasksRepository:
 
         actions_by_task = {}
         for row in cur.fetchall():
-            task_id = str(row[10])
+            task_id = str(row[8])
             if task_id not in actions_by_task:
                 actions_by_task[task_id] = []
 
@@ -280,7 +280,7 @@ class TasksRepository:
 
         # Interventions (pour filtrage)
         cur.execute("""
-            SELECT DISTINCT i.id, i.code, i.title, i.status_actual
+            SELECT DISTINCT i.id, i.code, i.title, i.status_actual, i.reported_date
             FROM intervention i
             WHERE i.status_actual != (SELECT id FROM intervention_status_ref WHERE code = 'ferme' LIMIT 1)
             ORDER BY i.reported_date DESC
