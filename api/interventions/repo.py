@@ -4,7 +4,7 @@ from uuid import uuid4
 
 from api.settings import settings
 from api.db import get_connection, release_connection
-from api.errors.exceptions import DatabaseError, raise_db_error, NotFoundError
+from api.errors.exceptions import DatabaseError, ValidationError, raise_db_error, NotFoundError
 from api.constants import PRIORITY_TYPES, CLOSED_STATUS_CODE
 
 from api.intervention_actions.repo import InterventionActionRepository
@@ -169,7 +169,7 @@ class InterventionRepository:
                     ec_code = row_dict.pop('ec_code', None)
                     ec_label = row_dict.pop('ec_label', None)
 
-                    p_id   = row_dict.pop('m_parent_id',   None)
+                    p_id = row_dict.pop('m_parent_id',   None)
                     p_code = row_dict.pop('m_parent_code', None)
                     p_name = row_dict.pop('m_parent_name', None)
 
@@ -345,16 +345,19 @@ class InterventionRepository:
             intervention['status_logs'] = status_log_repo.get_by_intervention(
                 intervention_id)
 
-            # Calculer la progression de gamme si l'intervention a un plan préventif
-            if intervention.get('plan_id'):
-                # Import lazy pour éviter la circularité avec gamme_step_validations.repo
-                from api.gamme_step_validations.repo import GammeStepValidationRepository
-                gsv_repo = GammeStepValidationRepository()
-                intervention['gamme_progress'] = gsv_repo.get_progress(intervention_id)
-                intervention['gamme_steps'] = gsv_repo.get_by_intervention(intervention_id)
+            # Charger les tâches liées à l'intervention (plan préventif ou tâches ad hoc)
+            # On ne conditionne PAS sur plan_id : une intervention créée manuellement via
+            # acceptation DI peut avoir des intervention_task sans que plan_id soit renseigné.
+            # Import lazy pour éviter la circularité avec intervention_tasks.repo
+            from api.intervention_tasks.repo import InterventionTaskRepository
+            task_repo = InterventionTaskRepository()
+            tasks = task_repo.get_by_intervention(intervention_id)
+            intervention['tasks'] = tasks
+            if tasks:
+                intervention['task_progress'] = task_repo.get_progress(
+                    intervention_id)
             else:
-                intervention['gamme_progress'] = None
-                intervention['gamme_steps'] = []
+                intervention['task_progress'] = None
 
             return intervention
         except NotFoundError:
@@ -384,6 +387,17 @@ class InterventionRepository:
             cur = conn.cursor()
             intervention_id = str(uuid4())
 
+            # Résoudre plan_id depuis l'occurrence préventive liée à la DI si non fourni
+            # (cas acceptation manuelle d'une DI système préventive via POST /interventions)
+            plan_id = data.get('plan_id')
+            if plan_id is None and request_id:
+                cur.execute(
+                    "SELECT plan_id FROM preventive_occurrence WHERE di_id = %s LIMIT 1",
+                    (request_id,),
+                )
+                occ_row = cur.fetchone()
+                plan_id = str(occ_row[0]) if occ_row and occ_row[0] else None
+
             cur.execute(
                 """
                 INSERT INTO intervention
@@ -403,7 +417,7 @@ class InterventionRepository:
                     data.get('status_actual', 'ouvert'),
                     data.get('printed_fiche', False),
                     data.get('reported_date'),
-                    data.get('plan_id')
+                    plan_id,
                 )
             )
 
@@ -475,9 +489,37 @@ class InterventionRepository:
             (request_id, current_statut, "Intervention créée manuellement"),
         )
 
+        # Vérifier si la DI appartient à une occurrence préventive non encore liée
+        cur.execute(
+            "SELECT id, plan_id FROM preventive_occurrence WHERE di_id = %s AND intervention_id IS NULL",
+            (request_id,),
+        )
+        occ_row = cur.fetchone()
+        if occ_row:
+            occ_id = str(occ_row[0])
+            occ_plan_id = occ_row[1]
+
+            cur.execute(
+                "UPDATE preventive_occurrence SET intervention_id = %s, status = 'in_progress' WHERE id = %s",
+                (intervention_id, occ_id),
+            )
+            cur.execute(
+                "UPDATE intervention_task SET intervention_id = %s WHERE occurrence_id = %s AND intervention_id IS NULL",
+                (intervention_id, occ_id),
+            )
+            if occ_plan_id:
+                cur.execute(
+                    "UPDATE intervention SET plan_id = %s WHERE id = %s",
+                    (str(occ_plan_id), intervention_id),
+                )
+
     def update(self, intervention_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
         """Met à jour une intervention existante"""
         existing = self.get_by_id(intervention_id, include_actions=False)
+
+        # Bloquer la fermeture si des tâches non-optionnelles sont en attente
+        if 'status_actual' in data:
+            self._check_closable(intervention_id, data['status_actual'])
 
         conn = self._get_connection()
         try:
@@ -510,6 +552,9 @@ class InterventionRepository:
 
             cur.execute(query, params)
             conn.commit()
+        except (ValidationError, DatabaseError):
+            conn.rollback()
+            raise
         except Exception as e:
             conn.rollback()
             raise DatabaseError(
@@ -528,6 +573,49 @@ class InterventionRepository:
                 self._notify_if_closed(intervention_id, new_status)
 
         return result
+
+    def _check_closable(self, intervention_id: str, status_actual: Any) -> None:
+        """Lève ValidationError si des tâches non-optionnelles bloquent la fermeture."""
+        if not status_actual:
+            return
+        try:
+            conn = get_connection()
+            try:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "SELECT code FROM intervention_status_ref WHERE id = %s LIMIT 1",
+                        (str(status_actual),),
+                    )
+                    row = cur.fetchone()
+                    status_code = row[0] if row else str(status_actual)
+            finally:
+                release_connection(conn)
+        except Exception:
+            return
+
+        if status_code != CLOSED_STATUS_CODE:
+            return
+
+        conn = get_connection()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT COUNT(*) FROM intervention_task
+                    WHERE intervention_id = %s
+                      AND status IN ('todo', 'in_progress')
+                      AND optional = FALSE
+                    """,
+                    (intervention_id,),
+                )
+                blocking = cur.fetchone()[0]
+        finally:
+            release_connection(conn)
+
+        if blocking > 0:
+            raise ValidationError(
+                f"Impossible de fermer : {blocking} tâche(s) non-optionnelle(s) en attente."
+            )
 
     def _notify_if_closed(self, intervention_id: str, status_actual: Any) -> None:
         """Notifie le repo des demandes si l'intervention vient d'être fermée.

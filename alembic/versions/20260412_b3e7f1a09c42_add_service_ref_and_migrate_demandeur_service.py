@@ -5,7 +5,7 @@ Cree la table referentielle `service`, renomme `demandeur_service` en
 `service_id` et tente un mapping automatique des donnees existantes.
 
 Revision ID: b3e7f1a09c42
-Revises: None
+Revises: a1b2c3d4e5f0
 Create Date: 2026-04-12 00:00:00.000000
 """
 from __future__ import annotations
@@ -13,7 +13,7 @@ from typing import Union
 from alembic import op
 
 revision: str = "b3e7f1a09c42"
-down_revision: Union[str, None] = None
+down_revision: Union[str, None] = "a1b2c3d4e5f0"
 branch_labels: Union[str, tuple[str, ...], None] = None
 depends_on: Union[str, tuple[str, ...], None] = None
 

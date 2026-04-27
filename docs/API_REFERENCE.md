@@ -1480,7 +1480,7 @@ Exemples :
 
 ## 15. Maintenance Préventive
 
-Gestion complète du cycle de vie de la maintenance préventive : plans de gamme, génération automatique d'occurrences et validation des étapes lors de l'exécution.
+Gestion complète du cycle de vie de la maintenance préventive : plans de gamme, génération automatique d'occurrences et suivi des tâches lors de l'exécution.
 
 ### Flux
 
@@ -1489,7 +1489,7 @@ Plan préventif → Génération → Occurrence → DI créée automatiquement
                                                ↓
                                     Intervention (si auto_accept)
                                                ↓
-                              Validation des étapes de gamme
+                              Suivi des tâches d'intervention
                                                ↓
                                   is_complete → Clôture autorisée
 ```
@@ -1508,11 +1508,14 @@ Plan préventif → Génération → Occurrence → DI créée automatiquement
 | `GET`    | `/preventive-occurrences/{id}`            | Détail d'une occurrence                               |
 | `POST`   | `/preventive-occurrences/generate`        | Déclenche la génération pour tous les plans actifs    |
 | `PATCH`  | `/preventive-occurrences/{id}/skip`       | Ignore une occurrence `pending`                       |
-| `GET`    | `/gamme-step-validations`                 | Liste les validations d'une intervention              |
-| `GET`    | `/gamme-step-validations/progress`        | Progression gamme d'une intervention                  |
-| `PATCH`  | `/gamme-step-validations/{id}`            | Valide ou ignore une étape                            |
+| `GET`    | `/intervention-tasks`                     | Liste les tâches d'une intervention                   |
+| `GET`    | `/intervention-tasks/progress`            | Progression des tâches d'une intervention             |
+| `GET`    | `/intervention-tasks/{id}`                | Détail d'une tâche                                    |
+| `POST`   | `/intervention-tasks`                     | Crée une tâche manuelle (resp ou tech)                |
+| `PATCH`  | `/intervention-tasks/{id}`                | Met à jour une tâche                                  |
+| `DELETE` | `/intervention-tasks/{id}`                | Supprime une tâche (todo, sans action liée)           |
 
-> Documentation complète : [Preventive Plans](endpoints/preventive-plans.md) | [Preventive Occurrences](endpoints/preventive-occurrences.md) | [Gamme Step Validations](endpoints/gamme-step-validations.md)
+> Documentation complète : [Preventive Plans](endpoints/preventive-plans.md) | [Preventive Occurrences](endpoints/preventive-occurrences.md) | [Intervention Tasks](endpoints/intervention-tasks.md)
 
 ### Impact sur `GET /interventions/{id}`
 
@@ -1521,14 +1524,14 @@ Les interventions issues d'un plan préventif exposent deux champs supplémentai
 | Champ            | Description                                                                    |
 | ---------------- | ------------------------------------------------------------------------------ |
 | `plan_id`        | UUID du plan préventif d'origine (`null` si intervention manuelle)             |
-| `gamme_progress` | `{ total, validated, skipped, pending, is_complete }` — `null` si pas de plan |
+| `task_progress`  | `{ total, todo, in_progress, done, skipped, blocking_pending, is_complete }` — `null` si pas de plan |
 
-### Clôture avec gamme incomplète
+### Clôture avec tâches en attente
 
-Si `plan_id` est renseigné et que `pending > 0`, le passage en statut `ferme` retourne `409` :
+Si l'intervention a des tâches non-optionnelles en `todo` ou `in_progress`, le passage au statut `ferme` retourne `400` :
 
 ```json
-{ "detail": "Des étapes de gamme sont en attente de validation" }
+{ "detail": "Impossible de fermer : X tâche(s) non-optionnelle(s) en attente." }
 ```
 
 ---

@@ -4,6 +4,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, field_validator
 
+from api.intervention_tasks.schemas import InterventionTaskOut
+
 
 class PreventiveOccurrenceOut(BaseModel):
     id: UUID
@@ -22,6 +24,7 @@ class PreventiveOccurrenceOut(BaseModel):
     status: str
     skip_reason: Optional[str] = None
     created_at: Optional[datetime] = None
+    tasks: list[InterventionTaskOut] = []
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -45,11 +48,10 @@ class GenerateOccurrencesResult(BaseModel):
 
 class RepairOccurrencesResult(BaseModel):
     """Résultat de la procédure de réparation des occurrences corrompues."""
-    # Bug 1 : gamme_step_validation sans intervention_id malgré occurrence liée à une intervention
-    steps_relinked: int
-    # Bug 2 : occurrence encore 'generated' alors que l'intervention est fermée
+    tasks_relinked: int
+    occurrences_relinked: int
+    occurrences_set_in_progress: int
     occurrences_completed: int
-    # Demandes liées à une intervention fermée mais encore 'acceptee'
     requests_closed: int
-    # Détail des occurrences et interventions traitées (pour audit)
+    interventions_plan_fixed: int = 0
     details: list[str] = []

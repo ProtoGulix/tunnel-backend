@@ -2,6 +2,131 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [2.22.0] - 27 avril 2026
+
+### Breaking changes
+
+- **`InterventionActionIn.task_id` supprimé** : remplacé par `tasks: Optional[List[InterventionTaskValidationRequest]]`. Une action peut désormais tagger N tâches en une seule requête.
+- **`InterventionActionOut.task` renommé en `tasks`** : était un objet nullable, c'est maintenant une liste (vide si aucune tâche liée).
+- **`InterventionTaskPatch.status`** : seule la valeur `skipped` est désormais acceptée via PATCH direct. Les transitions `in_progress` et `done` passent obligatoirement par `POST /intervention-actions`.
+
+### Correction modèle relation action ↔ tâche
+
+Le modèle de relation entre `intervention_action` et `intervention_task` a été corrigé :
+
+- **Avant** : `intervention_action.task_id` → FK vers `intervention_task.id` (1:1 — une action = une tâche max)
+- **Après** : `intervention_action.task_id` → FK nullable vers `intervention_task.id` (one-to-many — une tâche peut être liée à N actions)
+
+### Nouveautés
+
+- **`GET /dashboard/summary` (public)** : endpoint instrumental pour afficher les compteurs des badges du menu. Retourne les comptages de chaque section (interventions ouvertes, tâches en attente, équipements, stock, etc.). Aucune authentification requise, conçu pour être cachable côté frontend.
+- **`POST /intervention-actions` — champ `tasks`** : liste optionnelle de tâches à tagger simultanément à la création de l'action. Chaque item supporte `close_task` (clôture immédiate) et `skip` + `skip_reason` (passage à `skipped`).
+- **`PATCH /intervention-actions/{id}` — champ `tasks`** : support de la liaison de tâches via PATCH, identique au POST (tagger, close, skip).
+- **Trigger `trg_task_status_on_action_link`** : transition `todo → in_progress` gérée directement en DB au SET `action_id` sur `intervention_task` (plus de transition Python).
+
+### Corrections
+
+- **`interventions/repo.py`** : référence stale `gamme_step_validation` corrigée en `intervention_task` dans `_link_request()`.
+- **`intervention_tasks/repo.py`** : agrégats `action_count`/`time_spent` corrigés (jointure `ia.id = it.action_id` au lieu de `ia.task_id = it.id`). Méthode `transition_to_in_progress()` supprimée (trigger DB).
+- **`intervention_tasks/repo.py` `delete()`** : vérification stale `intervention_action.task_id` supprimée.
+
+### Migrations DB (`web.tunnel-db`)
+
+- `20260426_j5e6f7a8b9c0` : premier essai — `action_id` sur `intervention_task` (modèle intermédiaire, réverté par k6f7)
+- `20260426_k6f7a8b9c0d1` : **modèle final** — `task_id` sur `intervention_action` (one-to-many : une tâche → N actions)
+  - Suppression `intervention_task.action_id` + trigger `trg_task_status_on_action_link`
+  - Ré-ajout `intervention_action.task_id` FK nullable vers `intervention_task.id`
+  - Transition `todo → in_progress` gérée en Python dans `InterventionActionRepository.add()`
+- `20260427_l7g8h9i0j1k2` : repair des liens action ↔ tâche orphelins post-migration
+  - Pour les interventions avec exactement une tâche : lie toutes les actions orphelines (`task_id IS NULL`) à cette unique tâche
+- `20260427_m8h9i0j1k2l3` : fix trigger `trg_compute_action_time` — ne se déclenche plus sur `UPDATE SET task_id`
+  - Remplacement du trigger `BEFORE INSERT OR UPDATE` par deux triggers distincts : `BEFORE INSERT` et `BEFORE UPDATE OF time_spent, action_start, action_end`
+
+---
+
+## [2.21.0] - 25 avril 2026
+
+### Breaking changes
+
+- **`GET /gamme-step-validations` supprimé** : remplacé par `GET /intervention-tasks`. Les anciens endpoints `/gamme-step-validations/*` n'existent plus.
+- **`InterventionActionIn.gamme_step_validations` supprimé** : remplacé par `task_id: Optional[UUID]`. Le mécanisme d'embarquement de validations multiples est supprimé.
+- **`InterventionActionOut.gamme_steps` renommé en `task`** : était un tableau, c'est maintenant un objet `InterventionTaskRef` (ou `null`).
+- **`InterventionOut.gamme_progress` renommé en `task_progress`** et **`gamme_steps` renommé en `tasks`** : mêmes données, nouveaux noms de champs.
+
+### Nouveautés
+
+- **Nouveau domaine `intervention_task`** : conversion in-place de `gamme_step_validation`. Chaque tâche a un `label`, une `origin` (`plan`/`resp`/`tech`), un `status` (`todo`/`in_progress`/`done`/`skipped`), des champs `assigned_to`, `due_date`, `sort_order`, `created_by`, `closed_by`.
+
+- **`POST /intervention-tasks`** : création manuelle de tâches (`origin = resp` ou `tech`).
+
+- **`GET /intervention-tasks`** : liste avec filtres `intervention_id`, `assigned_to`, `status`, `origin`, `include_done`. Inclut les agrégats `action_count` et `time_spent`.
+
+- **`PATCH /intervention-tasks/{id}`** : mise à jour partielle (label, status, skip_reason, assigned_to, due_date, sort_order).
+
+- **`DELETE /intervention-tasks/{id}`** : suppression autorisée uniquement si `status = todo` et aucune action liée.
+
+- **`GET /intervention-tasks/progress`** : remplace `GET /gamme-step-validations/progress`. Nouveaux champs `todo`, `in_progress`, `done` en lieu et place de `validated`, `pending`.
+
+- **Transition automatique `todo → in_progress`** : à la création d'une action, la tâche passe automatiquement en `in_progress` si elle était en `todo`.
+
+- **Règle de clôture renforcée** : le passage au statut `ferme` est bloqué (`400`) si des tâches non-optionnelles sont en `todo` ou `in_progress`. Message : `"Impossible de fermer : X tâche(s) non-optionnelle(s) en attente."`.
+
+### Corrections
+
+- **[BUG] Steps de gamme absents lors de l'acceptation manuelle d'une DI préventive** (`api/interventions/repo.py`) :
+  `_link_request()` ne mettait pas à jour l'occurrence ni les `gamme_step_validation`. Correction : détecte l'occurrence liée à la DI et effectue dans la même transaction : `UPDATE preventive_occurrence`, `UPDATE intervention_task`, `UPDATE intervention SET plan_id`.
+
+- **Repair étendu (`POST /preventive-occurrences/repair`)** : retrouve toutes les occurrences dont la DI est acceptée mais `intervention_id` est null et effectue les 3 mises à jour ci-dessus.
+
+### Migrations DB (`web.tunnel-db`)
+
+- `20260425_i4d5e6f7g8h9` : conversion in-place de `gamme_step_validation` → `intervention_task`
+  - Renommage table, colonnes (`step_id→gamme_step_id`, `validated_at→updated_at`, `validated_by→closed_by`)
+  - Migration statuts (`pending→todo`, `validated→done`)
+  - Ajout colonnes : `label`, `origin`, `optional`, `sort_order`, `assigned_to`, `due_date`, `created_by`, `created_at`
+  - Renommage contraintes et index
+
+### Documentation
+
+- `docs/endpoints/gamme-step-validations.md` → `docs/endpoints/intervention-tasks.md` (réécrit intégralement)
+- `docs/endpoints/interventions.md`, `intervention-actions.md`, `preventive-occurrences.md` mis à jour
+- `docs/API_REFERENCE.md` mis à jour (section 15)
+
+---
+
+## [2.20.0] - 15 avril 2026
+
+### Nouveautés
+
+- **Statut `in_progress` sur les occurrences préventives** : nouveau statut intermédiaire entre `generated` et `completed`. Passage automatique quand la DI liée est acceptée (qu'elle passe à `acceptee`), dans les deux chemins : acceptation manuelle (`transition_status`) et auto-accept (`_auto_accept_occurrence`).
+
+- **Clôture de DI → `completed` sur l'occurrence** : la transition d'une DI vers `cloturee` passe maintenant directement l'occurrence associée à `completed`, sans nécessiter la fermeture de l'intervention.
+
+- **`gamme_steps` embarqués dans `GET /preventive-occurrences`** : chaque occurrence expose la liste de ses `gamme_step_validation` avec label, statut, `action_id` et `intervention_id`. Le chargement est fait en batch (une seule requête pour toutes les occurrences, sans N+1). Permet de diagnostiquer visuellement les bugs de rattachement.
+
+- **Repair amélioré (`POST /preventive-occurrences/repair`)** :
+  - Nouveau champ `occurrences_relinked` : occurrences dont `intervention_id` a été rétabli depuis la DI liée (bug curseur acceptation manuelle)
+  - Nouveau champ `occurrences_set_in_progress` : occurrences passées de `generated` à `in_progress` (DI déjà acceptée en base)
+  - Recherche étendue à `status IN ('generated', 'in_progress')` pour le Bug 2
+
+### Corrections
+
+- **`on_intervention_closed` ne passait pas l'occurrence à `completed` si la DI n'était plus `acceptee`** : le `return` prématuré de l'étape 1 bloquait l'étape 2. Les deux étapes sont maintenant indépendantes.
+
+### Migrations DB (`web.tunnel-db`)
+
+- `20260413_g2b3c4d5e6f7` : rétrolien interventions → plans via `preventive_occurrence`
+- `20260414_h3c4d5e6f7a8` : trigger `trg_sync_status_log_to_intervention` avec cascade fermeture
+- `20260415_i4d5e6f7a8b9` : suppression du trigger redondant `trg_sync_status_from_log`
+
+### Documentation
+
+- Cycle de vie des occurrences mis à jour avec les 4 statuts (`pending`, `generated`, `in_progress`, `completed`, `skipped`)
+- Schéma `gamme_steps` documenté dans `GET /preventive-occurrences`
+- `TODO.md` enrichi avec les points issus du bilan technique
+
+---
+
 ## [2.19.0] - 15 avril 2026
 
 ### Corrections critiques

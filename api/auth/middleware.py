@@ -17,7 +17,8 @@ class JWTMiddleware(BaseHTTPMiddleware):
 
     # Routes publiques (pas d'auth requise)
     # Note : /docs, /openapi.json, /redoc sont exclus en production pour ne pas exposer la spec API
-    PUBLIC_ROUTES = {"/health", "/server/ping", "/favicon.ico", "/auth/login"}
+    PUBLIC_ROUTES = {"/health", "/server/ping",
+                     "/favicon.ico", "/auth/login", "/dashboard/summary"}
 
     if settings.API_ENV != "production":
         PUBLIC_ROUTES |= {"/docs", "/openapi.json", "/redoc"}
@@ -130,7 +131,8 @@ class JWTMiddleware(BaseHTTPMiddleware):
             logger.error("Middleware JWT error: %s", str(e), exc_info=e)
             return JSONResponse(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                content={"detail": "Erreur lors du traitement de l'authentification"}
+                content={
+                    "detail": "Erreur lors du traitement de l'authentification"}
             )
 
         # call_next hors du try/except global : les erreurs des routes remontent normalement

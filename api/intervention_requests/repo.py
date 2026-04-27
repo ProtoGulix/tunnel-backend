@@ -478,7 +478,7 @@ class InterventionRequestRepository:
                     request_id, intervention_id, effective_type_inter,
                 )
 
-            # ── Clôture : fermer l'intervention liée ──────────────────
+            # ── Clôture : fermer l'intervention liée + compléter l'occurrence ──
             elif status_to == "cloturee":
                 if intervention_id:
                     self._close_linked_intervention(
@@ -486,6 +486,21 @@ class InterventionRequestRepository:
                     logger.info(
                         "Demande %s clôturée : intervention %s fermée",
                         request_id, intervention_id,
+                    )
+                # Passer l'occurrence préventive liée à 'completed'
+                cur.execute(
+                    """
+                    UPDATE preventive_occurrence
+                    SET status = 'completed'
+                    WHERE di_id = %s
+                      AND status NOT IN ('completed', 'skipped')
+                    """,
+                    (request_id,),
+                )
+                if cur.rowcount:
+                    logger.info(
+                        "Occurrence préventive liée à la demande %s passée à 'completed'",
+                        request_id,
                     )
 
             # ── Rejet : remettre l'occurrence préventive liée en pending ──
@@ -520,17 +535,21 @@ class InterventionRequestRepository:
                     "UPDATE intervention_request SET intervention_id = %s WHERE id = %s",
                     (str(intervention_id), request_id),
                 )
-                # Rattacher l'occurrence et les gamme_step_validation à l'intervention créée.
+                # Rattacher l'occurrence et les intervention_task à l'intervention créée.
                 # preventive_occurrence_id a été résolu AVANT _create_intervention_for_request
                 # pour éviter toute pollution du curseur partagé.
                 if preventive_occurrence_id:
                     cur.execute(
-                        "UPDATE preventive_occurrence SET intervention_id = %s WHERE id = %s",
+                        """
+                        UPDATE preventive_occurrence
+                        SET intervention_id = %s, status = 'in_progress'
+                        WHERE id = %s
+                        """,
                         (str(intervention_id), preventive_occurrence_id),
                     )
                     cur.execute(
                         """
-                        UPDATE gamme_step_validation
+                        UPDATE intervention_task
                         SET intervention_id = %s
                         WHERE occurrence_id = %s
                         AND intervention_id IS NULL
@@ -538,7 +557,7 @@ class InterventionRequestRepository:
                         (str(intervention_id), preventive_occurrence_id),
                     )
                     logger.info(
-                        "Rattachement gamme : %s step(s) liés à l'intervention %s",
+                        "Rattachement tâches : %s tâche(s) liées à l'intervention %s",
                         cur.rowcount, intervention_id,
                     )
 
@@ -682,30 +701,28 @@ class InterventionRequestRepository:
                 (intervention_id,),
             )
             row = cur.fetchone()
-            if not row:
-                return  # Pas de demande liée en statut acceptee, rien à faire
+            if row:
+                request_id, current_statut = row[0], row[1]
 
-            request_id, current_statut = row[0], row[1]
+                cur.execute("SET LOCAL app.skip_request_status_log = 'true'")
+                cur.execute(
+                    "UPDATE intervention_request SET statut = 'cloturee' WHERE id = %s",
+                    (str(request_id),),
+                )
+                cur.execute(
+                    """
+                    INSERT INTO request_status_log (request_id, status_from, status_to, changed_by, notes)
+                    VALUES (%s, %s, %s, NULL, %s)
+                    """,
+                    (str(request_id), current_statut, "cloturee",
+                     "Clôture automatique suite à la fermeture de l'intervention"),
+                )
+                logger.info(
+                    "Demande %s automatiquement clôturée (intervention %s fermée)",
+                    request_id, intervention_id,
+                )
 
-            cur.execute("SET LOCAL app.skip_request_status_log = 'true'")
-            cur.execute(
-                "UPDATE intervention_request SET statut = 'cloturee' WHERE id = %s",
-                (str(request_id),),
-            )
-            cur.execute(
-                """
-                INSERT INTO request_status_log (request_id, status_from, status_to, changed_by, notes)
-                VALUES (%s, %s, %s, NULL, %s)
-                """,
-                (str(request_id), current_statut, "cloturee",
-                 "Clôture automatique suite à la fermeture de l'intervention"),
-            )
-            logger.info(
-                "Demande %s automatiquement clôturée (intervention %s fermée)",
-                request_id, intervention_id,
-            )
-
-            # 2. Passer l'occurrence préventive liée à 'completed'
+            # 2. Passer l'occurrence préventive liée à 'completed' (indépendant de l'étape 1)
             cur.execute(
                 """
                 UPDATE preventive_occurrence

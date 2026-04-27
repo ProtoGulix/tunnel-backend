@@ -69,8 +69,8 @@ def repair_occurrences():
 
     **Bug 1 — steps de gamme non liés à l'intervention** :
     Lors de l'acceptation manuelle d'une DI préventive, un problème de curseur partagé
-    empêchait le rattachement des `gamme_step_validation` à l'intervention créée.
-    Les steps restaient avec `intervention_id = NULL` et n'apparaissaient pas dans les actions.
+    empêchait le rattachement des `intervention_task` à l'intervention créée.
+    Les tâches restaient avec `intervention_id = NULL` et n'apparaissaient pas dans l'intervention.
 
     **Bug 2 — occurrence préventive bloquée à 'generated' après fermeture** :
     La fermeture d'une intervention (via PATCH) ne propageait pas l'état `completed`

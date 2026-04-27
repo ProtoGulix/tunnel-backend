@@ -1,0 +1,84 @@
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- 09_trigger_detect_preventive.sql - Trigger de détection automatique
+-- ═══════════════════════════════════════════════════════════════════════════════
+--
+-- Point de branchement : au moment où une action de dépannage est créée,
+-- déclencher l'analyse et la création des préconisations préventives.
+--
+-- ⚠️ CRITICAL CONSTRAINT :
+--   - Exécuté AFTER INSERT (event est terminé)
+--   - Aucune modification de l'action elle-même (pas de side-effects)
+--   - Aucune création d'intervention (humain valide d'abord)
+--
+-- @author Tunnel GMAO
+-- @version 1.0
+-- @created 2026-01-05
+
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- Création du trigger
+-- ═══════════════════════════════════════════════════════════════════════════════
+
+CREATE OR REPLACE TRIGGER trg_detect_preventive
+AFTER INSERT ON intervention_action
+FOR EACH ROW
+EXECUTE FUNCTION detect_preventive_suggestions();
+
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- Notes opérationnelles
+-- ═══════════════════════════════════════════════════════════════════════════════
+--
+-- Cycle de vie de la détection :
+--
+--   1. Technicien crée une action (intervention_action INSERT)
+--   2. Trigger se déclenche AFTER INSERT
+--   3. Fonction detect_preventive_suggestions() exécutée
+--   4. Analyse description + insert preventive_suggestion avec status='NEW'
+--   5. Retour au client (client ne sait rien du trigger)
+--   6. Superviseur consulte API Directus → voit les précos NEW
+--   7. Superviseur accepte/rejette via PATCH /items/preventive_suggestion/{id}
+--
+-- ─────────────────────────────────────────────────────────────────
+-- Dépannage / Vérification
+-- ─────────────────────────────────────────────────────────────────
+--
+-- Vérifier que le trigger est bien créé :
+-- SELECT * FROM information_schema.triggers WHERE trigger_name = 'trg_detect_preventive';
+--
+-- Tester manuellement :
+-- INSERT INTO intervention_action (
+--   id, intervention_id, description, action_subcategory_id, created_at
+-- )
+-- VALUES (
+--   gen_random_uuid(),
+--   '550e8400-e29b-41d4-a716-446655440000',
+--   'Contrôle courroie de transmission et alignement poulies',
+--   (SELECT id FROM action_subcategory WHERE code = 'DEP_CORRECTIVE'),
+--   CURRENT_TIMESTAMP
+-- );
+--
+-- -- Puis vérifier
+-- SELECT * FROM preventive_suggestion ORDER BY detected_at DESC LIMIT 5;
+--
+-- ─────────────────────────────────────────────────────────────────
+-- Notes de performance
+-- ─────────────────────────────────────────────────────────────────
+--
+-- ✓ AFTER INSERT (pas de blocker pour INSERT)
+-- ✓ FOR EACH ROW (actions créées individuellement en général)
+-- ✓ Fonction optimisée (peu de jointures, index actif)
+-- ✓ Conséquence : +5-10ms par INSERT (acceptable pour UI async)
+--
+-- ─────────────────────────────────────────────────────────────────
+-- Futur : intégration DI_PREV
+-- ─────────────────────────────────────────────────────────────────
+--
+-- Quand le module Demande d'Intervention préventive (DI_PREV) sera implémenté :
+--
+-- CREATE TRIGGER trg_accept_preventive_create_di
+-- AFTER UPDATE ON preventive_suggestion
+-- FOR EACH ROW
+-- WHEN (OLD.status = 'NEW' AND NEW.status = 'ACCEPTED')
+-- EXECUTE FUNCTION create_preventive_intervention_request();
+--
+-- Cette fonction créera une demande_intervention liée au preventive_suggestion.id
+--
