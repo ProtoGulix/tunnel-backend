@@ -45,6 +45,9 @@ env/
 *.sqlite
 *.sqlite3
 
+# Backups
+backups/
+
 # Logs
 *.log
 

@@ -111,6 +111,10 @@ def upgrade() -> None:
     """)
 
     op.execute("""
+        DROP TRIGGER IF EXISTS trg_sync_status_log_to_intervention
+            ON public.intervention_status_log
+    """)
+    op.execute("""
         CREATE TRIGGER trg_sync_status_log_to_intervention
             AFTER INSERT ON public.intervention_status_log
             FOR EACH ROW
