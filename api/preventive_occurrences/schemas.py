@@ -4,7 +4,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, field_validator
 
-from api.gamme_step_validations.schemas import GammeStepValidationOut
+from api.intervention_tasks.schemas import InterventionTaskOut
 
 
 class PreventiveOccurrenceOut(BaseModel):
@@ -24,7 +24,7 @@ class PreventiveOccurrenceOut(BaseModel):
     status: str
     skip_reason: Optional[str] = None
     created_at: Optional[datetime] = None
-    gamme_steps: list[GammeStepValidationOut] = []
+    tasks: list[InterventionTaskOut] = []
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -48,9 +48,10 @@ class GenerateOccurrencesResult(BaseModel):
 
 class RepairOccurrencesResult(BaseModel):
     """Résultat de la procédure de réparation des occurrences corrompues."""
-    steps_relinked: int
+    tasks_relinked: int
     occurrences_relinked: int
     occurrences_set_in_progress: int
     occurrences_completed: int
     requests_closed: int
+    interventions_plan_fixed: int = 0
     details: list[str] = []

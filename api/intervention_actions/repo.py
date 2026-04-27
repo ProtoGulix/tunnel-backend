@@ -18,7 +18,6 @@ class InterventionActionRepository:
 
     def _map_action_with_subcategory(self, row_dict: Dict[str, Any]) -> Dict[str, Any]:
         """Mappe une row avec subcategory et category imbriquées"""
-        # Nettoie la description HTML
         if row_dict.get('description'):
             row_dict['description'] = strip_html(row_dict['description'])
 
@@ -37,7 +36,6 @@ class InterventionActionRepository:
         else:
             row_dict['subcategory'] = None
 
-        # Nettoie les colonnes intermédiaires
         for key in ['subcategory_id', 'subcategory_name', 'subcategory_code',
                     'category_id', 'category_name', 'category_code', 'color']:
             row_dict.pop(key, None)
@@ -83,28 +81,22 @@ class InterventionActionRepository:
             if not pr_ids:
                 return []
 
-            # Import ici pour éviter import circulaire
+            # Import lazy pour éviter import circulaire
             from api.purchase_requests.repo import PurchaseRequestRepository
             return PurchaseRequestRepository().get_list(ids=pr_ids)
         except Exception:
             return []
 
-    def _get_gamme_steps_for_action(self, action_id: str, conn) -> List[Dict[str, Any]]:
-        """Récupère les steps de gamme validés/skippés par cette action"""
+    def _get_tasks_for_action(self, action_id: str, conn) -> List[Dict[str, Any]]:
+        """Récupère la tâche liée à cette action via intervention_action.task_id."""
         try:
             cur = conn.cursor()
             cur.execute(
                 """
-                SELECT
-                    gsv.id, gsv.step_id,
-                    gs.label AS step_label,
-                    gs.sort_order AS step_sort_order,
-                    gs.optional AS step_optional,
-                    gsv.status, gsv.skip_reason, gsv.validated_at, gsv.validated_by
-                FROM gamme_step_validation gsv
-                LEFT JOIN preventive_plan_gamme_step gs ON gs.id = gsv.step_id
-                WHERE gsv.action_id = %s
-                ORDER BY gs.sort_order ASC
+                SELECT it.id, it.label, it.status, it.origin, it.optional
+                FROM intervention_action ia
+                JOIN intervention_task it ON it.id = ia.task_id
+                WHERE ia.id = %s
                 """,
                 (action_id,)
             )
@@ -166,7 +158,6 @@ class InterventionActionRepository:
             rows = cur.fetchall()
             cols = [desc[0] for desc in cur.description]
 
-            # Première passe : mapper toutes les actions
             all_actions = []
             for row in rows:
                 action = self._map_action_with_subcategory(
@@ -182,13 +173,14 @@ class InterventionActionRepository:
                     'equipement_name': action.pop('interv_equipement_name', None),
                 } if action.get('intervention_id') else None
                 action['purchase_requests'] = []
-                action['gamme_steps'] = []
+                action['tasks'] = []
                 all_actions.append(action)
 
-            # Batch PR : 2 requêtes pour toutes les actions
             if all_actions:
                 action_ids = [str(a['id']) for a in all_actions]
                 placeholders = ','.join(['%s'] * len(action_ids))
+
+                # Batch PR
                 cur.execute(
                     f"""
                     SELECT intervention_action_id, purchase_request_id
@@ -213,32 +205,27 @@ class InterventionActionRepository:
                             if pid in pr_by_id
                         ]
 
-                # Batch gamme steps : récupère les steps liés
+                # Batch tâches liées via intervention_action.task_id
                 cur.execute(
                     f"""
-                    SELECT
-                        gsv.action_id, gsv.id, gsv.step_id,
-                        gs.label AS step_label,
-                        gs.sort_order AS step_sort_order,
-                        gs.optional AS step_optional,
-                        gsv.status, gsv.skip_reason, gsv.validated_at, gsv.validated_by
-                    FROM gamme_step_validation gsv
-                    LEFT JOIN preventive_plan_gamme_step gs ON gs.id = gsv.step_id
-                    WHERE gsv.action_id IN ({placeholders})
-                    ORDER BY gs.sort_order ASC
+                    SELECT ia.id AS action_id, it.id, it.label, it.status, it.origin, it.optional
+                    FROM intervention_action ia
+                    JOIN intervention_task it ON it.id = ia.task_id
+                    WHERE ia.id IN ({placeholders})
                     """,
                     action_ids
                 )
-                steps_rows = cur.fetchall()
-                if steps_rows:
-                    action_steps_map: Dict[str, List] = {}
-                    cols_steps = [d[0] for d in cur.description]
-                    for row in steps_rows:
-                        row_dict = dict(zip(cols_steps, row))
-                        action_id = str(row_dict.pop('action_id'))
-                        action_steps_map.setdefault(action_id, []).append(row_dict)
+                task_rows = cur.fetchall()
+                if task_rows:
+                    tasks_by_action: Dict[str, List[Dict]] = {}
+                    cols_task = [d[0] for d in cur.description]
+                    for row in task_rows:
+                        row_dict = dict(zip(cols_task, row))
+                        aid = str(row_dict.pop('action_id'))
+                        tasks_by_action.setdefault(aid, []).append(row_dict)
                     for action in all_actions:
-                        action['gamme_steps'] = action_steps_map.get(str(action['id']), [])
+                        action['tasks'] = tasks_by_action.get(
+                            str(action['id']), [])
 
             # Groupement par date
             groups: Dict[date, List[Dict[str, Any]]] = {}
@@ -248,7 +235,6 @@ class InterventionActionRepository:
                 if day is not None:
                     groups.setdefault(day, []).append(action)
 
-            # Retourne les jours du plus récent au plus ancien
             return [
                 {'date': d, 'actions': groups[d]}
                 for d in sorted(groups.keys(), reverse=True)
@@ -306,7 +292,7 @@ class InterventionActionRepository:
             } if action.get('intervention_id') else None
             action['purchase_requests'] = self._get_linked_purchase_requests(
                 str(action['id']), conn)
-            action['gamme_steps'] = self._get_gamme_steps_for_action(
+            action['tasks'] = self._get_tasks_for_action(
                 str(action['id']), conn)
             return action
         except NotFoundError:
@@ -354,15 +340,16 @@ class InterventionActionRepository:
                     dict(zip(cols, row)))
                 action = self._map_tech_user(action)
                 action['purchase_requests'] = []
-                action['gamme_steps'] = []
+                action['tasks'] = []
                 results.append(action)
 
             if not results:
                 return results
 
-            # Batch : récupère tous les PR liés à toutes les actions en 2 requêtes
             action_ids = [str(a['id']) for a in results]
             placeholders = ','.join(['%s'] * len(action_ids))
+
+            # Batch PR
             cur.execute(
                 f"""
                 SELECT intervention_action_id, purchase_request_id
@@ -379,7 +366,6 @@ class InterventionActionRepository:
                 all_prs = PurchaseRequestRepository().get_list(ids=pr_ids)
                 pr_by_id = {str(pr['id']): pr for pr in all_prs}
 
-                # Index : action_id → [pr_id, ...]
                 action_pr_map: Dict[str, List] = {}
                 for action_id, pr_id in links:
                     action_pr_map.setdefault(
@@ -391,35 +377,27 @@ class InterventionActionRepository:
                         if pid in pr_by_id
                     ]
 
-            # Batch : récupère les steps de gamme liés à toutes les actions
+            # Batch tâches liées via intervention_action.task_id (une action → une tâche)
             cur.execute(
                 f"""
-                SELECT
-                    gsv.action_id, gsv.id, gsv.step_id,
-                    gs.label AS step_label,
-                    gs.sort_order AS step_sort_order,
-                    gs.optional AS step_optional,
-                    gsv.status, gsv.skip_reason, gsv.validated_at, gsv.validated_by
-                FROM gamme_step_validation gsv
-                LEFT JOIN preventive_plan_gamme_step gs ON gs.id = gsv.step_id
-                WHERE gsv.action_id IN ({placeholders})
-                ORDER BY gs.sort_order ASC
+                SELECT ia.id AS action_id, it.id, it.label, it.status, it.origin, it.optional
+                FROM intervention_action ia
+                JOIN intervention_task it ON it.id = ia.task_id
+                WHERE ia.id IN ({placeholders})
                 """,
                 action_ids
             )
-            steps_rows = cur.fetchall()
-
-            if steps_rows:
-                # Index : action_id → [steps...]
-                action_steps_map: Dict[str, List] = {}
-                cols_steps = [d[0] for d in cur.description]
-                for row in steps_rows:
-                    row_dict = dict(zip(cols_steps, row))
-                    action_id = str(row_dict.pop('action_id'))
-                    action_steps_map.setdefault(action_id, []).append(row_dict)
-
+            task_rows = cur.fetchall()
+            if task_rows:
+                tasks_by_action: Dict[str, List[Dict]] = {}
+                cols_task = [d[0] for d in cur.description]
+                for row in task_rows:
+                    row_dict = dict(zip(cols_task, row))
+                    aid = str(row_dict.pop('action_id'))
+                    tasks_by_action.setdefault(aid, []).append(row_dict)
                 for action in results:
-                    action['gamme_steps'] = action_steps_map.get(str(action['id']), [])
+                    action['tasks'] = tasks_by_action.get(
+                        str(action['id']), [])
 
             return results
         except HTTPException:
@@ -473,39 +451,39 @@ class InterventionActionRepository:
             release_connection(conn)
 
     def add(self, action_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Ajoute une nouvelle action à une intervention
+        """Ajoute une nouvelle action à une intervention.
 
-        Si gamme_step_validations est fourni (liste), valide/skippe les steps après création.
-        Chaque validatior peut être :
-          - status="validated" : lie l'action_id au step
-          - status="skipped" : skippe le step avec skip_reason
+        Si tasks est fourni, chaque tâche du lot est vérifiée (appartenance à
+        l'intervention) puis l'action est liée à la tâche via intervention_action.task_id.
+        Une tâche peut avoir plusieurs actions (one-to-many).
+        La transition todo→in_progress est gérée en Python sur la première action liée.
         """
-        # Extraction des validations de gamme steps avant la validation
-        gamme_step_validations = action_data.pop('gamme_step_validations', None)
+        import uuid as _uuid
+        # Extraire tasks avant validation (champ non géré par le validateur)
+        tasks = action_data.pop('tasks', None) or []
 
-        # Validation et préparation des données — lève ValidationError (400) si invalide
         validated_data = InterventionActionValidator.validate_and_prepare(
             action_data)
-
-        import uuid as _uuid
 
         conn = self._get_connection()
         try:
             cur = conn.cursor()
             action_id = str(uuid4())
             now = datetime.now()
-
-            # Utilise created_at du validator (qui utilise now() si None)
             created_at = validated_data.get('created_at', now)
+
+            # Résoudre task_id si une seule tâche fournie (champ simple, rétrocompat)
+            task_id_single = None
+            if not tasks and validated_data.get('task_id'):
+                task_id_single = str(validated_data.pop('task_id'))
 
             cur.execute(
                 """
                 INSERT INTO intervention_action
                 (id, intervention_id, description, time_spent, action_subcategory,
                  tech, complexity_score, complexity_factor, action_start, action_end,
-                 created_at, updated_at)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                RETURNING *
+                 task_id, created_at, updated_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     action_id,
@@ -520,44 +498,101 @@ class InterventionActionRepository:
                     validated_data.get('complexity_factor'),
                     validated_data.get('action_start'),
                     validated_data.get('action_end'),
+                    task_id_single,
                     created_at,
-                    now
+                    now,
                 )
             )
-            conn.commit()
 
-            # Valider/skipper les gamme steps si fournis
-            if gamme_step_validations:
-                # Import lazy pour éviter la circularité
-                from api.gamme_step_validations.repo import GammeStepValidationRepository
-                from api.gamme_step_validations.schemas import GammeStepValidationPatch
+            # Transition todo→in_progress si première action sur cette tâche simple
+            if task_id_single:
+                cur.execute(
+                    """
+                    UPDATE intervention_task
+                    SET status = 'in_progress', updated_at = NOW()
+                    WHERE id = %s AND status = 'todo'
+                    """,
+                    (task_id_single,),
+                )
 
-                gsv_repo = GammeStepValidationRepository()
+            intervention_id_str = str(validated_data['intervention_id']) if isinstance(
+                validated_data['intervention_id'], _uuid.UUID) else validated_data['intervention_id']
 
-                for gsv_request in gamme_step_validations:
-                    if gsv_request.get('status') == "skipped":
-                        # Mode skip
-                        patch_data = GammeStepValidationPatch(
-                            status="skipped",
-                            skip_reason=gsv_request.get('skip_reason'),
-                            validated_by=validated_data['tech'],
-                            action_id=None
-                        )
-                    else:
-                        # Mode validation : lier à l'action créée
-                        patch_data = GammeStepValidationPatch(
-                            status="validated",
-                            action_id=_uuid.UUID(action_id),
-                            validated_by=validated_data['tech'],
-                            skip_reason=None
-                        )
+            for task_req in tasks:
+                task_req_data = task_req if isinstance(task_req, dict) else {
+                    'task_id': task_req.task_id,
+                    'close_task': task_req.close_task,
+                    'skip': task_req.skip,
+                    'skip_reason': task_req.skip_reason,
+                }
+                tid = str(task_req_data['task_id'])
 
-                    gsv_repo.patch_validation(
-                        str(gsv_request.get('step_validation_id')),
-                        patch_data
+                # Vérifier existence + appartenance à la même intervention
+                cur.execute(
+                    "SELECT intervention_id, status, label FROM intervention_task WHERE id = %s",
+                    (tid,)
+                )
+                task_row = cur.fetchone()
+                if not task_row:
+                    raise NotFoundError(f"Tâche {tid} introuvable")
+                task_intervention, task_status, task_label = task_row
+                if str(task_intervention) != intervention_id_str:
+                    raise ValidationError(
+                        f"Tâche « {task_label} » n'appartient pas à cette intervention"
                     )
 
+                if task_req_data.get('skip', False):
+                    if task_status in ('done', 'skipped'):
+                        raise ValidationError(
+                            f"Tâche « {task_label} » déjà clôturée — impossible de la skipper"
+                        )
+                    # Lier l'action à la tâche + skipper
+                    cur.execute(
+                        "UPDATE intervention_action SET task_id = %s WHERE id = %s",
+                        (tid, action_id),
+                    )
+                    cur.execute(
+                        """
+                        UPDATE intervention_task
+                        SET status = 'skipped', skip_reason = %s, updated_at = NOW()
+                        WHERE id = %s
+                        """,
+                        (task_req_data.get('skip_reason'), tid),
+                    )
+                else:
+                    if task_status in ('done', 'skipped'):
+                        raise ValidationError(
+                            f"Tâche « {task_label} » déjà clôturée — impossible de la tagger"
+                        )
+                    # Lier l'action à la tâche
+                    cur.execute(
+                        "UPDATE intervention_action SET task_id = %s WHERE id = %s",
+                        (tid, action_id),
+                    )
+                    # Transition todo→in_progress sur la tâche si c'est sa première action
+                    cur.execute(
+                        """
+                        UPDATE intervention_task
+                        SET status = 'in_progress', updated_at = NOW()
+                        WHERE id = %s AND status = 'todo'
+                        """,
+                        (tid,),
+                    )
+                    if task_req_data.get('close_task', False):
+                        cur.execute(
+                            """
+                            UPDATE intervention_task
+                            SET status = 'done', updated_at = NOW()
+                            WHERE id = %s AND status != 'skipped'
+                            """,
+                            (tid,),
+                        )
+
+            conn.commit()
             return self.get_by_id(action_id)
+        except (ValidationError, NotFoundError):
+            conn.rollback()
+            raise
         except HTTPException:
             conn.rollback()
             raise
@@ -569,12 +604,13 @@ class InterventionActionRepository:
 
     def update(self, action_id: str, patch_data: Dict[str, Any]) -> Dict[str, Any]:
         """Met à jour partiellement une action existante"""
-        # Vérification d'existence (légère)
+        tasks = patch_data.pop('tasks', None) or []
+
         conn = self._get_connection()
         try:
             cur = conn.cursor()
             cur.execute(
-                "SELECT complexity_score, complexity_factor FROM intervention_action WHERE id = %s", (action_id,))
+                "SELECT intervention_id, complexity_score, complexity_factor FROM intervention_action WHERE id = %s", (action_id,))
             row = cur.fetchone()
             if not row:
                 raise NotFoundError(f"Action {action_id} non trouvée")
@@ -598,10 +634,9 @@ class InterventionActionRepository:
         updates = {k: v for k, v in patch_data.items()
                    if k in updatable_fields and v is not None}
 
-        if not updates:
+        if not updates and not tasks:
             return self.get_by_id(action_id)
 
-        # Validation partielle des champs fournis
         if 'description' in updates:
             updates['description'] = InterventionActionValidator.sanitize_description(
                 updates['description'])
@@ -615,7 +650,6 @@ class InterventionActionRepository:
             updates['complexity_factor'] = InterventionActionValidator.validate_complexity_factor(
                 updates['complexity_factor'])
 
-        # Valide la règle score > 5 → complexity_factor obligatoire (valeurs fusionnées)
         score = updates.get('complexity_score',
                             current.get('complexity_score'))
         factor = updates.get('complexity_factor',
@@ -625,19 +659,14 @@ class InterventionActionRepository:
                 "complexity_factor est obligatoire quand complexity_score > 5"
             )
 
-        # Respect de l'exclusivité bornes/time_spent imposée par le trigger PostgreSQL :
-        # si le PATCH passe en mode bornes (action_start+action_end), on efface time_spent,
-        # et inversement.
         has_bounds = 'action_start' in updates or 'action_end' in updates
         has_direct = 'time_spent' in updates
         if has_bounds and not has_direct:
-            # forcer NULL pour satisfaire le trigger
             updates['time_spent'] = None
         elif has_direct and not has_bounds:
             updates['action_start'] = None
             updates['action_end'] = None
 
-        # Normalise les UUID en str pour psycopg2 (compatibilité avec ou sans register_uuid)
         import uuid as _uuid
         params_updates = {
             k: str(v) if isinstance(v, _uuid.UUID) else v
@@ -647,17 +676,90 @@ class InterventionActionRepository:
         conn = self._get_connection()
         try:
             cur = conn.cursor()
-            set_clauses = [f"{field} = %s" for field in params_updates]
-            params = list(params_updates.values())
-            set_clauses.append("updated_at = %s")
-            params.append(datetime.now())
-            params.append(action_id)
+            if params_updates:
+                set_clauses = [f"{field} = %s" for field in params_updates]
+                params = list(params_updates.values())
+                set_clauses.append("updated_at = %s")
+                params.append(datetime.now())
+                params.append(action_id)
 
-            cur.execute(
-                f"UPDATE intervention_action SET {', '.join(set_clauses)} WHERE id = %s",
-                params
-            )
+                cur.execute(
+                    f"UPDATE intervention_action SET {', '.join(set_clauses)} WHERE id = %s",
+                    params
+                )
+
+            intervention_id_str = str(current['intervention_id'])
+            for task_req in tasks:
+                task_req_data = task_req if isinstance(task_req, dict) else {
+                    'task_id': task_req.task_id,
+                    'close_task': task_req.close_task,
+                    'skip': task_req.skip,
+                    'skip_reason': task_req.skip_reason,
+                }
+                tid = str(task_req_data['task_id'])
+
+                cur.execute(
+                    "SELECT intervention_id, status, label FROM intervention_task WHERE id = %s",
+                    (tid,)
+                )
+                task_row = cur.fetchone()
+                if not task_row:
+                    raise NotFoundError(f"Tâche {tid} introuvable")
+
+                task_intervention, task_status, task_label = task_row
+                if str(task_intervention) != intervention_id_str:
+                    raise ValidationError(
+                        f"Tâche « {task_label} » n'appartient pas à cette intervention"
+                    )
+
+                if task_req_data.get('skip', False):
+                    if task_status in ('done', 'skipped'):
+                        raise ValidationError(
+                            f"Tâche « {task_label} » déjà clôturée — impossible de la skipper"
+                        )
+                    cur.execute(
+                        "UPDATE intervention_action SET task_id = %s WHERE id = %s",
+                        (tid, action_id),
+                    )
+                    cur.execute(
+                        """
+                        UPDATE intervention_task
+                        SET status = 'skipped', skip_reason = %s, updated_at = NOW()
+                        WHERE id = %s
+                        """,
+                        (task_req_data.get('skip_reason'), tid),
+                    )
+                else:
+                    if task_status in ('done', 'skipped'):
+                        raise ValidationError(
+                            f"Tâche « {task_label} » déjà clôturée — impossible de la tagger"
+                        )
+                    cur.execute(
+                        "UPDATE intervention_action SET task_id = %s WHERE id = %s",
+                        (tid, action_id),
+                    )
+                    cur.execute(
+                        """
+                        UPDATE intervention_task
+                        SET status = 'in_progress', updated_at = NOW()
+                        WHERE id = %s AND status = 'todo'
+                        """,
+                        (tid,),
+                    )
+                    if task_req_data.get('close_task', False):
+                        cur.execute(
+                            """
+                            UPDATE intervention_task
+                            SET status = 'done', updated_at = NOW()
+                            WHERE id = %s AND status != 'skipped'
+                            """,
+                            (tid,),
+                        )
+
             conn.commit()
+        except (ValidationError, NotFoundError):
+            conn.rollback()
+            raise
         except HTTPException:
             conn.rollback()
             raise

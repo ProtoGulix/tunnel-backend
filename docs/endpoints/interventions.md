@@ -4,9 +4,9 @@ Gestion des interventions de maintenance. Chaque intervention est liée à un é
 
 Une intervention peut être créée manuellement via `POST /interventions`, ou **automatiquement depuis une demande d'intervention** lors de la transition vers `acceptee`. Dans ce cas, le champ `request` contient les informations de la demande d'origine.
 
-Une intervention peut aussi être liée à un **plan de maintenance préventive** (`plan_id` non null). Dans ce cas, le champ `gamme_progress` est hydraté sur `GET /interventions/{id}`.
+Une intervention peut aussi être liée à un **plan de maintenance préventive** (`plan_id` non null). Dans ce cas, le champ `task_progress` est hydraté sur `GET /interventions/{id}`.
 
-> Voir aussi : [Actions](intervention-actions.md) | [Status Logs](intervention-status-log.md) | [Purchase Requests](purchase-requests.md) | [Intervention Requests](intervention-requests.md) | [Preventive Plans](preventive-plans.md) | [Gamme Step Validations](gamme-step-validations.md)
+> Voir aussi : [Actions](intervention-actions.md) | [Status Logs](intervention-status-log.md) | [Purchase Requests](purchase-requests.md) | [Intervention Requests](intervention-requests.md) | [Preventive Plans](preventive-plans.md) | [Intervention Tasks](intervention-tasks.md)
 
 ---
 
@@ -44,11 +44,21 @@ Liste les interventions avec filtres, tri et pagination.
       "name": "Scie principale",
       "health": {
         "level": "maintenance",
-        "reason": "1 intervention(s) ouverte(s)",
-        "rules_triggered": null
+        "reason": "1 intervention ouverte",
+        "open_interventions_count": 1,
+        "urgent_count": 0,
+        "new_requests_count": 0,
+        "rules_triggered": ["OPEN_TOTAL > 0"]
       },
-      "parent_id": null,
-      "equipement_class": { "id": "uuid", "code": "SCIE", "label": "Scie" }
+      "parent": { "id": "uuid", "code": "VLT", "name": "Site des villettes" },
+      "equipement_class": { "id": "uuid", "code": "SCIE", "label": "Scie" },
+      "statut": {
+        "id": 3,
+        "code": "EN_SERVICE",
+        "label": "En service",
+        "interventions": true,
+        "couleur": "#10B981"
+      }
     },
     "type_inter": "curatif",
     "priority": "urgent",
@@ -92,11 +102,17 @@ Liste les interventions avec filtres, tri et pagination.
 
 ### Champs `equipements` en liste
 
-| Champ              | Description                                                                                                |
-| ------------------ | ---------------------------------------------------------------------------------------------------------- |
-| `health`           | Calculé depuis le compte réel des interventions ouvertes sur l'équipement (toutes, pas seulement filtrées) |
-| `health.level`     | `ok`, `maintenance` (≥ 1 ouverte), `critical` (≥ 1 urgente)                                                |
-| `equipement_class` | Classe d'équipement (`null` si non renseignée)                                                             |
+| Champ                             | Description                                                                                                |
+| --------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `health`                          | Calculé depuis le compte réel des interventions ouvertes sur l'équipement (toutes, pas seulement filtrées) |
+| `health.level`                    | `ok`, `maintenance` (≥ 1 ouverte), `critical` (≥ 1 urgente)                                                |
+| `health.open_interventions_count` | Nombre d'interventions ouvertes                                                                            |
+| `health.urgent_count`             | Nombre d'interventions urgentes ouvertes                                                                   |
+| `health.new_requests_count`       | Nombre de demandes en statut `nouvelle`                                                                    |
+| `health.rules_triggered`          | Règles ayant déclenché le niveau de santé (ex: `["OPEN_TOTAL > 0"]`)                                       |
+| `parent`                          | Équipement parent `{id, code, name}`. `null` si racine                                                     |
+| `statut`                          | Statut opérationnel `{id, code, label, interventions, couleur}`. `null` si non renseigné                   |
+| `equipement_class`                | Classe d'équipement `{id, code, label}`. `null` si non renseignée                                          |
 
 ---
 
@@ -147,11 +163,21 @@ Détail complet d'une intervention. **La structure est différente de la liste**
     "notes": null,
     "health": {
       "level": "maintenance",
-      "reason": "1 intervention(s) ouverte(s)",
-      "rules_triggered": null
+      "reason": "1 intervention ouverte",
+      "open_interventions_count": 1,
+      "urgent_count": 0,
+      "new_requests_count": 0,
+      "rules_triggered": ["OPEN_TOTAL > 0"]
     },
-    "parent_id": null,
+    "parent": { "id": "uuid", "code": "VLT", "name": "Site des villettes" },
     "equipement_class": { "id": "uuid", "code": "SCIE", "label": "Scie" },
+    "statut": {
+      "id": 3,
+      "code": "EN_SERVICE",
+      "label": "En service",
+      "interventions": true,
+      "couleur": "#10B981"
+    },
     "children_count": 2,
     "interventions": {
       "total": 5,
@@ -169,7 +195,38 @@ Détail complet d'une intervention. **La structure est différente de la liste**
           "reported_date": "2026-01-13"
         }
       ]
-    }
+    },
+    "preventive_plans": [
+      {
+        "id": "uuid",
+        "code": "PLAN-CODE",
+        "label": "Libellé du plan",
+        "trigger_type": "periodicity",
+        "periodicity_days": 15,
+        "hours_threshold": null,
+        "active": true,
+        "next_occurrence": null
+      }
+    ],
+    "preventive_occurrences_summary": {
+      "pending_count": 0,
+      "generated_count": 0,
+      "skipped_count": 0,
+      "next_scheduled": null,
+      "last_skipped_reason": null
+    },
+    "open_requests": [
+      {
+        "id": "uuid",
+        "code": "DI-2026-0024",
+        "description": "Description de la demande",
+        "statut": "acceptee",
+        "statut_label": "Acceptée",
+        "statut_color": "#22c55e",
+        "is_system": true,
+        "created_at": "2026-04-13T16:59:34Z"
+      }
+    ]
   },
   "type_inter": "curatif",
   "priority": "urgent",
@@ -200,7 +257,7 @@ Détail complet d'une intervention. **La structure est différente de la liste**
     "purchase_count": 1
   },
   "plan_id": null,
-  "gamme_progress": null,
+  "task_progress": null,
   "actions": [
     {
       "id": "uuid",
@@ -249,19 +306,12 @@ Détail complet d'une intervention. **La structure est différente de la liste**
           "updated_at": "2026-01-14T08:00:00"
         }
       ],
-      "gamme_steps": [
-        {
-          "id": "550e8400-e29b-41d4-a716-446655440000",
-          "step_id": "660e8400-e29b-41d4-a716-446655440001",
-          "step_label": "Diagnostic initial",
-          "step_sort_order": 1,
-          "step_optional": false,
-          "status": "validated",
-          "skip_reason": null,
-          "validated_at": "2026-01-13T14:35:00",
-          "validated_by": "a1b2c3d4-..."
-        }
-      ],
+      "task": {
+        "id": "550e8400-e29b-41d4-a716-446655440000",
+        "label": "Diagnostic initial",
+        "status": "done",
+        "origin": "plan"
+      },
       "created_at": "2026-01-13T14:30:00",
       "updated_at": "2026-01-13T15:00:00"
     }
@@ -280,32 +330,29 @@ Détail complet d'une intervention. **La structure est différente de la liste**
 
 ### Différences avec la liste
 
-| Champ                  | Liste                                                                   | Détail                                                                                                                                                      |
-| ---------------------- | ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `equipements`          | Léger : `id`, `code`, `name`, `health`, `parent_id`, `equipement_class` | Complet : + `no_machine`, `affectation`, `is_mere`, `fabricant`, `numero_serie`, `date_mise_service`, `notes`, `children_count`, `interventions` (paginées) |
-| `request`              | Objet `InterventionRequestListItem` (`null` si création manuelle)       | Idem                                                                                                                                                        |
-| `actions`              | Toujours `[]`                                                           | Tableau de [InterventionActionOut](intervention-actions.md) complet avec `subcategory`, `tech`, `purchase_requests`, **`gamme_steps`**                      |
-| `status_logs`          | Toujours `[]`                                                           | Tableau de [InterventionStatusLogOut](intervention-status-log.md)                                                                                           |
-| `plan_id`              | Absent (non retourné en liste)                                          | UUID du plan préventif si l'intervention provient de la maintenance préventive, `null` sinon                                                                |
-| `gamme_progress`       | Absent (non retourné en liste)                                          | Objet [GammeProgressOut](gamme-step-validations.md) (`total`, `validated`, `skipped`, `pending`, `is_complete`). `null` si `plan_id` est null               |
-| `stats.purchase_count` | Calculé en SQL (agrégat)                                                | Calculé depuis les `purchase_requests` chargées dans les actions                                                                                            |
+| Champ                  | Liste                                                                          | Détail                                                                                                                                                                                                                             |
+| ---------------------- | ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `equipements`          | Léger : `id`, `code`, `name`, `health`, `parent`, `equipement_class`, `statut` | Complet : + `no_machine`, `affectation`, `is_mere`, `fabricant`, `numero_serie`, `date_mise_service`, `notes`, `children_count`, `interventions` (paginées), `preventive_plans`, `preventive_occurrences_summary`, `open_requests` |
+| `request`              | Objet `InterventionRequestListItem` (`null` si création manuelle)              | Idem                                                                                                                                                                                                                               |
+| `actions`              | Toujours `[]`                                                                  | Tableau de [InterventionActionOut](intervention-actions.md) complet avec `subcategory`, `tech`, `purchase_requests`, **`task`**                                                                                                    |
+| `status_logs`          | Toujours `[]`                                                                  | Tableau de [InterventionStatusLogOut](intervention-status-log.md)                                                                                                                                                                  |
+| `plan_id`              | Absent (non retourné en liste)                                                 | UUID du plan préventif si l'intervention provient de la maintenance préventive, `null` sinon                                                                                                                                       |
+| `task_progress`        | Absent (non retourné en liste)                                                 | Objet [TaskProgressOut](intervention-tasks.md#get-intervention-tasksprogress) (`total`, `todo`, `in_progress`, `done`, `skipped`, `is_complete`). `null` si `plan_id` est null                                                     |
+| `tasks`                | Absent (non retourné en liste)                                                 | Tableau de [InterventionTaskOut](intervention-tasks.md) — tâches de l'intervention. `[]` si `plan_id` est null                                                                                                                     |
+| `stats.purchase_count` | Calculé en SQL (agrégat)                                                       | Calculé depuis les `purchase_requests` chargées dans les actions                                                                                                                                                                   |
 
-### Actions avec gamme_steps
+### Actions avec tâche liée
 
-Chaque action dans `actions` inclut un champ `gamme_steps` (tableau optionnel) : les **steps de gamme validés/skippés par cette action**.
+Chaque action dans `actions` inclut un champ `task` (optionnel) : la **tâche liée à cette action**.
 
-**Contexte** : Si l'intervention est liée à un plan préventif (`plan_id` non null), les actions qui valident ou skippe des étapes de gamme incluent ces informations.
+| Champ         | Type   | Description                              |
+| ------------- | ------ | ---------------------------------------- |
+| `task.id`     | uuid   | ID de la tâche                           |
+| `task.label`  | string | Intitulé de la tâche                     |
+| `task.status` | string | `todo`, `in_progress`, `done`, `skipped` |
+| `task.origin` | string | `plan`, `resp`, `tech`                   |
 
-| Champ | Type | Description |
-|-------|------|-------------|
-| `gamme_steps[].id` | uuid | ID de la validation de step (gamme_step_validation.id) |
-| `gamme_steps[].step_label` | string | Libellé du step (ex: "Diagnostic initial") |
-| `gamme_steps[].status` | string | `"validated"` (action lie le step) ou `"skipped"` (étape pas applicable) |
-| `gamme_steps[].skip_reason` | string \| null | Motif du skip si applicable (`null` pour validated) |
-| `gamme_steps[].validated_at` | datetime | Date/heure de la validation/skip |
-| `gamme_steps[].validated_by` | uuid | Technicien qui a validé |
-
-Voir [Intervention Actions - GammeStepValidationDetail](intervention-actions.md#gammestepvalidationdetail) pour tous les champs.
+Voir [Intervention Actions — task](intervention-actions.md) pour le détail complet.
 
 ---
 
@@ -362,7 +409,7 @@ Met à jour une intervention. Même body que POST, tous les champs sont optionne
 
 > **Clôture automatique de la demande liée** : si `status_actual` est mis à jour vers le code `ferme` et qu'une demande d'intervention est liée (`request` non null), cette demande passe automatiquement à `cloturee`.
 
-> **Gamme incomplète** : si l'intervention a un plan préventif (`plan_id` non null) et que des étapes de gamme sont encore en statut `pending`, un trigger DB bloque la clôture et retourne `409` avec `"Des étapes de gamme sont en attente de validation"`. Utiliser `PATCH /gamme-step-validations` pour traiter les étapes avant de clôturer.
+> **Tâches incomplètes** : si l'intervention a des tâches non-optionnelles en `todo` ou `in_progress`, la mise à jour vers le statut `ferme` est bloquée et retourne `400` avec `"Impossible de fermer : X tâche(s) non-optionnelle(s) en attente."`. Utiliser `PATCH /intervention-tasks/{id}` pour traiter les tâches avant de clôturer.
 
 ### Réponse `200`
 

@@ -535,7 +535,7 @@ class InterventionRequestRepository:
                     "UPDATE intervention_request SET intervention_id = %s WHERE id = %s",
                     (str(intervention_id), request_id),
                 )
-                # Rattacher l'occurrence et les gamme_step_validation à l'intervention créée.
+                # Rattacher l'occurrence et les intervention_task à l'intervention créée.
                 # preventive_occurrence_id a été résolu AVANT _create_intervention_for_request
                 # pour éviter toute pollution du curseur partagé.
                 if preventive_occurrence_id:
@@ -549,7 +549,7 @@ class InterventionRequestRepository:
                     )
                     cur.execute(
                         """
-                        UPDATE gamme_step_validation
+                        UPDATE intervention_task
                         SET intervention_id = %s
                         WHERE occurrence_id = %s
                         AND intervention_id IS NULL
@@ -557,7 +557,7 @@ class InterventionRequestRepository:
                         (str(intervention_id), preventive_occurrence_id),
                     )
                     logger.info(
-                        "Rattachement gamme : %s step(s) liés à l'intervention %s",
+                        "Rattachement tâches : %s tâche(s) liées à l'intervention %s",
                         cur.rowcount, intervention_id,
                     )
 

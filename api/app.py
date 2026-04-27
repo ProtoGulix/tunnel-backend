@@ -38,7 +38,9 @@ from api.intervention_requests.routes import router as intervention_request_rout
 from api.services.routes import router as service_router
 from api.preventive_plans.routes import router as preventive_plans_router
 from api.preventive_occurrences.routes import router as preventive_occurrences_router
-from api.gamme_step_validations.routes import router as gamme_step_validations_router
+from api.intervention_tasks.routes import router as intervention_tasks_router
+from api.tasks.routes import router as tasks_router
+from api.dashboard.routes import router as dashboard_router
 from api.errors.handlers import register_error_handlers
 from api.health import health_check
 
@@ -77,7 +79,8 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialise et ferme le pool DB au démarrage/arrêt."""
-    init_pool(settings.DATABASE_URL, settings.DB_POOL_MIN, settings.DB_POOL_MAX)
+    init_pool(settings.DATABASE_URL,
+              settings.DB_POOL_MIN, settings.DB_POOL_MAX)
     yield
     close_pool()
 
@@ -98,6 +101,7 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # Enregistre les handlers d'erreur (404, 401, 403, 500, etc.)
 register_error_handlers(app)
+
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """Ajoute les headers de sécurité HTTP sur toutes les réponses."""
@@ -143,7 +147,9 @@ app.include_router(intervention_request_router)
 app.include_router(service_router)
 app.include_router(preventive_plans_router)
 app.include_router(preventive_occurrences_router)
-app.include_router(gamme_step_validations_router)
+app.include_router(intervention_tasks_router)
+app.include_router(tasks_router)
+app.include_router(dashboard_router)
 app.include_router(auth_router)
 
 
