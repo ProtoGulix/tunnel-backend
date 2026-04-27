@@ -39,7 +39,11 @@ _TASK_SELECT = """
 
 
 def _map_task(row: Dict[str, Any]) -> Dict[str, Any]:
-    """Mappe les colonnes assigned_* en objet assigned_to imbriqué."""
+    """Mappe les colonnes assigned_* en objet assigned_to imbriqué.
+    Convertit aussi les Decimal psycopg2 en float pour Pydantic.
+    """
+    if row.get("time_spent") is not None:
+        row["time_spent"] = float(row["time_spent"])
     if row.get("assigned_id"):
         row["assigned_to"] = {
             "id": row.pop("assigned_id"),

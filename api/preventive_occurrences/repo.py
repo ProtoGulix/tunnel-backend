@@ -137,7 +137,7 @@ class PreventiveOccurrenceRepository:
                 it.label, it.origin,
                 it.sort_order,
                 it.optional,
-                it.occurrence_id, it.intervention_id, it.action_id,
+                it.occurrence_id, it.intervention_id,
                 it.status, it.skip_reason, it.updated_at, it.closed_by
             FROM intervention_task it
             WHERE it.occurrence_id IN ({placeholders})

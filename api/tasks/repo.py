@@ -100,7 +100,7 @@ class TasksRepository:
                 LEFT JOIN LATERAL (
                     SELECT COALESCE(SUM(ia.time_spent), 0.0) as time_spent
                     FROM intervention_action ia
-                    WHERE ia.id = it.action_id
+                    WHERE ia.task_id = it.id
                 ) agg ON TRUE
                 {where_sql}
                 ORDER BY it.created_at DESC, it.id DESC
@@ -232,7 +232,7 @@ class TasksRepository:
                 it.id as task_id
             FROM intervention_action ia
             LEFT JOIN directus_users u ON ia.tech = u.id
-            LEFT JOIN intervention_task it ON it.action_id = ia.id
+            JOIN intervention_task it ON ia.task_id = it.id
             WHERE it.id IN ({ph})
             ORDER BY ia.created_at DESC
         """, task_ids)

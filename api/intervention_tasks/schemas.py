@@ -20,7 +20,6 @@ class InterventionTaskOut(BaseModel):
     skip_reason: Optional[str] = None
     gamme_step_id: Optional[UUID] = None
     occurrence_id: Optional[UUID] = None
-    action_id: Optional[UUID] = None
     closed_by: Optional[UUID] = None
     created_by: Optional[UUID] = None
     created_at: Optional[datetime] = None

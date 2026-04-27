@@ -44,11 +44,15 @@ Liste les interventions avec filtres, tri et pagination.
       "name": "Scie principale",
       "health": {
         "level": "maintenance",
-        "reason": "1 intervention(s) ouverte(s)",
-        "rules_triggered": null
+        "reason": "1 intervention ouverte",
+        "open_interventions_count": 1,
+        "urgent_count": 0,
+        "new_requests_count": 0,
+        "rules_triggered": ["OPEN_TOTAL > 0"]
       },
-      "parent_id": null,
-      "equipement_class": { "id": "uuid", "code": "SCIE", "label": "Scie" }
+      "parent": { "id": "uuid", "code": "VLT", "name": "Site des villettes" },
+      "equipement_class": { "id": "uuid", "code": "SCIE", "label": "Scie" },
+      "statut": { "id": 3, "code": "EN_SERVICE", "label": "En service", "interventions": true, "couleur": "#10B981" }
     },
     "type_inter": "curatif",
     "priority": "urgent",
@@ -92,11 +96,17 @@ Liste les interventions avec filtres, tri et pagination.
 
 ### Champs `equipements` en liste
 
-| Champ              | Description                                                                                                |
-| ------------------ | ---------------------------------------------------------------------------------------------------------- |
-| `health`           | Calculé depuis le compte réel des interventions ouvertes sur l'équipement (toutes, pas seulement filtrées) |
-| `health.level`     | `ok`, `maintenance` (≥ 1 ouverte), `critical` (≥ 1 urgente)                                                |
-| `equipement_class` | Classe d'équipement (`null` si non renseignée)                                                             |
+| Champ                             | Description                                                                                                |
+| --------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `health`                          | Calculé depuis le compte réel des interventions ouvertes sur l'équipement (toutes, pas seulement filtrées) |
+| `health.level`                    | `ok`, `maintenance` (≥ 1 ouverte), `critical` (≥ 1 urgente)                                               |
+| `health.open_interventions_count` | Nombre d'interventions ouvertes                                                                            |
+| `health.urgent_count`             | Nombre d'interventions urgentes ouvertes                                                                   |
+| `health.new_requests_count`       | Nombre de demandes en statut `nouvelle`                                                                    |
+| `health.rules_triggered`          | Règles ayant déclenché le niveau de santé (ex: `["OPEN_TOTAL > 0"]`)                                       |
+| `parent`                          | Équipement parent `{id, code, name}`. `null` si racine                                                     |
+| `statut`                          | Statut opérationnel `{id, code, label, interventions, couleur}`. `null` si non renseigné                   |
+| `equipement_class`                | Classe d'équipement `{id, code, label}`. `null` si non renseignée                                         |
 
 ---
 
@@ -147,11 +157,15 @@ Détail complet d'une intervention. **La structure est différente de la liste**
     "notes": null,
     "health": {
       "level": "maintenance",
-      "reason": "1 intervention(s) ouverte(s)",
-      "rules_triggered": null
+      "reason": "1 intervention ouverte",
+      "open_interventions_count": 1,
+      "urgent_count": 0,
+      "new_requests_count": 0,
+      "rules_triggered": ["OPEN_TOTAL > 0"]
     },
-    "parent_id": null,
+    "parent": { "id": "uuid", "code": "VLT", "name": "Site des villettes" },
     "equipement_class": { "id": "uuid", "code": "SCIE", "label": "Scie" },
+    "statut": { "id": 3, "code": "EN_SERVICE", "label": "En service", "interventions": true, "couleur": "#10B981" },
     "children_count": 2,
     "interventions": {
       "total": 5,
@@ -169,7 +183,38 @@ Détail complet d'une intervention. **La structure est différente de la liste**
           "reported_date": "2026-01-13"
         }
       ]
-    }
+    },
+    "preventive_plans": [
+      {
+        "id": "uuid",
+        "code": "PLAN-CODE",
+        "label": "Libellé du plan",
+        "trigger_type": "periodicity",
+        "periodicity_days": 15,
+        "hours_threshold": null,
+        "active": true,
+        "next_occurrence": null
+      }
+    ],
+    "preventive_occurrences_summary": {
+      "pending_count": 0,
+      "generated_count": 0,
+      "skipped_count": 0,
+      "next_scheduled": null,
+      "last_skipped_reason": null
+    },
+    "open_requests": [
+      {
+        "id": "uuid",
+        "code": "DI-2026-0024",
+        "description": "Description de la demande",
+        "statut": "acceptee",
+        "statut_label": "Acceptée",
+        "statut_color": "#22c55e",
+        "is_system": true,
+        "created_at": "2026-04-13T16:59:34Z"
+      }
+    ]
   },
   "type_inter": "curatif",
   "priority": "urgent",
@@ -275,7 +320,7 @@ Détail complet d'une intervention. **La structure est différente de la liste**
 
 | Champ                  | Liste                                                                   | Détail                                                                                                                                                      |
 | ---------------------- | ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `equipements`          | Léger : `id`, `code`, `name`, `health`, `parent_id`, `equipement_class` | Complet : + `no_machine`, `affectation`, `is_mere`, `fabricant`, `numero_serie`, `date_mise_service`, `notes`, `children_count`, `interventions` (paginées) |
+| `equipements`          | Léger : `id`, `code`, `name`, `health`, `parent`, `equipement_class`, `statut` | Complet : + `no_machine`, `affectation`, `is_mere`, `fabricant`, `numero_serie`, `date_mise_service`, `notes`, `children_count`, `interventions` (paginées), `preventive_plans`, `preventive_occurrences_summary`, `open_requests` |
 | `request`              | Objet `InterventionRequestListItem` (`null` si création manuelle)       | Idem                                                                                                                                                        |
 | `actions`              | Toujours `[]`                                                           | Tableau de [InterventionActionOut](intervention-actions.md) complet avec `subcategory`, `tech`, `purchase_requests`, **`task`**                             |
 | `status_logs`          | Toujours `[]`                                                           | Tableau de [InterventionStatusLogOut](intervention-status-log.md)                                                                                           |
