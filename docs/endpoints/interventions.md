@@ -52,7 +52,13 @@ Liste les interventions avec filtres, tri et pagination.
       },
       "parent": { "id": "uuid", "code": "VLT", "name": "Site des villettes" },
       "equipement_class": { "id": "uuid", "code": "SCIE", "label": "Scie" },
-      "statut": { "id": 3, "code": "EN_SERVICE", "label": "En service", "interventions": true, "couleur": "#10B981" }
+      "statut": {
+        "id": 3,
+        "code": "EN_SERVICE",
+        "label": "En service",
+        "interventions": true,
+        "couleur": "#10B981"
+      }
     },
     "type_inter": "curatif",
     "priority": "urgent",
@@ -99,14 +105,14 @@ Liste les interventions avec filtres, tri et pagination.
 | Champ                             | Description                                                                                                |
 | --------------------------------- | ---------------------------------------------------------------------------------------------------------- |
 | `health`                          | Calculé depuis le compte réel des interventions ouvertes sur l'équipement (toutes, pas seulement filtrées) |
-| `health.level`                    | `ok`, `maintenance` (≥ 1 ouverte), `critical` (≥ 1 urgente)                                               |
+| `health.level`                    | `ok`, `maintenance` (≥ 1 ouverte), `critical` (≥ 1 urgente)                                                |
 | `health.open_interventions_count` | Nombre d'interventions ouvertes                                                                            |
 | `health.urgent_count`             | Nombre d'interventions urgentes ouvertes                                                                   |
 | `health.new_requests_count`       | Nombre de demandes en statut `nouvelle`                                                                    |
 | `health.rules_triggered`          | Règles ayant déclenché le niveau de santé (ex: `["OPEN_TOTAL > 0"]`)                                       |
 | `parent`                          | Équipement parent `{id, code, name}`. `null` si racine                                                     |
 | `statut`                          | Statut opérationnel `{id, code, label, interventions, couleur}`. `null` si non renseigné                   |
-| `equipement_class`                | Classe d'équipement `{id, code, label}`. `null` si non renseignée                                         |
+| `equipement_class`                | Classe d'équipement `{id, code, label}`. `null` si non renseignée                                          |
 
 ---
 
@@ -165,7 +171,13 @@ Détail complet d'une intervention. **La structure est différente de la liste**
     },
     "parent": { "id": "uuid", "code": "VLT", "name": "Site des villettes" },
     "equipement_class": { "id": "uuid", "code": "SCIE", "label": "Scie" },
-    "statut": { "id": 3, "code": "EN_SERVICE", "label": "En service", "interventions": true, "couleur": "#10B981" },
+    "statut": {
+      "id": 3,
+      "code": "EN_SERVICE",
+      "label": "En service",
+      "interventions": true,
+      "couleur": "#10B981"
+    },
     "children_count": 2,
     "interventions": {
       "total": 5,
@@ -318,27 +330,27 @@ Détail complet d'une intervention. **La structure est différente de la liste**
 
 ### Différences avec la liste
 
-| Champ                  | Liste                                                                   | Détail                                                                                                                                                      |
-| ---------------------- | ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Champ                  | Liste                                                                          | Détail                                                                                                                                                                                                                             |
+| ---------------------- | ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `equipements`          | Léger : `id`, `code`, `name`, `health`, `parent`, `equipement_class`, `statut` | Complet : + `no_machine`, `affectation`, `is_mere`, `fabricant`, `numero_serie`, `date_mise_service`, `notes`, `children_count`, `interventions` (paginées), `preventive_plans`, `preventive_occurrences_summary`, `open_requests` |
-| `request`              | Objet `InterventionRequestListItem` (`null` si création manuelle)       | Idem                                                                                                                                                        |
-| `actions`              | Toujours `[]`                                                           | Tableau de [InterventionActionOut](intervention-actions.md) complet avec `subcategory`, `tech`, `purchase_requests`, **`task`**                             |
-| `status_logs`          | Toujours `[]`                                                           | Tableau de [InterventionStatusLogOut](intervention-status-log.md)                                                                                           |
-| `plan_id`              | Absent (non retourné en liste)                                          | UUID du plan préventif si l'intervention provient de la maintenance préventive, `null` sinon                                                                |
-| `task_progress`        | Absent (non retourné en liste)                                          | Objet [TaskProgressOut](intervention-tasks.md#get-intervention-tasksprogress) (`total`, `todo`, `in_progress`, `done`, `skipped`, `is_complete`). `null` si `plan_id` est null |
-| `tasks`                | Absent (non retourné en liste)                                          | Tableau de [InterventionTaskOut](intervention-tasks.md) — tâches de l'intervention. `[]` si `plan_id` est null                                             |
-| `stats.purchase_count` | Calculé en SQL (agrégat)                                                | Calculé depuis les `purchase_requests` chargées dans les actions                                                                                            |
+| `request`              | Objet `InterventionRequestListItem` (`null` si création manuelle)              | Idem                                                                                                                                                                                                                               |
+| `actions`              | Toujours `[]`                                                                  | Tableau de [InterventionActionOut](intervention-actions.md) complet avec `subcategory`, `tech`, `purchase_requests`, **`task`**                                                                                                    |
+| `status_logs`          | Toujours `[]`                                                                  | Tableau de [InterventionStatusLogOut](intervention-status-log.md)                                                                                                                                                                  |
+| `plan_id`              | Absent (non retourné en liste)                                                 | UUID du plan préventif si l'intervention provient de la maintenance préventive, `null` sinon                                                                                                                                       |
+| `task_progress`        | Absent (non retourné en liste)                                                 | Objet [TaskProgressOut](intervention-tasks.md#get-intervention-tasksprogress) (`total`, `todo`, `in_progress`, `done`, `skipped`, `is_complete`). `null` si `plan_id` est null                                                     |
+| `tasks`                | Absent (non retourné en liste)                                                 | Tableau de [InterventionTaskOut](intervention-tasks.md) — tâches de l'intervention. `[]` si `plan_id` est null                                                                                                                     |
+| `stats.purchase_count` | Calculé en SQL (agrégat)                                                       | Calculé depuis les `purchase_requests` chargées dans les actions                                                                                                                                                                   |
 
 ### Actions avec tâche liée
 
 Chaque action dans `actions` inclut un champ `task` (optionnel) : la **tâche liée à cette action**.
 
-| Champ | Type | Description |
-|-------|------|-------------|
-| `task.id` | uuid | ID de la tâche |
-| `task.label` | string | Intitulé de la tâche |
+| Champ         | Type   | Description                              |
+| ------------- | ------ | ---------------------------------------- |
+| `task.id`     | uuid   | ID de la tâche                           |
+| `task.label`  | string | Intitulé de la tâche                     |
 | `task.status` | string | `todo`, `in_progress`, `done`, `skipped` |
-| `task.origin` | string | `plan`, `resp`, `tech` |
+| `task.origin` | string | `plan`, `resp`, `tech`                   |
 
 Voir [Intervention Actions — task](intervention-actions.md) pour le détail complet.
 
