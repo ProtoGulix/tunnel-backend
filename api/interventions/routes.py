@@ -5,6 +5,7 @@ from api.intervention_actions.repo import InterventionActionRepository
 from api.interventions.schemas import InterventionOut, InterventionIn, InterventionCreate
 from api.intervention_actions.schemas import InterventionActionOut
 from api.constants import INTERVENTION_TYPES
+from api.errors.exceptions import ValidationError
 
 from api.auth.permissions import require_authenticated
 
@@ -95,6 +96,21 @@ def update_intervention(intervention_id: str, data: InterventionIn, request: Req
     """Met à jour une intervention existante"""
     repo = InterventionRepository()
     return repo.update(intervention_id, data.model_dump(exclude_none=True))
+
+
+@router.post("/{intervention_id}/force-close-request", response_model=InterventionOut)
+def force_close_linked_request(intervention_id: str, request: Request):
+    """
+    Force la clôture de la demande d'intervention liée quand la cascade automatique a échoué.
+
+    Conditions requises :
+    - L'intervention doit être au statut `ferme`
+    - Une demande liée doit être encore en statut `acceptee`
+
+    Retourne l'intervention mise à jour avec la demande désormais `cloturee`.
+    """
+    repo = InterventionRepository()
+    return repo.force_close_request(intervention_id)
 
 
 @router.delete("/{intervention_id}")

@@ -2,6 +2,16 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [2.22.1] - 27 avril 2026
+
+### Corrections
+
+- **Verrouillage global d'une intervention fermée** : les écritures sont désormais refusées (HTTP 400) sur les éléments liés à une intervention dont `status_actual = ferme`.
+  - Blocage de **création et édition d'actions** (`POST/PATCH /intervention-actions`).
+  - Blocage de **création, édition et suppression de tâches** (`POST/PATCH/DELETE /intervention-tasks`).
+  - Blocage de **création, édition et suppression de demandes d'achat liées** (`POST/PUT/DELETE /purchase-requests` quand la DA est rattachée à une action/intervention fermée).
+- **Uniformisation des erreurs métier** : les refus de verrouillage restent en `ValidationError` (400) et ne remontent plus en erreur base (500).
+
 ## [2.22.0] - 27 avril 2026
 
 ### Breaking changes
