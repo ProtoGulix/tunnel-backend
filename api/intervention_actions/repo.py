@@ -105,14 +105,15 @@ class InterventionActionRepository:
             return []
 
     def _get_tasks_for_action(self, action_id: str, conn) -> List[Dict[str, Any]]:
-        """Récupère les tâches liées à cette action via intervention_task.action_id."""
+        """Récupère les tâches liées à cette action via intervention_action.task_id."""
         try:
             cur = conn.cursor()
             cur.execute(
                 """
                 SELECT it.id, it.label, it.status, it.origin, it.optional
-                FROM intervention_task it
-                WHERE it.action_id = %s
+                FROM intervention_action ia
+                JOIN intervention_task it ON ia.task_id = it.id
+                WHERE ia.id = %s
                 """,
                 (action_id,)
             )
@@ -221,12 +222,13 @@ class InterventionActionRepository:
                             if pid in pr_by_id
                         ]
 
-                # Batch tâches liées via intervention_task.action_id
+                # Batch tâches liées via intervention_action.task_id (une action → plusieurs tâches)
                 cur.execute(
                     f"""
-                    SELECT it.action_id, it.id, it.label, it.status, it.origin, it.optional
-                    FROM intervention_task it
-                    WHERE it.action_id IN ({placeholders})
+                    SELECT ia.id as action_id, it.id, it.label, it.status, it.origin, it.optional
+                    FROM intervention_action ia
+                    JOIN intervention_task it ON ia.task_id = it.id
+                    WHERE ia.id IN ({placeholders})
                     """,
                     action_ids
                 )
@@ -392,12 +394,13 @@ class InterventionActionRepository:
                         if pid in pr_by_id
                     ]
 
-            # Batch tâches liées via intervention_task.action_id (plusieurs tâches → une action)
+            # Batch tâches liées via intervention_action.task_id (une action → plusieurs tâches)
             cur.execute(
                 f"""
-                SELECT it.action_id, it.id, it.label, it.status, it.origin, it.optional
-                FROM intervention_task it
-                WHERE it.action_id IN ({placeholders})
+                SELECT ia.id as action_id, it.id, it.label, it.status, it.origin, it.optional
+                FROM intervention_action ia
+                JOIN intervention_task it ON ia.task_id = it.id
+                WHERE ia.id IN ({placeholders})
                 """,
                 action_ids
             )
