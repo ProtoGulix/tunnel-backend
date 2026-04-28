@@ -5,6 +5,7 @@ from datetime import datetime, date
 
 from api.settings import settings
 from api.db import get_connection, release_connection
+from api.constants import CLOSED_STATUS_CODE
 from api.errors.exceptions import DatabaseError, raise_db_error, NotFoundError, ValidationError
 from api.utils.sanitizer import strip_html
 from api.intervention_actions.validators import InterventionActionValidator
@@ -15,6 +16,22 @@ class InterventionActionRepository:
 
     def _get_connection(self):
         return get_connection()
+
+    def _ensure_intervention_editable(self, cur, intervention_id: str) -> None:
+        """Bloque toute écriture sur une intervention fermée."""
+        cur.execute(
+            "SELECT status_actual FROM intervention WHERE id = %s",
+            (intervention_id,),
+        )
+        row = cur.fetchone()
+        if not row:
+            raise NotFoundError(f"Intervention {intervention_id} non trouvée")
+
+        status_actual = str(row[0] or "").strip().lower()
+        if status_actual == CLOSED_STATUS_CODE:
+            raise ValidationError(
+                "Intervention fermée : aucune modification des actions n'est autorisée"
+            )
 
     def _map_action_with_subcategory(self, row_dict: Dict[str, Any]) -> Dict[str, Any]:
         """Mappe une row avec subcategory et category imbriquées"""
@@ -471,9 +488,15 @@ class InterventionActionRepository:
 
             # Si task_id fourni en champ direct, le normaliser en entrée tasks
             if not tasks and validated_data.get('task_id'):
-                tasks = [{'task_id': str(validated_data.pop('task_id')), 'close_task': False, 'skip': False, 'skip_reason': None}]
+                tasks = [{'task_id': str(validated_data.pop(
+                    'task_id')), 'close_task': False, 'skip': False, 'skip_reason': None}]
             else:
                 validated_data.pop('task_id', None)
+
+            intervention_id_str = str(validated_data['intervention_id']) if isinstance(
+                validated_data['intervention_id'], _uuid.UUID) else validated_data['intervention_id']
+
+            self._ensure_intervention_editable(cur, intervention_id_str)
 
             cur.execute(
                 """
@@ -500,9 +523,6 @@ class InterventionActionRepository:
                     now,
                 )
             )
-
-            intervention_id_str = str(validated_data['intervention_id']) if isinstance(
-                validated_data['intervention_id'], _uuid.UUID) else validated_data['intervention_id']
 
             for task_req in tasks:
                 task_req_data = task_req if isinstance(task_req, dict) else {
@@ -655,6 +675,9 @@ class InterventionActionRepository:
         conn = self._get_connection()
         try:
             cur = conn.cursor()
+            self._ensure_intervention_editable(
+                cur, str(current['intervention_id']))
+
             if params_updates:
                 set_clauses = [f"{field} = %s" for field in params_updates]
                 params = list(params_updates.values())
