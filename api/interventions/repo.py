@@ -578,22 +578,8 @@ class InterventionRepository:
         """Lève ValidationError si des tâches non-optionnelles bloquent la fermeture."""
         if not status_actual:
             return
-        try:
-            conn = get_connection()
-            try:
-                with conn.cursor() as cur:
-                    cur.execute(
-                        "SELECT code FROM intervention_status_ref WHERE id = %s LIMIT 1",
-                        (str(status_actual),),
-                    )
-                    row = cur.fetchone()
-                    status_code = row[0] if row else str(status_actual)
-            finally:
-                release_connection(conn)
-        except Exception:
-            return
-
-        if status_code != CLOSED_STATUS_CODE:
+        # intervention.status_actual stocke directement le code texte (ex: 'ferme')
+        if str(status_actual) != CLOSED_STATUS_CODE:
             return
 
         conn = get_connection()
@@ -620,31 +606,57 @@ class InterventionRepository:
     def _notify_if_closed(self, intervention_id: str, status_actual: Any) -> None:
         """Notifie le repo des demandes si l'intervention vient d'être fermée.
 
-        status_actual peut être un UUID (valeur DB brute) ou le code texte directement.
-        On résout toujours le code via la DB pour comparer proprement.
+        intervention.status_actual stocke directement le code texte (ex: 'ferme'),
+        identique à intervention_status_ref.id — pas besoin de résolution via DB.
         """
         if not status_actual:
             return
         try:
-            conn = get_connection()
-            try:
-                with conn.cursor() as cur:
-                    # Résoudre le code depuis l'UUID — si c'est déjà un code texte,
-                    # le SELECT ne trouvera rien et on retombe sur la comparaison directe.
-                    cur.execute(
-                        "SELECT code FROM intervention_status_ref WHERE id = %s LIMIT 1",
-                        (str(status_actual),),
-                    )
-                    row = cur.fetchone()
-                    status_code = row[0] if row else str(status_actual)
-            finally:
-                release_connection(conn)
-
-            if status_code == CLOSED_STATUS_CODE:
+            if str(status_actual) == CLOSED_STATUS_CODE:
                 from api.intervention_requests.repo import InterventionRequestRepository
                 InterventionRequestRepository().on_intervention_closed(intervention_id)
         except Exception:
             pass  # Ne pas bloquer la mise à jour de l'intervention
+
+    def force_close_request(self, intervention_id: str) -> Dict[str, Any]:
+        """Force la clôture de la demande liée à une intervention fermée.
+
+        À utiliser quand la cascade automatique a échoué : l'intervention est
+        déjà au statut 'ferme' mais la demande est restée bloquée en 'acceptee'.
+        Lève ValidationError si l'intervention n'est pas fermée ou si aucune
+        demande 'acceptee' n'est liée.
+        """
+        existing = self.get_by_id(intervention_id, include_actions=False)
+        if existing.get("status_actual") != CLOSED_STATUS_CODE:
+            raise ValidationError(
+                "Le forçage de clôture n'est possible que si l'intervention est déjà fermée."
+            )
+
+        from api.intervention_requests.repo import InterventionRequestRepository
+        req_repo = InterventionRequestRepository()
+
+        conn = get_connection()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT id, statut FROM intervention_request
+                    WHERE intervention_id = %s AND statut = 'acceptee'
+                    LIMIT 1
+                    """,
+                    (intervention_id,),
+                )
+                row = cur.fetchone()
+
+            if not row:
+                raise ValidationError(
+                    "Aucune demande en statut 'acceptee' n'est liée à cette intervention."
+                )
+        finally:
+            release_connection(conn)
+
+        req_repo.on_intervention_closed(intervention_id)
+        return self.get_by_id(intervention_id)
 
     def delete(self, intervention_id: str) -> bool:
         """Supprime une intervention (interdit si actions ou demandes d'achat liées)"""

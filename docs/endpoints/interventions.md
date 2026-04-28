@@ -407,13 +407,36 @@ Intervention complète avec equipement, `request` (objet demande si liée), stat
 
 Met à jour une intervention. Même body que POST, tous les champs sont optionnels.
 
-> **Clôture automatique de la demande liée** : si `status_actual` est mis à jour vers le code `ferme` et qu'une demande d'intervention est liée (`request` non null), cette demande passe automatiquement à `cloturee`.
+> **Clôture automatique de la demande liée** : si `status_actual` est mis à jour vers le code `ferme` et qu'une demande d'intervention est liée (`request` non null), cette demande passe automatiquement à `cloturee`. En cas d'échec de la cascade (demande restée en `acceptee`), utiliser `POST /interventions/{id}/force-close-request`.
 
 > **Tâches incomplètes** : si l'intervention a des tâches non-optionnelles en `todo` ou `in_progress`, la mise à jour vers le statut `ferme` est bloquée et retourne `400` avec `"Impossible de fermer : X tâche(s) non-optionnelle(s) en attente."`. Utiliser `PATCH /intervention-tasks/{id}` pour traiter les tâches avant de clôturer.
 
 ### Réponse `200`
 
 Intervention complète mise à jour.
+
+---
+
+## `POST /interventions/{id}/force-close-request`
+
+Force la clôture de la demande d'intervention liée quand la cascade automatique a échoué (bug corrigé le 2026-04-27 : la comparaison du code statut était fausse, les demandes restaient bloquées en `acceptee` après fermeture de l'intervention).
+
+### Conditions requises
+
+- L'intervention doit être au statut `ferme`
+- Une demande liée doit être encore en statut `acceptee`
+
+### Réponse `200`
+
+Intervention complète mise à jour. La demande liée (`request`) est désormais au statut `cloturee`.
+
+### Erreurs
+
+| Code | Cas                                                        |
+| ---- | ---------------------------------------------------------- |
+| 404  | Intervention introuvable                                   |
+| 400  | L'intervention n'est pas au statut `ferme`                 |
+| 400  | Aucune demande en statut `acceptee` n'est liée             |
 
 ---
 
