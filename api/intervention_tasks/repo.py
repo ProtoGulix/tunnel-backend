@@ -5,6 +5,7 @@ from uuid import uuid4
 
 from fastapi import HTTPException
 
+from api.constants import CLOSED_STATUS_CODE
 from api.db import get_connection, release_connection
 from api.errors.exceptions import NotFoundError, ValidationError, raise_db_error
 from api.intervention_tasks.schemas import InterventionTaskIn, InterventionTaskPatch
@@ -33,7 +34,7 @@ _TASK_SELECT = """
             COUNT(ia.id)                    AS action_count,
             COALESCE(SUM(ia.time_spent), 0) AS time_spent
         FROM intervention_action ia
-        WHERE ia.task_id = it.id
+        WHERE ia.id = it.action_id
     ) agg ON TRUE
 """
 
@@ -67,6 +68,22 @@ class InterventionTaskRepository:
 
     def _get_connection(self):
         return get_connection()
+
+    def _ensure_intervention_editable(self, cur, intervention_id: str) -> None:
+        """Bloque toute écriture sur une intervention fermée."""
+        cur.execute(
+            "SELECT status_actual FROM intervention WHERE id = %s",
+            (intervention_id,),
+        )
+        row = cur.fetchone()
+        if not row:
+            raise NotFoundError(f"Intervention {intervention_id} non trouvée")
+
+        status_actual = str(row[0] or "").strip().lower()
+        if status_actual == CLOSED_STATUS_CODE:
+            raise ValidationError(
+                "Intervention fermée : aucune modification des tâches n'est autorisée"
+            )
 
     # ── Lecture ──────────────────────────────────────────────────
 
@@ -260,6 +277,8 @@ class InterventionTaskRepository:
         conn = self._get_connection()
         try:
             cur = conn.cursor()
+            self._ensure_intervention_editable(cur, str(data.intervention_id))
+
             task_id = str(uuid4())
             cur.execute(
                 """
@@ -281,6 +300,9 @@ class InterventionTaskRepository:
                 ),
             )
             conn.commit()
+        except (NotFoundError, ValidationError):
+            conn.rollback()
+            raise
         except Exception as e:
             conn.rollback()
             raise_db_error(e, "création de la tâche")
@@ -297,10 +319,12 @@ class InterventionTaskRepository:
         try:
             cur = conn.cursor()
             cur.execute(
-                "SELECT status FROM intervention_task WHERE id = %s", (task_id,))
+                "SELECT status, intervention_id FROM intervention_task WHERE id = %s", (task_id,))
             row = cur.fetchone()
             if not row:
                 raise NotFoundError(f"Tâche {task_id} non trouvée")
+
+            self._ensure_intervention_editable(cur, str(row[1]))
 
             set_parts: List[str] = []
             params: List[Any] = []
@@ -360,7 +384,7 @@ class InterventionTaskRepository:
         try:
             cur = conn.cursor()
             cur.execute(
-                "SELECT status FROM intervention_task WHERE id = %s",
+                "SELECT status, intervention_id, action_id FROM intervention_task WHERE id = %s",
                 (task_id,),
             )
             row = cur.fetchone()
@@ -368,15 +392,13 @@ class InterventionTaskRepository:
                 raise NotFoundError(f"Tâche {task_id} non trouvée")
 
             status = row[0]
+            self._ensure_intervention_editable(cur, str(row[1]))
+
             if status != "todo":
                 raise ValidationError(
                     "Seule une tâche en statut 'todo' peut être supprimée")
 
-            cur.execute(
-                "SELECT COUNT(*) FROM intervention_action WHERE task_id = %s",
-                (task_id,),
-            )
-            if cur.fetchone()[0] > 0:
+            if row[2] is not None:
                 raise ValidationError(
                     "Impossible de supprimer une tâche liée à une action")
 

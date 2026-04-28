@@ -6,8 +6,8 @@ from decimal import Decimal
 import logging
 
 from api.db import get_connection, release_connection
-from api.errors.exceptions import DatabaseError, raise_db_error, NotFoundError
-from api.constants import DERIVED_STATUS_CONFIG
+from api.errors.exceptions import DatabaseError, raise_db_error, NotFoundError, ValidationError
+from api.constants import DERIVED_STATUS_CONFIG, CLOSED_STATUS_CODE
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +31,57 @@ class PurchaseRequestRepository:
         finally:
             release_connection(conn)
 
+    def _ensure_action_intervention_editable(self, cur, action_id: str) -> None:
+        """Bloque les écritures DA si l'action appartient à une intervention fermée."""
+        cur.execute(
+            """
+            SELECT ia.intervention_id, i.status_actual
+            FROM intervention_action ia
+            LEFT JOIN intervention i ON i.id = ia.intervention_id
+            WHERE ia.id = %s
+            """,
+            (action_id,),
+        )
+        row = cur.fetchone()
+        if not row:
+            raise NotFoundError(f"Action {action_id} non trouvée")
+
+        status_actual = str(row[1] or "").strip().lower()
+        if status_actual == CLOSED_STATUS_CODE:
+            raise ValidationError(
+                "Intervention fermée : aucune modification des demandes d'achat liées n'est autorisée"
+            )
+
+    def _ensure_request_intervention_editable(self, cur, request_id: str) -> None:
+        """Bloque les écritures DA si la demande est liée à une intervention fermée."""
+        cur.execute(
+            """
+            SELECT EXISTS (
+                SELECT 1
+                FROM intervention i
+                WHERE i.status_actual = %s
+                  AND (
+                    i.id = (
+                        SELECT pr.intervention_id
+                        FROM purchase_request pr
+                        WHERE pr.id = %s
+                    )
+                    OR i.id IN (
+                        SELECT ia.intervention_id
+                        FROM intervention_action_purchase_request iapr
+                        JOIN intervention_action ia ON ia.id = iapr.intervention_action_id
+                        WHERE iapr.purchase_request_id = %s
+                    )
+                  )
+            )
+            """,
+            (CLOSED_STATUS_CODE, request_id, request_id),
+        )
+        if cur.fetchone()[0]:
+            raise ValidationError(
+                "Intervention fermée : aucune modification des demandes d'achat liées n'est autorisée"
+            )
+
     def add(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Crée une nouvelle demande d'achat.
@@ -51,12 +102,7 @@ class PurchaseRequestRepository:
             if intervention_action_id:
                 # Vérifie que l'action existe
                 action_id_str = str(intervention_action_id)
-                cur.execute(
-                    "SELECT id FROM intervention_action WHERE id = %s",
-                    (action_id_str,)
-                )
-                if not cur.fetchone():
-                    raise NotFoundError(f"Action {action_id_str} non trouvée")
+                self._ensure_action_intervention_editable(cur, action_id_str)
 
             request_id = str(uuid4())
             now = datetime.now()
@@ -98,7 +144,7 @@ class PurchaseRequestRepository:
                 )
 
             conn.commit()
-        except NotFoundError:
+        except (NotFoundError, ValidationError):
             raise
         except Exception as e:
             conn.rollback()
@@ -116,6 +162,8 @@ class PurchaseRequestRepository:
         conn = self._get_connection()
         try:
             cur = conn.cursor()
+            self._ensure_request_intervention_editable(cur, request_id)
+
             now = datetime.now()
 
             # Champs modifiables (status supprimé car calculé automatiquement)
@@ -149,6 +197,9 @@ class PurchaseRequestRepository:
 
             cur.execute(query, params)
             conn.commit()
+        except (NotFoundError, ValidationError):
+            conn.rollback()
+            raise
         except Exception as e:
             conn.rollback()
             raise DatabaseError(
@@ -165,10 +216,15 @@ class PurchaseRequestRepository:
         conn = self._get_connection()
         try:
             cur = conn.cursor()
+            self._ensure_request_intervention_editable(cur, request_id)
+
             cur.execute(
                 "DELETE FROM purchase_request WHERE id = %s", (request_id,))
             conn.commit()
             return True
+        except (NotFoundError, ValidationError):
+            conn.rollback()
+            raise
         except Exception as e:
             conn.rollback()
             raise DatabaseError(
