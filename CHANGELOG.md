@@ -2,9 +2,16 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
-<<<<<<< HEAD
-## [2.22.0] - 27 avril 2026
-=======
+## [2.23.0] - 28 avril 2026
+
+### Nouveautés
+
+- **`POST /interventions` accepte `tech_id: UUID`** : le champ `tech_initials` est supprimé du payload d'entrée. L'API résout automatiquement les initiales depuis `directus_users.initial` pour alimenter le trigger de génération de code. `tech_id` est désormais stocké en base (`intervention.tech_id`).
+- **`POST /intervention-requests/{id}/transition`** : `tech_id: UUID` optionnel ajouté au payload `acceptee`. `tech_initials` reste accepté pour la rétrocompatibilité. Si `status_to = acceptee`, l'un des deux est obligatoire.
+- **`GET /interventions?tech_id=`** : nouveau filtre par UUID technicien pilote, filtre sur la colonne `intervention.tech_id`.
+- **Auto-assignation des tâches** : à la création d'une tâche sans `assigned_to` explicite, le pilote de l'intervention (`tech_id`) est automatiquement assigné.
+- **Migration DB** : colonne `tech_id UUID` ajoutée sur `intervention` avec FK `ON DELETE SET NULL`. Backfill automatique des lignes existantes via `directus_users.initial`.
+
 ## [2.22.1] - 27 avril 2026
 
 ### Corrections
@@ -16,7 +23,6 @@ Toutes les modifications importantes de l'API sont documentées ici.
 - **Uniformisation des erreurs métier** : les refus de verrouillage restent en `ValidationError` (400) et ne remontent plus en erreur base (500).
 
 ## [2.22.0] - 26 avril 2026
->>>>>>> cb859ad2c02d74d0f52f978489fcb86c60b738ce
 
 ### Breaking changes
 

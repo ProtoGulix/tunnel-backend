@@ -28,6 +28,7 @@ class InterventionRepository:
         sort: str | None = None,
         include_stats: bool = True,
         printed: bool | None = None,
+        tech_id: str | None = None,
     ) -> List[Dict[str, Any]]:
         """Récupère interventions avec filtres/sort et stats calculées en SQL (sans actions)"""
         # Garde-fou: limit max 1000
@@ -67,6 +68,10 @@ class InterventionRepository:
         if printed is not None:
             where_clauses.append("i.printed_fiche = %s")
             params.append(printed)
+
+        if tech_id:
+            where_clauses.append("i.tech_id = %s")
+            params.append(tech_id)
 
         where_sql = ("WHERE " + " AND ".join(where_clauses)
                      ) if where_clauses else ""
@@ -374,11 +379,22 @@ class InterventionRepository:
         finally:
             release_connection(conn)
 
+    def _resolve_tech_initials(self, cur: Any, data: Dict[str, Any]) -> None:
+        """Résout tech_initials depuis directus_users.initial si tech_id est fourni."""
+        tech_id = data.get('tech_id')
+        if not tech_id:
+            return
+        cur.execute(
+            "SELECT initial FROM directus_users WHERE id = %s",
+            (str(tech_id),),
+        )
+        row = cur.fetchone()
+        if not row:
+            raise ValidationError(f"Utilisateur {tech_id} introuvable")
+        data['tech_initials'] = row[0]
+
     def add(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Crée une nouvelle intervention"""
-        from api.interventions.validators import InterventionValidator
-        InterventionValidator.validate_create(data)
-
         request_id = str(data['request_id']) if data.get(
             'request_id') else None
 
@@ -386,6 +402,12 @@ class InterventionRepository:
         try:
             cur = conn.cursor()
             intervention_id = str(uuid4())
+
+            # Résoudre tech_initials depuis l'UUID avant validation (le trigger en a besoin)
+            self._resolve_tech_initials(cur, data)
+
+            from api.interventions.validators import InterventionValidator
+            InterventionValidator.validate_create(data)
 
             # Résoudre plan_id depuis l'occurrence préventive liée à la DI si non fourni
             # (cas acceptation manuelle d'une DI système préventive via POST /interventions)
@@ -402,9 +424,9 @@ class InterventionRepository:
                 """
                 INSERT INTO intervention
                 (id, title, machine_id, type_inter, priority,
-                 reported_by, tech_initials, status_actual,
+                 reported_by, tech_initials, tech_id, status_actual,
                  printed_fiche, reported_date, plan_id)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     intervention_id,
@@ -414,6 +436,7 @@ class InterventionRepository:
                     data.get('priority'),
                     data.get('reported_by'),
                     data.get('tech_initials'),
+                    str(data['tech_id']) if data.get('tech_id') else None,
                     data.get('status_actual', 'ouvert'),
                     data.get('printed_fiche', False),
                     data.get('reported_date'),
@@ -504,8 +527,14 @@ class InterventionRepository:
                 (intervention_id, occ_id),
             )
             cur.execute(
-                "UPDATE intervention_task SET intervention_id = %s WHERE occurrence_id = %s AND intervention_id IS NULL",
-                (intervention_id, occ_id),
+                """
+                UPDATE intervention_task
+                SET intervention_id = %s,
+                    assigned_to = COALESCE(assigned_to,
+                        (SELECT tech_id FROM intervention WHERE id = %s))
+                WHERE occurrence_id = %s AND intervention_id IS NULL
+                """,
+                (intervention_id, intervention_id, occ_id),
             )
             if occ_plan_id:
                 cur.execute(
@@ -527,7 +556,7 @@ class InterventionRepository:
 
             updatable_fields = [
                 'title', 'machine_id', 'type_inter', 'priority',
-                'reported_by', 'tech_initials', 'status_actual',
+                'reported_by', 'tech_initials', 'tech_id', 'status_actual',
                 'printed_fiche', 'reported_date'
             ]
 

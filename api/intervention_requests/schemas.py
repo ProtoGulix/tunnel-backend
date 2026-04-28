@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from typing import Optional, List
 from datetime import datetime
 from uuid import UUID
@@ -91,9 +91,18 @@ class StatusTransitionIn(BaseModel):
     # Champs pour la création d'intervention lors de l'acceptation (status_to = acceptee)
     type_inter: Optional[str] = Field(
         default=None, description="Type d'intervention (obligatoire pour acceptee)")
+    tech_id: Optional[UUID] = Field(
+        default=None, description="UUID du technicien pilote (prioritaire sur tech_initials)")
     tech_initials: Optional[str] = Field(
-        default=None, description="Initiales du technicien (obligatoire pour acceptee)")
+        default=None, description="Initiales du technicien (legacy — utiliser tech_id de préférence)")
     priority: Optional[str] = Field(
         default=None, description="Priorité de l'intervention")
     reported_date: Optional[str] = Field(
         default=None, description="Date de signalement (YYYY-MM-DD)")
+
+    @model_validator(mode="after")
+    def validate_tech(self):
+        if self.status_to == "acceptee":
+            if not self.tech_id and not self.tech_initials:
+                raise ValueError("tech_id ou tech_initials requis pour acceptee")
+        return self

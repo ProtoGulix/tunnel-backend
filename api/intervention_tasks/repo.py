@@ -279,6 +279,17 @@ class InterventionTaskRepository:
             cur = conn.cursor()
             self._ensure_intervention_editable(cur, str(data.intervention_id))
 
+            # Auto-assigner au pilote de l'intervention si assigned_to absent
+            assigned_to = str(data.assigned_to) if data.assigned_to else None
+            if not assigned_to:
+                cur.execute(
+                    "SELECT tech_id FROM intervention WHERE id = %s",
+                    (str(data.intervention_id),),
+                )
+                pilot = cur.fetchone()
+                if pilot and pilot[0]:
+                    assigned_to = str(pilot[0])
+
             task_id = str(uuid4())
             cur.execute(
                 """
@@ -293,7 +304,7 @@ class InterventionTaskRepository:
                     data.label,
                     data.origin,
                     data.optional,
-                    str(data.assigned_to) if data.assigned_to else None,
+                    assigned_to,
                     data.due_date,
                     data.sort_order,
                     created_by,

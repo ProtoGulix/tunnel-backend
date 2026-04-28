@@ -14,7 +14,7 @@ class InterventionCreate(BaseModel):
     """Schéma d'entrée pour créer une intervention (champs requis par le trigger)"""
     machine_id: UUID
     type_inter: str
-    tech_initials: str
+    tech_id: UUID
     title: Optional[str] = None
     priority: Optional[str] = None
     reported_by: Optional[str] = None
@@ -35,6 +35,7 @@ class InterventionIn(BaseModel):
     priority: Optional[str] = None
     reported_by: Optional[str] = None
     tech_initials: Optional[str] = None
+    tech_id: Optional[UUID] = None
     status_actual: Optional[str] = None
     printed_fiche: Optional[bool] = None
     reported_date: Optional[date] = None
@@ -64,6 +65,7 @@ class InterventionOut(BaseModel):
     priority: Optional[str] = None
     reported_by: Optional[str] = None
     tech_initials: Optional[str] = None
+    tech_id: Optional[UUID] = None
     status_actual: Optional[str] = None
     updated_by: Optional[UUID] = None
     printed_fiche: Optional[bool] = None

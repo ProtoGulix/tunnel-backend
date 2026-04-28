@@ -111,6 +111,11 @@ def upgrade() -> None:
     """)
 
     op.execute("""
+        DROP TRIGGER IF EXISTS trg_sync_status_log_to_intervention
+            ON public.intervention_status_log
+    """)
+
+    op.execute("""
         CREATE TRIGGER trg_sync_status_log_to_intervention
             AFTER INSERT ON public.intervention_status_log
             FOR EACH ROW
@@ -123,4 +128,5 @@ def downgrade() -> None:
         DROP TRIGGER IF EXISTS trg_sync_status_log_to_intervention
             ON public.intervention_status_log
     """)
-    op.execute("DROP FUNCTION IF EXISTS public.fn_sync_status_log_to_intervention()")
+    op.execute(
+        "DROP FUNCTION IF EXISTS public.fn_sync_status_log_to_intervention()")
