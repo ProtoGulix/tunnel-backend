@@ -35,9 +35,20 @@ class StockItemRepository:
             params.append(sub_family_code)
 
         if search:
-            where_clauses.append(f"({a}name ILIKE %s OR {a}ref ILIKE %s)")
             search_pattern = f"%{search}%"
-            params.extend([search_pattern, search_pattern])
+            where_clauses.append(
+                f"({a}name ILIKE %s OR {a}ref ILIKE %s"
+                f" OR EXISTS ("
+                f"SELECT 1 FROM stock_item_supplier sis2"
+                f" WHERE sis2.stock_item_id = {a}id AND sis2.supplier_ref ILIKE %s"
+                f")"
+                f" OR EXISTS ("
+                f"SELECT 1 FROM stock_item_supplier sis3"
+                f" JOIN manufacturer_item mi ON mi.id = sis3.manufacturer_item_id"
+                f" WHERE sis3.stock_item_id = {a}id AND mi.manufacturer_ref ILIKE %s"
+                f"))"
+            )
+            params.extend([search_pattern, search_pattern, search_pattern, search_pattern])
 
         if has_supplier is True:
             where_clauses.append(
@@ -161,9 +172,20 @@ class StockItemRepository:
             where_sql = ""
 
             if search:
-                where_sql = "WHERE (si.name ILIKE %s OR si.ref ILIKE %s)"
                 search_pattern = f"%{search}%"
-                params.extend([search_pattern, search_pattern])
+                where_sql = (
+                    "WHERE (si.name ILIKE %s OR si.ref ILIKE %s"
+                    " OR EXISTS ("
+                    "SELECT 1 FROM stock_item_supplier sis2"
+                    " WHERE sis2.stock_item_id = si.id AND sis2.supplier_ref ILIKE %s"
+                    ")"
+                    " OR EXISTS ("
+                    "SELECT 1 FROM stock_item_supplier sis3"
+                    " JOIN manufacturer_item mi ON mi.id = sis3.manufacturer_item_id"
+                    " WHERE sis3.stock_item_id = si.id AND mi.manufacturer_ref ILIKE %s"
+                    "))"
+                )
+                params.extend([search_pattern, search_pattern, search_pattern, search_pattern])
 
             query = f"""
                 SELECT

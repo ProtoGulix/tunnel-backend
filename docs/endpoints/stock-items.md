@@ -25,7 +25,7 @@ Liste les articles avec filtres, pagination et facettes.
 | `limit`           | int    | 50     | Max par page: 1000                                    |
 | `family_code`     | string | —      | Filtrer par famille                                   |
 | `sub_family_code` | string | —      | Filtrer par sous-famille                              |
-| `search`          | string | —      | Recherche nom ou référence (ILIKE)                    |
+| `search`          | string | —      | Recherche sur nom, référence interne, référence fournisseur ou référence fabricant (ILIKE) |
 | `has_supplier`    | bool   | —      | `true` = articles avec au moins un fournisseur        |
 | `sort_by`         | string | `name` | Tri : `name`, `ref`, `family_code`, `sub_family_code` |
 
