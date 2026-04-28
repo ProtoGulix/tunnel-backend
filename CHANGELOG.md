@@ -2,10 +2,7 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
-<<<<<<< HEAD
-## [2.22.0] - 27 avril 2026
-=======
-## [2.22.1] - 27 avril 2026
+## [2.22.1] - 28 avril 2026
 
 ### Corrections
 
@@ -14,9 +11,11 @@ Toutes les modifications importantes de l'API sont documentées ici.
   - Blocage de **création, édition et suppression de tâches** (`POST/PATCH/DELETE /intervention-tasks`).
   - Blocage de **création, édition et suppression de demandes d'achat liées** (`POST/PUT/DELETE /purchase-requests` quand la DA est rattachée à une action/intervention fermée).
 - **Uniformisation des erreurs métier** : les refus de verrouillage restent en `ValidationError` (400) et ne remontent plus en erreur base (500).
+- **Tâches absentes dans les actions** (`GET /interventions/{id}`) : les tâches liées via `intervention_action.task_id` (ancien modèle) remontent à nouveau correctement dans le champ `tasks` des actions.
 
-## [2.22.0] - 26 avril 2026
->>>>>>> cb859ad2c02d74d0f52f978489fcb86c60b738ce
+---
+
+## [2.22.0] - 27 avril 2026
 
 ### Breaking changes
 
