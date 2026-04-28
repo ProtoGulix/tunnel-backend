@@ -2,7 +2,7 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from api.db import get_connection, release_connection
-from api.errors.exceptions import ConflictError, DatabaseError, NotFoundError, ValidationError
+from api.errors.exceptions import ConflictError, DatabaseError, NotFoundError, ValidationError, raise_db_error
 from api.constants import CLOSED_STATUS_CODE, IN_PROGRESS_STATUS_CODE
 from api.intervention_requests.validators import InterventionRequestValidator
 
@@ -745,5 +745,82 @@ class InterventionRequestRepository:
                 "Erreur clôture automatique pour intervention %s: %s",
                 intervention_id, str(e),
             )
+        finally:
+            release_connection(conn)
+
+    # ──────────────────────────────────────────────────────────────
+    # Réparation manuelle des DIs orphelines
+    # ──────────────────────────────────────────────────────────────
+
+    def repair_orphaned_requests(self) -> Dict[str, Any]:
+        """
+        Passe à 'cloturee' toutes les DIs en statut 'acceptee' dont l'intervention
+        liée est déjà fermée (status_actual = CLOSED_STATUS_CODE).
+
+        Réplique la cascade de on_intervention_closed pour les DIs orphelines :
+        cas où la fermeture automatique n'a pas été déclenchée (données historiques,
+        fermeture directe en DB, etc.).
+
+        Idempotente : peut être appelée plusieurs fois sans effet secondaire.
+        """
+        conn = self._get_connection()
+        try:
+            cur = conn.cursor()
+
+            # Trouve toutes les DIs acceptées dont l'intervention est fermée
+            cur.execute(
+                """
+                SELECT ir.id, ir.code, m.code AS machine_code
+                FROM intervention_request ir
+                JOIN intervention i ON i.id = ir.intervention_id
+                LEFT JOIN machine m ON m.id = ir.machine_id
+                WHERE ir.statut = 'acceptee'
+                  AND i.status_actual = %s
+                ORDER BY ir.id
+                """,
+                (CLOSED_STATUS_CODE,),
+            )
+            rows = cur.fetchall()
+
+            repaired = []
+
+            # Empêche le trigger de créer un doublon dans request_status_log
+            cur.execute("SET LOCAL app.skip_request_status_log = 'true'")
+
+            for request_id, di_code, machine_code in rows:
+                cur.execute(
+                    "UPDATE intervention_request SET statut = 'cloturee' WHERE id = %s",
+                    (str(request_id),),
+                )
+                cur.execute(
+                    """
+                    INSERT INTO request_status_log
+                        (request_id, status_from, status_to, changed_by, notes)
+                    VALUES (%s, %s, %s, NULL, %s)
+                    """,
+                    (
+                        str(request_id),
+                        "acceptee",
+                        "cloturee",
+                        "Clôture manuelle via endpoint /repair",
+                    ),
+                )
+                repaired.append({
+                    "id": str(request_id),
+                    "code": di_code,
+                    "machine_code": machine_code,
+                })
+
+            conn.commit()
+            logger.info(
+                "repair_orphaned_requests : %d DI(s) pass\u00e9es \u00e0 cloturee", len(repaired)
+            )
+            return {
+                "repaired_count": len(repaired),
+                "details": repaired,
+            }
+        except Exception as e:
+            conn.rollback()
+            raise_db_error(e, "r\u00e9paration DIs orphelines")
         finally:
             release_connection(conn)

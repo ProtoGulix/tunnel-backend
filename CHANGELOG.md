@@ -13,6 +13,10 @@ Toutes les modifications importantes de l'API sont documentées ici.
 - **Uniformisation des erreurs métier** : les refus de verrouillage restent en `ValidationError` (400) et ne remontent plus en erreur base (500).
 - **Tâches absentes dans les actions** (`GET /interventions/{id}`) : les tâches liées via `intervention_action.task_id` (ancien modèle) remontent à nouveau correctement dans le champ `tasks` des actions.
 
+### Ajouts
+
+- **`POST /intervention-requests/repair`** : réparation manuelle des demandes d'intervention orphelines. Passe à `cloturee` toutes les DIs en statut `acceptee` dont l'intervention liée est déjà fermée (`status_actual = ferme`). Idémpotent. Retourne `repaired_count` et le détail par DI (id, code, machine_code).
+
 ---
 
 ## [2.22.0] - 27 avril 2026

@@ -97,3 +97,15 @@ class StatusTransitionIn(BaseModel):
         default=None, description="Priorité de l'intervention")
     reported_date: Optional[str] = Field(
         default=None, description="Date de signalement (YYYY-MM-DD)")
+
+
+class RepairResult(BaseModel):
+    """Résultat de la réparation des DIs orphelines liées à des interventions fermées"""
+    repaired_count: int = Field(..., description="Nombre de DIs passées à 'cloturee'")
+    details: List[dict] = Field(
+        default_factory=list,
+        description="Détail par DI réparée (id, code, machine_code)"
+    )
+
+    class Config:
+        from_attributes = True
