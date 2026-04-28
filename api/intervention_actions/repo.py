@@ -221,14 +221,18 @@ class InterventionActionRepository:
                             if pid in pr_by_id
                         ]
 
-                # Batch tâches liées via intervention_task.action_id
+                # Batch tâches liées : it.action_id (nouveau modèle) OU ia.task_id (ancien modèle)
                 cur.execute(
                     f"""
-                    SELECT it.action_id, it.id, it.label, it.status, it.origin, it.optional
+                    SELECT COALESCE(it.action_id, ia_legacy.id) AS action_id,
+                           it.id, it.label, it.status, it.origin, it.optional
                     FROM intervention_task it
+                    LEFT JOIN intervention_action ia_legacy ON ia_legacy.task_id = it.id
+                        AND ia_legacy.id IN ({placeholders})
                     WHERE it.action_id IN ({placeholders})
+                       OR (it.action_id IS NULL AND ia_legacy.id IS NOT NULL)
                     """,
-                    action_ids
+                    action_ids + action_ids
                 )
                 task_rows = cur.fetchall()
                 if task_rows:
@@ -392,14 +396,18 @@ class InterventionActionRepository:
                         if pid in pr_by_id
                     ]
 
-            # Batch tâches liées via intervention_task.action_id (plusieurs tâches → une action)
+            # Batch tâches liées : it.action_id (nouveau modèle) OU ia.task_id (ancien modèle)
             cur.execute(
                 f"""
-                SELECT it.action_id, it.id, it.label, it.status, it.origin, it.optional
+                SELECT COALESCE(it.action_id, ia_legacy.id) AS action_id,
+                       it.id, it.label, it.status, it.origin, it.optional
                 FROM intervention_task it
+                LEFT JOIN intervention_action ia_legacy ON ia_legacy.task_id = it.id
+                    AND ia_legacy.id IN ({placeholders})
                 WHERE it.action_id IN ({placeholders})
+                   OR (it.action_id IS NULL AND ia_legacy.id IS NOT NULL)
                 """,
-                action_ids
+                action_ids + action_ids
             )
             task_rows = cur.fetchall()
             if task_rows:
