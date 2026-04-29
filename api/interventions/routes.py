@@ -48,6 +48,7 @@ def list_interventions(
     include: str | None = Query(None, description="Ex: stats"),
     printed: bool | None = Query(
         False, description="Filtre par statut d'impression/archivage. false=actives (défaut), true=archivées, null=toutes"),
+    tech_id: str | None = Query(None, description="Filtrer par UUID technicien pilote"),
 ):
     """Liste interventions avec filtres/sort et stats optionnelles (sans actions)"""
     intervention_repo = InterventionRepository()
@@ -66,7 +67,8 @@ def list_interventions(
         priorities=priorities,
         sort=sort,
         include_stats=include_stats,
-        printed=printed
+        printed=printed,
+        tech_id=tech_id,
     )
 
 
