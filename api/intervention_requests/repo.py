@@ -590,6 +590,18 @@ class InterventionRequestRepository:
         from uuid import uuid4
         from api.interventions.validators import InterventionValidator
 
+        # Résoudre tech_initials depuis tech_id si fourni
+        tech_id = intervention_data.get("tech_id")
+        if tech_id and not intervention_data.get("tech_initials"):
+            cur.execute(
+                "SELECT initial FROM directus_users WHERE id = %s",
+                (str(tech_id),),
+            )
+            row = cur.fetchone()
+            if not row:
+                raise ValidationError(f"Utilisateur {tech_id} introuvable")
+            intervention_data["tech_initials"] = row[0]
+
         # Valider l'unicité du code avant l'INSERT (remonte ConflictError 409)
         InterventionValidator.validate_create({
             "machine_id": str(request["machine_id"]),
@@ -637,9 +649,9 @@ class InterventionRequestRepository:
             """
             INSERT INTO intervention
                 (id, title, machine_id, type_inter, priority,
-                 reported_by, tech_initials, status_actual,
+                 reported_by, tech_initials, tech_id, status_actual,
                  printed_fiche, reported_date, plan_id)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """,
             (
                 intervention_id,
@@ -650,6 +662,7 @@ class InterventionRequestRepository:
                 intervention_data.get("priority", "normale"),
                 request.get("demandeur_nom"),         # reported_by = demandeur
                 intervention_data["tech_initials"],
+                str(intervention_data["tech_id"]) if intervention_data.get("tech_id") else None,
                 status_pris_en_charge_id,
                 False,
                 reported_date,

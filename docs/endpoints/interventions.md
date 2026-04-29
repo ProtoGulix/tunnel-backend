@@ -25,6 +25,7 @@ Liste les interventions avec filtres, tri et pagination.
 | `status`        | csv    | —      | Filtrer par codes statut (ex: `ouvert,ferme,en_cours`)                  |
 | `priority`      | csv    | —      | Filtrer par priorité (`faible,normale,important,urgent`)                |
 | `printed`       | bool   | —      | `true` : imprimées, `false` : non imprimées, omis : toutes              |
+| `tech_id`       | uuid   | —      | Filtrer par UUID du technicien pilote (`intervention.tech_id`)          |
 | `sort`          | csv    | —      | Tri avec `-` pour DESC (ex: `-priority,-reported_date`)                 |
 | `include`       | csv    | —      | Données optionnelles (`stats`). Stats incluses par défaut               |
 
@@ -64,6 +65,7 @@ Liste les interventions avec filtres, tri et pagination.
     "priority": "urgent",
     "reported_by": "Jean Dupont",
     "tech_initials": "QC",
+    "tech_id": "uuid-utilisateur",
     "status_actual": "en_cours",
     "updated_by": "uuid",
     "printed_fiche": false,
@@ -232,6 +234,7 @@ Détail complet d'une intervention. **La structure est différente de la liste**
   "priority": "urgent",
   "reported_by": "Jean Dupont",
   "tech_initials": "QC",
+  "tech_id": "uuid-utilisateur",
   "status_actual": "en_cours",
   "updated_by": "uuid",
   "printed_fiche": false,
@@ -371,8 +374,8 @@ Crée une nouvelle intervention.
 ```json
 {
   "machine_id": "uuid",
-  "type_inter": "curatif",
-  "tech_initials": "QC",
+  "type_inter": "CUR",
+  "tech_id": "uuid-utilisateur",
   "title": "Remplacement roulement principal",
   "priority": "urgent",
   "reported_by": "Jean Dupont",
@@ -382,13 +385,13 @@ Crée une nouvelle intervention.
 }
 ```
 
-> **Note** : `machine_id`, `type_inter` et `tech_initials` sont requis par le trigger PostgreSQL `trg_interv_code` qui génère le code d'intervention (`{machine.code}-{type_inter}-{YYYYMMDD}-{tech_initials}`). Une erreur DB est levée si l'un d'eux est absent ou si la machine est inconnue.
+> **Note** : `machine_id`, `type_inter` et `tech_id` sont requis. L'API résout automatiquement les initiales du technicien depuis `directus_users.initial` pour alimenter le trigger PostgreSQL `trg_interv_code` qui génère le code (`{machine.code}-{type_inter}-{YYYYMMDD}-{initiales}`).
 
 | Champ           | Type   | Requis  | Défaut   | Description                                                                                                                                                                                                                                                 |
 | --------------- | ------ | ------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `machine_id`    | uuid   | **oui** | —        | Équipement concerné (trigger exige une machine existante)                                                                                                                                                                                                   |
 | `type_inter`    | string | **oui** | —        | Type d'intervention (`CUR`, `PRE`, `REA`, `BAT`, `PRO`, `COF`, `PIL`, `MES`) — voir `GET /interventions/types`                                                                                                                                              |
-| `tech_initials` | string | **oui** | —        | Initiales du technicien — intégrées dans le code                                                                                                                                                                                                            |
+| `tech_id`       | uuid   | **oui** | —        | UUID du technicien pilote (`directus_users.id`). L'API résout les initiales en interne pour le trigger de génération de code                                                                                                                                 |
 | `title`         | string | non     | null     | Titre de l'intervention                                                                                                                                                                                                                                     |
 | `priority`      | string | non     | null     | `faible`, `normale`, `important`, `urgent`                                                                                                                                                                                                                  |
 | `reported_by`   | string | non     | null     | Nom du signaleur                                                                                                                                                                                                                                            |
