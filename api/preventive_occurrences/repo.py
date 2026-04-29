@@ -456,10 +456,13 @@ class PreventiveOccurrenceRepository:
                     UPDATE intervention_task
                     SET intervention_id = %s,
                         assigned_to = COALESCE(assigned_to,
-                            (SELECT tech_id FROM intervention WHERE id = %s))
+                            (SELECT tech_id FROM intervention WHERE id = %s)),
+                        due_date = COALESCE(due_date,
+                            (SELECT reported_date FROM intervention WHERE id = %s))
                     WHERE occurrence_id = %s AND intervention_id IS NULL
                     """,
-                    (intervention_id, intervention_id, occurrence_id),
+                    (intervention_id, intervention_id,
+                     intervention_id, occurrence_id),
                 )
                 conn.commit()
                 logger.info(
