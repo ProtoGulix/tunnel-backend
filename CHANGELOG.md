@@ -2,7 +2,7 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
-## [2.23.0] - 28 avril 2026
+## [2.23.0] - 29 avril 2026
 
 ### Nouveautés
 
@@ -10,6 +10,8 @@ Toutes les modifications importantes de l'API sont documentées ici.
 - **`POST /intervention-requests/{id}/transition`** : `tech_id: UUID` optionnel ajouté au payload `acceptee`. `tech_initials` reste accepté pour la rétrocompatibilité. Si `status_to = acceptee`, l'un des deux est obligatoire.
 - **`GET /interventions?tech_id=`** : nouveau filtre par UUID technicien pilote, filtre sur la colonne `intervention.tech_id`.
 - **Auto-assignation des tâches** : à la création d'une tâche sans `assigned_to` explicite, le pilote de l'intervention (`tech_id`) est automatiquement assigné.
+- **`due_date` automatique sur les tâches préventives** : lors du rattachement d'une tâche `origin: plan` à une intervention (auto-accept ou acceptation manuelle), `due_date` est défini à `intervention.reported_date` si absent. Exposé sur `GET /intervention-tasks` et `GET /tasks`.
+- **Recherche articles (`GET /stock-items`)** : la recherche textuelle inclut désormais la référence fournisseur et la référence fabricant en plus du nom et du code interne.
 - **Migration DB** : colonne `tech_id UUID` ajoutée sur `intervention` avec FK `ON DELETE SET NULL`. Backfill automatique des lignes existantes via `directus_users.initial`.
 
 ## [2.22.1] - 27 avril 2026
