@@ -100,7 +100,13 @@ class StatusTransitionIn(BaseModel):
     reported_date: Optional[str] = Field(
         default=None, description="Date de signalement (YYYY-MM-DD)")
 
-<<<<<<< HEAD
+    @model_validator(mode="after")
+    def validate_tech(self):
+        if self.status_to == "acceptee":
+            if not self.tech_id and not self.tech_initials:
+                raise ValueError("tech_id ou tech_initials requis pour acceptee")
+        return self
+
 
 class RepairResult(BaseModel):
     """Résultat de la réparation des DIs orphelines liées à des interventions fermées"""
@@ -112,11 +118,3 @@ class RepairResult(BaseModel):
 
     class Config:
         from_attributes = True
-=======
-    @model_validator(mode="after")
-    def validate_tech(self):
-        if self.status_to == "acceptee":
-            if not self.tech_id and not self.tech_initials:
-                raise ValueError("tech_id ou tech_initials requis pour acceptee")
-        return self
->>>>>>> a9dceabce4b59670d5e456bbff26a05c919b5c79

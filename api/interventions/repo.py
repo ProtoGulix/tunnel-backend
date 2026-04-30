@@ -647,7 +647,11 @@ class InterventionRepository:
                 from api.intervention_requests.repo import InterventionRequestRepository
                 InterventionRequestRepository().on_intervention_closed(intervention_id)
         except Exception:
-            pass  # Ne pas bloquer la mise à jour de l'intervention
+            logger.error(
+                "Erreur cascade fermeture pour intervention %s",
+                intervention_id,
+                exc_info=True,
+            )
 
     def force_close_request(self, intervention_id: str) -> Dict[str, Any]:
         """Force la clôture de la demande liée à une intervention fermée.
