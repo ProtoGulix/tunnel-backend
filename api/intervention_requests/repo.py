@@ -487,15 +487,20 @@ class InterventionRequestRepository:
                         "Demande %s clôturée : intervention %s fermée",
                         request_id, intervention_id,
                     )
-                # Passer l'occurrence préventive liée à 'completed'
+                # Passer l'occurrence préventive liée à 'completed'.
+                # Double critère : di_id (cas standard) OU intervention_id (cas où
+                # l'occurrence a son di_id NULL suite à un repair ou un bug de liaison).
                 cur.execute(
                     """
                     UPDATE preventive_occurrence
                     SET status = 'completed'
-                    WHERE di_id = %s
-                      AND status NOT IN ('completed', 'skipped')
+                    WHERE status NOT IN ('completed', 'skipped')
+                      AND (
+                          di_id = %s
+                          OR intervention_id = %s
+                      )
                     """,
-                    (request_id,),
+                    (request_id, str(intervention_id) if intervention_id else None),
                 )
                 if cur.rowcount:
                     logger.info(
@@ -735,15 +740,21 @@ class InterventionRequestRepository:
                     request_id, intervention_id,
                 )
 
-            # 2. Passer l'occurrence préventive liée à 'completed' (indépendant de l'étape 1)
+            # 2. Passer l'occurrence préventive liée à 'completed'.
+            # Double critère : intervention_id (cas standard) OU di_id (cas où
+            # occurrence.intervention_id est NULL suite à un bug de rattachement).
+            closed_request_id = str(row[0]) if row else None
             cur.execute(
                 """
                 UPDATE preventive_occurrence
                 SET status = 'completed'
-                WHERE intervention_id = %s
-                  AND status NOT IN ('completed', 'skipped')
+                WHERE status NOT IN ('completed', 'skipped')
+                  AND (
+                      intervention_id = %s
+                      OR (di_id = %s AND %s IS NOT NULL)
+                  )
                 """,
-                (intervention_id,),
+                (intervention_id, closed_request_id, closed_request_id),
             )
             if cur.rowcount:
                 logger.info(
