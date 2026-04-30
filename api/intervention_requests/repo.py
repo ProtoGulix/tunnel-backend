@@ -2,7 +2,7 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from api.db import get_connection, release_connection
-from api.errors.exceptions import ConflictError, DatabaseError, NotFoundError, ValidationError
+from api.errors.exceptions import ConflictError, DatabaseError, NotFoundError, ValidationError, raise_db_error
 from api.constants import CLOSED_STATUS_CODE, IN_PROGRESS_STATUS_CODE
 from api.intervention_requests.validators import InterventionRequestValidator
 
@@ -677,21 +677,13 @@ class InterventionRequestRepository:
         return intervention_id
 
     def _close_linked_intervention(self, cur: Any, intervention_id: str) -> None:
-        """Passe une intervention au statut fermé (code = CLOSED_STATUS_CODE)."""
-        cur.execute(
-            "SELECT id FROM intervention_status_ref WHERE code = %s LIMIT 1",
-            (CLOSED_STATUS_CODE,),
-        )
-        row = cur.fetchone()
-        if not row:
-            raise DatabaseError(
-                "Impossible de résoudre le statut 'ferme' dans intervention_status_ref"
-            )
-        closed_status_id = row[0]
-
+        """Passe une intervention au statut fermé (code = CLOSED_STATUS_CODE).
+        Utilise le code texte directement pour que status_actual = 'ferme'
+        et que _notify_if_closed() le détecte correctement.
+        """
         cur.execute(
             "UPDATE intervention SET status_actual = %s WHERE id = %s",
-            (closed_status_id, intervention_id),
+            (CLOSED_STATUS_CODE, intervention_id),
         )
 
     # ──────────────────────────────────────────────────────────────
@@ -709,7 +701,8 @@ class InterventionRequestRepository:
         try:
             cur = conn.cursor()
 
-            # 1. Clôturer la demande liée
+            # 1. Clôturer la demande liée.
+            # Tentative 1 : chercher via intervention_request.intervention_id (lien direct).
             cur.execute(
                 """
                 SELECT id, statut FROM intervention_request
@@ -719,6 +712,28 @@ class InterventionRequestRepository:
                 (intervention_id,),
             )
             row = cur.fetchone()
+
+            # Tentative 2 (fallback) : DI dont intervention_id est NULL (ex. auto-accept)
+            # mais liée via preventive_occurrence.di_id → occurrence.intervention_id.
+            if not row:
+                cur.execute(
+                    """
+                    SELECT ir.id, ir.statut
+                    FROM intervention_request ir
+                    JOIN preventive_occurrence po ON po.di_id = ir.id
+                    WHERE po.intervention_id = %s AND ir.statut = 'acceptee'
+                    LIMIT 1
+                    """,
+                    (intervention_id,),
+                )
+                row = cur.fetchone()
+                if row:
+                    # Corriger le lien manquant pour les prochaines fermetures
+                    cur.execute(
+                        "UPDATE intervention_request SET intervention_id = %s WHERE id = %s",
+                        (intervention_id, str(row[0])),
+                    )
+
             if row:
                 request_id, current_statut = row[0], row[1]
 
@@ -743,7 +758,18 @@ class InterventionRequestRepository:
             # 2. Passer l'occurrence préventive liée à 'completed'.
             # Double critère : intervention_id (cas standard) OU di_id (cas où
             # occurrence.intervention_id est NULL suite à un bug de rattachement).
+            # On récupère le di_id sans filtrer sur le statut de la DI, car le trigger
+            # trg_sync_status_log_to_intervention peut avoir déjà clôturé la DI avant
+            # que cette fonction ne soit appelée — row serait None dans ce cas.
             closed_request_id = str(row[0]) if row else None
+            if not closed_request_id:
+                cur.execute(
+                    "SELECT id FROM intervention_request WHERE intervention_id = %s LIMIT 1",
+                    (intervention_id,),
+                )
+                di_row = cur.fetchone()
+                closed_request_id = str(di_row[0]) if di_row else None
+
             cur.execute(
                 """
                 UPDATE preventive_occurrence
@@ -769,5 +795,108 @@ class InterventionRequestRepository:
                 "Erreur clôture automatique pour intervention %s: %s",
                 intervention_id, str(e),
             )
+        finally:
+            release_connection(conn)
+
+    # ──────────────────────────────────────────────────────────────
+    # Réparation manuelle des DIs orphelines
+    # ──────────────────────────────────────────────────────────────
+
+    def repair_orphaned_requests(self) -> Dict[str, Any]:
+        """
+        Passe à 'cloturee' toutes les DIs en statut 'acceptee' dont l'intervention
+        liée est déjà fermée (status_actual = CLOSED_STATUS_CODE).
+
+        Réplique la cascade de on_intervention_closed pour les DIs orphelines :
+        cas où la fermeture automatique n'a pas été déclenchée (données historiques,
+        fermeture directe en DB, etc.).
+
+        Idempotente : peut être appelée plusieurs fois sans effet secondaire.
+        """
+        conn = self._get_connection()
+        try:
+            cur = conn.cursor()
+
+            # Trouve toutes les DIs acceptées dont l'intervention est fermée.
+            # UNION : chemin direct (intervention_id sur la DI) ET chemin via occurrence
+            # (DIs auto-acceptées dont intervention_id est NULL mais liées via occurrence).
+            cur.execute(
+                """
+                SELECT ir.id, ir.code, m.code AS machine_code
+                FROM intervention_request ir
+                JOIN intervention i ON i.id = ir.intervention_id
+                LEFT JOIN machine m ON m.id = ir.machine_id
+                WHERE ir.statut = 'acceptee'
+                  AND i.status_actual = %s
+
+                UNION
+
+                SELECT ir.id, ir.code, m.code AS machine_code
+                FROM intervention_request ir
+                JOIN preventive_occurrence po ON po.di_id = ir.id
+                JOIN intervention i ON i.id = po.intervention_id
+                LEFT JOIN machine m ON m.id = ir.machine_id
+                WHERE ir.statut = 'acceptee'
+                  AND ir.intervention_id IS NULL
+                  AND i.status_actual = %s
+
+                ORDER BY id
+                """,
+                (CLOSED_STATUS_CODE, CLOSED_STATUS_CODE),
+            )
+            rows = cur.fetchall()
+
+            repaired = []
+
+            # Empêche le trigger de créer un doublon dans request_status_log
+            cur.execute("SET LOCAL app.skip_request_status_log = 'true'")
+
+            for request_id, di_code, machine_code in rows:
+                # Corriger intervention_id manquant (DIs auto-acceptées via occurrence)
+                cur.execute(
+                    """
+                    UPDATE intervention_request ir
+                    SET intervention_id = po.intervention_id
+                    FROM preventive_occurrence po
+                    WHERE po.di_id = ir.id
+                      AND ir.id = %s
+                      AND ir.intervention_id IS NULL
+                    """,
+                    (str(request_id),),
+                )
+                cur.execute(
+                    "UPDATE intervention_request SET statut = 'cloturee' WHERE id = %s",
+                    (str(request_id),),
+                )
+                cur.execute(
+                    """
+                    INSERT INTO request_status_log
+                        (request_id, status_from, status_to, changed_by, notes)
+                    VALUES (%s, %s, %s, NULL, %s)
+                    """,
+                    (
+                        str(request_id),
+                        "acceptee",
+                        "cloturee",
+                        "Clôture manuelle via endpoint /repair",
+                    ),
+                )
+                repaired.append({
+                    "id": str(request_id),
+                    "code": di_code,
+                    "machine_code": machine_code,
+                })
+
+            conn.commit()
+            logger.info(
+                "repair_orphaned_requests : %d DI(s) pass\u00e9es \u00e0 cloturee", len(repaired)
+            )
+            return {
+                "repaired_count": len(repaired),
+                "details": repaired,
+            }
+        except Exception as e:
+            conn.rollback()
+            raise_db_error(e, "r\u00e9paration DIs orphelines")
         finally:
             release_connection(conn)

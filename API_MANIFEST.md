@@ -72,6 +72,12 @@ Documentation OpenAPI interactive : `http://localhost:8000/docs`
 | PUT     | `/purchase-requests/{id}`                              | Modifier demande              | [purchase-requests.md](docs/endpoints/purchase-requests.md)             |
 | DELETE  | `/purchase-requests/{id}`                              | Supprimer demande             | [purchase-requests.md](docs/endpoints/purchase-requests.md)             |
 | POST    | `/purchase-requests/dispatch`                          | Dispatch automatique          | [purchase-requests.md](docs/endpoints/purchase-requests.md)             |
+| GET     | `/intervention-requests`                               | Liste demandes d'intervention | [intervention-requests.md](docs/endpoints/intervention-requests.md)     |
+| GET     | `/intervention-requests/statuses`                      | Référentiel statuts           | [intervention-requests.md](docs/endpoints/intervention-requests.md)     |
+| GET     | `/intervention-requests/{id}`                          | Détail DI                     | [intervention-requests.md](docs/endpoints/intervention-requests.md)     |
+| POST    | `/intervention-requests`                               | Créer DI                      | [intervention-requests.md](docs/endpoints/intervention-requests.md)     |
+| POST    | `/intervention-requests/{id}/transition`               | Transition de statut DI       | [intervention-requests.md](docs/endpoints/intervention-requests.md)     |
+| POST    | `/intervention-requests/repair`                        | Réparation DIs orphelines      | [intervention-requests.md](docs/endpoints/intervention-requests.md)     |
 | GET     | `/stock-items`                                         | Liste articles                | [stock-items.md](docs/endpoints/stock-items.md)                         |
 | GET     | `/stock-items/{id}`                                    | Détail article                | [stock-items.md](docs/endpoints/stock-items.md)                         |
 | GET     | `/stock-items/{id}/with-characteristics`               | Article avec caractéristiques | [stock-items.md](docs/endpoints/stock-items.md)                         |

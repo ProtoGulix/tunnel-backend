@@ -106,3 +106,15 @@ class StatusTransitionIn(BaseModel):
             if not self.tech_id and not self.tech_initials:
                 raise ValueError("tech_id ou tech_initials requis pour acceptee")
         return self
+
+
+class RepairResult(BaseModel):
+    """Résultat de la réparation des DIs orphelines liées à des interventions fermées"""
+    repaired_count: int = Field(..., description="Nombre de DIs passées à 'cloturee'")
+    details: List[dict] = Field(
+        default_factory=list,
+        description="Détail par DI réparée (id, code, machine_code)"
+    )
+
+    class Config:
+        from_attributes = True

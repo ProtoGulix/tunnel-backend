@@ -382,3 +382,33 @@ Retourne la demande mise à jour. Si `acceptee`, le champ `intervention_id` est 
 | 422  | `type_inter` ou `tech_initials` manquant pour le statut `acceptee` (DI humaine sans type suggéré)  |
 | 400  | DI système sans `suggested_type_inter` et sans `type_inter` dans le payload                        |
 | 422  | Code `status_to` inconnu dans le référentiel                                                       |
+
+---
+
+## `POST /intervention-requests/repair`
+
+Outil de maintenance : passe à `cloturee` toutes les DIs en statut `acceptee` dont l'intervention liée est déjà fermée.
+
+Utile pour corriger des données historiques où la cascade de clôture automatique n'a pas été déclenchée (fermeture directe en base, données importées, etc.).
+
+**Idempotent** : peut être appelé plusieurs fois sans effet secondaire.
+
+### Réponse `200` — `RepairResult`
+
+```json
+{
+  "repaired_count": 3,
+  "details": [
+    { "id": "uuid", "code": "DI-2026-0012", "machine_code": "EQ-001" },
+    { "id": "uuid", "code": "DI-2026-0018", "machine_code": "EQ-007" },
+    { "id": "uuid", "code": "DI-2025-0099", "machine_code": "EQ-003" }
+  ]
+}
+```
+
+| Champ            | Description                                        |
+| ---------------- | -------------------------------------------------- |
+| `repaired_count` | Nombre de DIs passées à `cloturee`                 |
+| `details`        | Liste des DIs réparées avec `id`, `code`, `machine_code` |
+
+> Si aucune DI orpheline n'est trouvée, `repaired_count` vaut `0` et `details` est vide.

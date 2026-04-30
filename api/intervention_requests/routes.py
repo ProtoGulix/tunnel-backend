@@ -10,6 +10,7 @@ from api.intervention_requests.schemas import (
     InterventionRequestDetail,
     RequestStatusRef,
     StatusTransitionIn,
+    RepairResult,
 )
 from api.errors.exceptions import NotFoundError, ValidationError, DatabaseError
 from api.auth.permissions import require_authenticated
@@ -115,3 +116,16 @@ def transition_request_status(request_id: UUID, body: StatusTransitionIn):
         changed_by=str(body.changed_by) if body.changed_by else None,
         intervention_data=intervention_data,
     )
+
+
+@router.post("/repair", response_model=RepairResult)
+def repair_orphaned_requests():
+    """
+    Passe à `cloturee` toutes les DIs en statut `acceptee` dont l'intervention
+    liée est déjà fermée.
+
+    Utile pour corriger des données historiques où la cascade de clôture
+    automatique n'a pas été déclenchée.
+    Idémpotent.
+    """
+    return repo.repair_orphaned_requests()

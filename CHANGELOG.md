@@ -2,6 +2,20 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [2.24.0] - 30 avril 2026
+
+### Nouveautés
+
+- **`POST /intervention-requests/repair`** : réparation manuelle des demandes d'intervention orphelines. Passe à `cloturee` toutes les DIs en statut `acceptee` dont l'intervention liée est déjà fermée (`status_actual = ferme`). Idempotent. Retourne `repaired_count` et le détail par DI (`id`, `code`, `machine_code`).
+
+### Corrections
+
+- **Cascade de clôture DI** : correction du cas où une DI en `acceptee` n'était pas automatiquement clôturée quand son intervention liée était fermée via `PUT /interventions/{id}`. La détection du lien via `preventive_occurrence` (DIs auto-acceptées sans `intervention_id`) est désormais robuste.
+- **Validation `POST /intervention-requests/{id}/transition`** : `tech_id` ou `tech_initials` désormais obligatoire quand `status_to = acceptee` (validation Pydantic `@model_validator`).
+- **Logging** : amélioration des traces sur les transitions de statut et les fermetures en cascade.
+
+---
+
 ## [2.23.0] - 29 avril 2026
 
 ### Nouveautés
@@ -23,6 +37,8 @@ Toutes les modifications importantes de l'API sont documentées ici.
   - Blocage de **création, édition et suppression de tâches** (`POST/PATCH/DELETE /intervention-tasks`).
   - Blocage de **création, édition et suppression de demandes d'achat liées** (`POST/PUT/DELETE /purchase-requests` quand la DA est rattachée à une action/intervention fermée).
 - **Uniformisation des erreurs métier** : les refus de verrouillage restent en `ValidationError` (400) et ne remontent plus en erreur base (500).
+
+---
 
 ## [2.22.0] - 26 avril 2026
 

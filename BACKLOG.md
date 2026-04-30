@@ -76,7 +76,7 @@ Dernière mise à jour : 2026-04-30. Inclut l'audit complet du module préventif
   les `intervention_task origin='plan'` conservent l'ancienne valeur et bloquent à tort la fermeture.
   _Fix : resync `optional` depuis `preventive_plan_gamme_step` dans `repair_orphaned_data`. Corrigé 2026-04-30._
 
-- [ ] **[BUG] `_notify_if_closed` avale toutes les exceptions silencieusement**
+- [x] **[BUG] `_notify_if_closed` avale toutes les exceptions silencieusement**
   Fichier : `api/interventions/repo.py` lignes 645-650
   ```python
   except Exception:
@@ -85,16 +85,28 @@ Dernière mise à jour : 2026-04-30. Inclut l'audit complet du module préventif
   Si `on_intervention_closed` échoue (DB, rollback), l'erreur est perdue.
   L'intervention est fermée, mais l'occurrence reste `in_progress` et la DI reste `acceptee`
   sans aucun log permettant de diagnostiquer.
-  _Fix : remplacer `pass` par `logger.error(..., exc_info=True)` pour tracer le stacktrace complet._
+  _Fix : remplacer `pass` par `logger.error(..., exc_info=True)`. Corrigé 2026-04-30._
 
-- [ ] **[BUG] `on_intervention_closed` rate le cas DI déjà `cloturee`**
+- [x] **[BUG] `on_intervention_closed` rate le cas DI déjà `cloturee`**
   Fichier : `api/intervention_requests/repo.py` lignes 743-763
   `closed_request_id` vaut `None` si la DI n'est plus en statut `acceptee`.
   La condition `OR (di_id = %s AND %s IS NOT NULL)` est alors désactivée.
   Si l'occurrence a en plus `intervention_id = NULL` (bug de liaison antérieur),
   elle ne sera jamais complétée par ce chemin.
-  _Fix : SELECT séparée sans filtre sur le statut pour trouver l'ID de la DI liée à l'intervention,
-  puis l'utiliser dans l'UPDATE `preventive_occurrence`._
+  _Fix : SELECT séparée sans filtre sur le statut pour trouver l'ID de la DI liée. Corrigé 2026-04-30._
+
+- [x] **[BUG] DI non clôturée à la fermeture de l'intervention — deux causes**
+  Fichiers : `api/intervention_requests/repo.py`
+  Cause A : `_close_linked_intervention` stockait `intervention_status_ref.id` (potentiellement UUID)
+  dans `status_actual`, rendant la comparaison `str(status_actual) == 'ferme'` fausse dans
+  `_notify_if_closed` → `on_intervention_closed` jamais appelé via ce chemin.
+  Cause B : DIs auto-acceptées (via `_auto_accept_occurrence`) ont `intervention_request.intervention_id = NULL`
+  → trigger DB et `on_intervention_closed` ratent le SELECT `WHERE intervention_id = %s`.
+  _Fix :_
+  _— `_close_linked_intervention` utilise directement `CLOSED_STATUS_CODE` (texte)._
+  _— `on_intervention_closed` : fallback via `preventive_occurrence.di_id` si DI non trouvée direct._
+  _— `repair_orphaned_requests` : UNION avec le chemin occurrence + correction du `intervention_id` manquant._
+  _Corrigé 2026-04-30._
 
 - [ ] **[BUG] Schéma relation action ↔ tâche ambigu — double modèle en production**
   Migrations successives (i4d5→j5e6→k6f7→p1k2) ont inversé la relation 4 fois en 3 jours.
@@ -245,8 +257,8 @@ tests/
 
 | Statut | Critique | Majeur | Mineur | Total |
 |--------|----------|--------|--------|-------|
-| ✅ Corrigé | 5 | 3 | 0 | **8** |
-| 🔲 À faire | 3 | 9 | 11 | **23** |
+| ✅ Corrigé | 5 | 6 | 0 | **11** |
+| 🔲 À faire | 3 | 6 | 11 | **20** |
 | **Total** | **8** | **12** | **11** | **31** |
 
 ---
@@ -262,3 +274,6 @@ tests/
 | 2026-04-30 | C | Fix `repair` Bug 6 — table `gamme_step_validation` → `intervention_task` |
 | 2026-04-30 | C | Fix cascade fermeture — occurrence reste `in_progress` (double critère di_id/intervention_id) |
 | 2026-04-30 | M | Fix `repair` Bug 5 — resync `optional` depuis `preventive_plan_gamme_step` |
+| 2026-04-30 | M | Fix `_notify_if_closed` — exceptions loggées au lieu d'être avalées silencieusement |
+| 2026-04-30 | M | Fix `on_intervention_closed` — SELECT DI sans filtre statut pour récupérer di_id |
+| 2026-04-30 | M | Fix DI non clôturée — `_close_linked_intervention` + fallback occurrence + repair UNION |
