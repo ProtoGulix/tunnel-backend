@@ -507,6 +507,16 @@ class PreventiveOccurrenceRepository:
           transition_status et que le curseur partagé plantait le rattachement.
           Fix : couvrir aussi le cas où occurrence.intervention_id IS NULL mais
           la DI a un intervention_id.
+
+        Bug 5 — optional désynchronisé entre tâche et step de gamme :
+          Si un step de plan a été modifié (optionnel → obligatoire ou inverse)
+          après la génération des tâches, les intervention_task origin='plan'
+          conservent l'ancienne valeur et bloquent (ou ne bloquent pas) à tort.
+          Fix : resynchroniser optional depuis preventive_plan_gamme_step.
+
+        Bug 6 — référence à l'ancienne table gamme_step_validation dans repair :
+          L'étape 3 de repair utilisait encore l'ancien nom de table (avant migration
+          du 2026-04-25). Le UPDATE ne touchait rien. Fix : corriger le nom.
         """
         conn = self._get_connection()
         tasks_relinked = 0
@@ -515,6 +525,7 @@ class PreventiveOccurrenceRepository:
         occurrences_completed = 0
         requests_closed = 0
         interventions_plan_fixed = 0
+        tasks_optional_resynced = 0
         details = []
 
         try:
@@ -642,7 +653,7 @@ class PreventiveOccurrenceRepository:
                     (linked_intervention_id, new_status, occ_id),
                 )
                 cur.execute(
-                    "UPDATE gamme_step_validation SET intervention_id = %s WHERE occurrence_id = %s AND intervention_id IS NULL",
+                    "UPDATE intervention_task SET intervention_id = %s WHERE occurrence_id = %s AND intervention_id IS NULL",
                     (linked_intervention_id, occ_id),
                 )
                 if occ_plan_id:
@@ -736,12 +747,39 @@ class PreventiveOccurrenceRepository:
                             f"Bug 2 : demande {req_id} → 'cloturee' (liée à l'occurrence {occ_id})"
                         )
 
+            # ── Bug 5 : optional désynchronisé entre tâche et step de gamme ──────
+            # Si le plan a été modifié après génération, les tâches origin='plan'
+            # conservent l'ancienne valeur de optional et bloquent à tort la fermeture.
+            cur.execute(
+                """
+                UPDATE intervention_task it
+                SET optional = pgs.optional
+                FROM preventive_plan_gamme_step pgs
+                WHERE it.gamme_step_id = pgs.id
+                  AND it.origin = 'plan'
+                  AND it.optional != pgs.optional
+                RETURNING it.id, pgs.optional
+                """
+            )
+            opt_rows = cur.fetchall()
+            tasks_optional_resynced = len(opt_rows)
+            if opt_rows:
+                details.append(
+                    f"Bug 5 : {tasks_optional_resynced} tâche(s) — optional resynchronisé depuis le plan"
+                )
+                logger.info(
+                    "Repair Bug 5 : %s tâche(s) optional resynchronisé(es)",
+                    tasks_optional_resynced,
+                )
+
             conn.commit()
             logger.info(
                 "Repair terminé : %s tâches rattachées, %s occurrences reliées, "
-                "%s → in_progress, %s complétées, %s demandes clôturées, %s plan_id corrigés",
+                "%s → in_progress, %s complétées, %s demandes clôturées, %s plan_id corrigés, "
+                "%s optional resynchronisés",
                 tasks_relinked, occurrences_relinked, occurrences_set_in_progress,
                 occurrences_completed, requests_closed, interventions_plan_fixed,
+                tasks_optional_resynced,
             )
 
         except Exception as e:
@@ -756,6 +794,7 @@ class PreventiveOccurrenceRepository:
             "occurrences_set_in_progress": occurrences_set_in_progress,
             "occurrences_completed": occurrences_completed,
             "requests_closed": requests_closed,
+            "tasks_optional_resynced": tasks_optional_resynced,
             "interventions_plan_fixed": interventions_plan_fixed,
             "details": details,
         }

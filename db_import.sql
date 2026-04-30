@@ -1,0 +1,117 @@
+-- Importation de l'architecture de la base de données
+
+-- Extensions
+-- Fichier: 00_extensions.sql
+-- Contenu: (ajoutez ici le contenu de 00_extensions.sql)
+
+-- Core
+-- Fichier: 01_core/intervention_action.sql
+-- Contenu: (ajoutez ici le contenu de intervention_action.sql)
+-- Fichier: 01_core/intervention_action_purchase_request.sql
+-- Contenu: (ajoutez ici le contenu de intervention_action_purchase_request.sql)
+-- Fichier: 01_core/intervention_request.sql
+-- Contenu: (ajoutez ici le contenu de intervention_request.sql)
+-- Fichier: 01_core/request_status_log.sql
+-- Contenu: (ajoutez ici le contenu de request_status_log.sql)
+-- Fichier: 01_core/intervention_part.sql
+-- Contenu: (ajoutez ici le contenu de intervention_part.sql)
+-- Fichier: 01_core/intervention_status_log.sql
+-- Contenu: (ajoutez ici le contenu de intervention_status_log.sql)
+-- Fichier: 01_core/intervention.sql
+-- Contenu: (ajoutez ici le contenu de intervention.sql)
+-- Fichier: 01_core/location.sql
+-- Contenu: (ajoutez ici le contenu de location.sql)
+-- Fichier: 01_core/machine.sql
+-- Contenu: (ajoutez ici le contenu de machine.sql)
+-- Fichier: 01_core/manufacturer_item.sql
+-- Contenu: (ajoutez ici le contenu de manufacturer_item.sql)
+-- Fichier: 01_core/purchase_request.sql
+-- Contenu: (ajoutez ici le contenu de purchase_request.sql)
+-- Fichier: 01_core/stock_item_standard_spec.sql
+-- Contenu: (ajoutez ici le contenu de stock_item_standard_spec.sql)
+-- Fichier: 01_core/stock_item_supplier.sql
+-- Contenu: (ajoutez ici le contenu de stock_item_supplier.sql)
+-- Fichier: 01_core/stock_item.sql
+-- Contenu: (ajoutez ici le contenu de stock_item.sql)
+-- Fichier: 01_core/subtask.sql
+-- Contenu: (ajoutez ici le contenu de subtask.sql)
+-- Fichier: 01_core/supplier_order_line_purchase_request.sql
+-- Contenu: (ajoutez ici le contenu de supplier_order_line_purchase_request.sql)
+-- Fichier: 01_core/supplier_order_line.sql
+-- Contenu: (ajoutez ici le contenu de supplier_order_line.sql)
+-- Fichier: 01_core/supplier_order.sql
+-- Contenu: (ajoutez ici le contenu de supplier_order.sql)
+-- Fichier: 01_core/supplier.sql
+-- Contenu: (ajoutez ici le contenu de supplier.sql)
+
+-- Références
+-- Fichier: 02_ref/action_category.sql
+-- Contenu: (ajoutez ici le contenu de action_category.sql)
+-- Fichier: 02_ref/action_subcategory.sql
+-- Contenu: (ajoutez ici le contenu de action_subcategory.sql)
+-- Fichier: 02_ref/complexity_factor.sql
+-- Contenu: (ajoutez ici le contenu de complexity_factor.sql)
+-- Fichier: 02_ref/intervention_status_ref.sql
+-- Contenu: (ajoutez ici le contenu de intervention_status_ref.sql)
+-- Fichier: 02_ref/request_status_ref.sql
+-- Contenu: (ajoutez ici le contenu de request_status_ref.sql)
+-- Fichier: 02_ref/purchase_status.sql
+-- Contenu: (ajoutez ici le contenu de purchase_status.sql)
+-- Fichier: 02_ref/stock_family.sql
+-- Contenu: (ajoutez ici le contenu de stock_family.sql)
+-- Fichier: 02_ref/stock_sub_family.sql
+-- Contenu: (ajoutez ici le contenu de stock_sub_family.sql)
+
+-- Métadonnées
+-- Fichier: 03_meta/action_category_meta.sql
+-- Contenu: (ajoutez ici le contenu de action_category_meta.sql)
+-- Fichier: 03_meta/action_classification_probe.sql
+-- Contenu: (ajoutez ici le contenu de action_classification_probe.sql)
+-- Fichier: 03_meta/anomaly_threshold.sql
+-- Contenu: (ajoutez ici le contenu de anomaly_threshold.sql)
+-- Fichier: 03_meta/directus_expose_meta_tables.sql
+-- Contenu: (ajoutez ici le contenu de directus_expose_meta_tables.sql)
+-- Fichier: 03_meta/directus_permissions_meta_tables.sql
+-- Contenu: (ajoutez ici le contenu de directus_permissions_meta_tables.sql)
+-- Fichier: 03_meta/seed_meta_configuration.sql
+-- Contenu: (ajoutez ici le contenu de seed_meta_configuration.sql)
+
+-- Préventif
+-- Fichier: 04_preventive/detect_preventive_function.sql
+-- Contenu: (ajoutez ici le contenu de detect_preventive_function.sql)
+-- Fichier: 04_preventive/preventive_rule.sql
+-- Contenu: (ajoutez ici le contenu de preventive_rule.sql)
+-- Fichier: 04_preventive/preventive_suggestion.sql
+-- Contenu: (ajoutez ici le contenu de preventive_suggestion.sql)
+
+-- Triggers
+-- Fichier: 05_triggers/99_foreign_keys.sql
+-- Contenu: (ajoutez ici le contenu de 99_foreign_keys.sql)
+-- Fichier: 05_triggers/fn_dispatch_purchase_requests.sql
+-- Contenu: (ajoutez ici le contenu de fn_dispatch_purchase_requests.sql)
+-- Fichier: 05_triggers/README_MIGRATION_COMPLETE.md
+-- Contenu: (ajoutez ici le contenu de README_MIGRATION_COMPLETE.md)
+-- Fichier: 05_triggers/test_supplier_refs_count_adapted.sql
+-- Contenu: (ajoutez ici le contenu de test_supplier_refs_count_adapted.sql)
+-- Fichier: 05_triggers/test_supplier_refs_count.sql
+-- Contenu: (ajoutez ici le contenu de test_supplier_refs_count.sql)
+-- Fichier: 05_triggers/trg_calculate_totals.sql
+-- Contenu: (ajoutez ici le contenu de trg_calculate_totals.sql)
+-- Fichier: 05_triggers/trg_interv_code.sql
+-- Contenu: (ajoutez ici le contenu de trg_interv_code.sql)
+-- Fichier: 05_triggers/trg_log_status.sql
+-- Contenu: (ajoutez ici le contenu de trg_log_status.sql)
+-- Fichier: 05_triggers/trg_stock_ref.sql
+-- Contenu: (ajoutez ici le contenu de trg_stock_ref.sql)
+-- Fichier: 05_triggers/trg_supplier_order.sql
+-- Contenu: (ajoutez ici le contenu de trg_supplier_order.sql)
+-- Fichier: 05_triggers/trg_sync_status.sql
+-- Contenu: (ajoutez ici le contenu de trg_sync_status.sql)
+-- Fichier: 05_triggers/trg_update_supplier_refs_count_suite.sql
+-- Contenu: (ajoutez ici le contenu de trg_update_supplier_refs_count_suite.sql)
+-- Fichier: 05_triggers/trg_update_supplier_refs_count.sql
+-- Contenu: (ajoutez ici le contenu de trg_update_supplier_refs_count.sql)
+-- Fichier: 05_triggers/trigger_detect_preventive.sql
+-- Contenu: (ajoutez ici le contenu de trigger_detect_preventive.sql)
+-- Fichier: 05_triggers/trg_intervention_request.sql
+-- Contenu: (ajoutez ici le contenu de trg_intervention_request.sql)

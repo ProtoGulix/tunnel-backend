@@ -72,6 +72,22 @@
       "Bash(netsh advfirewall:*)",
       "Bash(ping -n 3 192.168.1.163)",
       "Bash(curl -v http://192.168.1.137:8000/health)",
+      "Read(//c/Users/QUENTIN/DEV/web.tunnel-db/alembic/**)",
+      "Read(//c/Users/QUENTIN/DEV/web.tunnel-db/alembic/versions/**)",
+      "Read(//c/Users/QUENTIN/DEV/web.tunnel-db/migrations/**)",
+      "Read(//c/Users/QUENTIN/DEV/web.tunnel-db/01_core/**)",
+      "Read(//c/Users/QUENTIN/DEV/web.tunnel-db/docs/**)",
+      "Bash(grep -E \"\\\\.sql$|\\\\.md$\")",
+      "Bash(cp C:/Users/QUENTIN/DEV/web.tunnel-db/00_extensions.sql C:/Users/QUENTIN/DEV/tunnel-backend/00_extensions.sql)",
+      "Bash(cp C:/Users/QUENTIN/DEV/web.tunnel-db/db_import.sql C:/Users/QUENTIN/DEV/tunnel-backend/db_import.sql)",
+      "Bash(cp -r C:/Users/QUENTIN/DEV/web.tunnel-db/01_core C:/Users/QUENTIN/DEV/tunnel-backend/01_core)",
+      "Bash(cp -r C:/Users/QUENTIN/DEV/web.tunnel-db/02_ref C:/Users/QUENTIN/DEV/tunnel-backend/02_ref)",
+      "Bash(cp -r C:/Users/QUENTIN/DEV/web.tunnel-db/03_meta C:/Users/QUENTIN/DEV/tunnel-backend/03_meta)",
+      "Bash(cp C:/Users/QUENTIN/DEV/web.tunnel-db/scripts/db_backup.py C:/Users/QUENTIN/DEV/tunnel-backend/scripts/db_backup.py)",
+      "Bash(cp C:/Users/QUENTIN/DEV/web.tunnel-db/scripts/db_connection.py C:/Users/QUENTIN/DEV/tunnel-backend/scripts/db_connection.py)",
+      "Bash(cp C:/Users/QUENTIN/DEV/web.tunnel-db/scripts/migration_runner.py C:/Users/QUENTIN/DEV/tunnel-backend/scripts/migration_runner.py)",
+      "Bash(cp C:/Users/QUENTIN/DEV/web.tunnel-db/scripts/convert_to_alembic.py C:/Users/QUENTIN/DEV/tunnel-backend/scripts/convert_to_alembic.py)",
+      "Bash(cp C:/Users/QUENTIN/DEV/web.tunnel-db/scripts/seed_equipement_class.sql C:/Users/QUENTIN/DEV/tunnel-backend/scripts/seed_equipement_class.sql)",
       "Bash(.venv/Scripts/alembic upgrade *)"
     ]
   }
