@@ -599,7 +599,7 @@ class InterventionRequestRepository:
         tech_id = intervention_data.get("tech_id")
         if tech_id and not intervention_data.get("tech_initials"):
             cur.execute(
-                "SELECT initial FROM directus_users WHERE id = %s",
+                "SELECT initial FROM tunnel_user WHERE id = %s",
                 (str(tech_id),),
             )
             row = cur.fetchone()

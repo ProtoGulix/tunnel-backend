@@ -22,7 +22,9 @@ Cette API fournit les données pour l'interface Tunnel GMAO :
 - **Templates de pièces** : caractérisation structurée des pièces avec versionnement (v1.4.0)
 - **Statistiques** : vue d'ensemble des interventions par type et statut
 
-> **Nouveauté v1.11.0** : Support complet du système de templates versionnés pour la caractérisation des pièces. Voir [docs/TEMPLATES_V1.4.0_IMPLEMENTATION.md](docs/TEMPLATES_V1.4.0_IMPLEMENTATION.md)
+> **Nouveauté v3.1.0** : Authentification par clé d'API pour les intégrations machine-to-machine (serveur MCP, scripts d'automatisation). Rôle `MCP` dédié avec accès lecture seule, géré via l'interface admin.
+
+> **Nouveauté v3.0.0** : Système d'authentification souverain Tunnel — plus de dépendance à Directus pour les utilisateurs terrain.
 
 ## 🎯 Pour qui ?
 

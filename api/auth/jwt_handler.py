@@ -1,63 +1,91 @@
-import jwt
+import os
+import secrets
+import hashlib
 import logging
-from datetime import timedelta
-from typing import Dict, Any
+from datetime import datetime, timezone, timedelta
+from typing import Dict, Any, Tuple
+
+import jwt
+
 from api.settings import settings
 from api.errors.exceptions import UnauthorizedError
 
 logger = logging.getLogger(__name__)
 
+_ALGORITHM = "HS256"
 
-def decode_directus_token(token: str) -> Dict[str, Any]:
+
+def _secret() -> str:
+    key = settings.JWT_SECRET_KEY
+    if not key or len(key) < 32:
+        # En dev sans clé configurée : clé éphémère (invalide entre redémarrages)
+        logger.warning("JWT_SECRET_KEY absent/trop court — clé éphémère utilisée")
+        return "dev-ephemeral-key-not-for-production-use-000"
+    return key
+
+
+def create_access_token(user_id: str, role_code: str, permissions: list[str]) -> str:
+    """Émet un access token JWT HS256 valide ACCESS_TOKEN_EXPIRE_MINUTES minutes."""
+    now = datetime.now(timezone.utc)
+    payload = {
+        "sub": user_id,
+        "role": role_code,
+        "permissions": permissions,
+        "iat": now,
+        "exp": now + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
+    }
+    return jwt.encode(payload, _secret(), algorithm=_ALGORITHM)
+
+
+def create_refresh_token() -> Tuple[str, str]:
     """
-    Décode et vérifie un JWT Directus.
+    Génère un refresh token aléatoire 32 bytes.
+    Retourne (token_clair, token_hash_sha256).
+    Seul le hash est stocké en BDD.
+    """
+    token_clair = secrets.token_hex(32)
+    token_hash = hashlib.sha256(token_clair.encode()).hexdigest()
+    return token_clair, token_hash
 
-    Si DIRECTUS_SECRET est configuré : vérifie la signature HS256 (recommandé).
-    Sinon : décode sans vérification (fallback dev uniquement, log warning).
+
+def decode_access_token(token: str) -> Dict[str, Any]:
+    """
+    Décode et vérifie un access token.
+    Rejette explicitement alg:none.
+    Lève UnauthorizedError si invalide/expiré.
     """
     try:
-        if settings.DIRECTUS_SECRET:
-            payload = jwt.decode(
-                token,
-                settings.DIRECTUS_SECRET,
-                algorithms=["HS256"],
-                options={"verify_exp": True},
-                leeway=timedelta(seconds=30),
-            )
-        else:
-            logger.warning(
-                "DIRECTUS_SECRET non configuré — JWT décodé sans vérification de signature. "
-                "Configurer DIRECTUS_SECRET en production."
-            )
-            payload = jwt.decode(token, options={"verify_signature": False})
+        payload = jwt.decode(
+            token,
+            _secret(),
+            algorithms=[_ALGORITHM],
+            options={"verify_exp": True, "require": ["sub", "role", "exp"]},
+        )
+        # Défense contre alg:none même si PyJWT le gère déjà
+        header = jwt.get_unverified_header(token)
+        if header.get("alg", "").lower() == "none":
+            raise UnauthorizedError("Algorithme JWT interdit")
         return payload
-    except jwt.ExpiredSignatureError:
-        raise UnauthorizedError("Token expiré")
-    except jwt.InvalidSignatureError:
-        raise UnauthorizedError("Signature JWT invalide")
-    except jwt.DecodeError:
-        raise UnauthorizedError("Token invalide")
+    except jwt.ExpiredSignatureError as e:
+        raise UnauthorizedError("Token expiré") from e
+    except jwt.InvalidSignatureError as e:
+        raise UnauthorizedError("Signature JWT invalide") from e
+    except jwt.DecodeError as e:
+        raise UnauthorizedError("Token invalide") from e
+    except jwt.MissingRequiredClaimError as e:
+        raise UnauthorizedError(f"Token incomplet : {e}") from e
 
 
 def extract_user_from_token(token: str) -> Dict[str, Any]:
     """
-    Extrait les infos utilisateur du token JWT.
-    Retourne: {user_id, role, iat, exp}
+    Compatibilité avec le middleware existant.
+    Retourne {user_id, role, permissions, iat, exp}.
     """
-    payload = decode_directus_token(token)
-
-    user_id = payload.get("id") or payload.get("sub")
-    role = payload.get("role")
-
-    logger.debug(f"Token payload: id={user_id}, role={role}")
-
-    if not user_id:
-        logger.error(f"user_id manquant dans le token. Payload: {payload}")
-        raise UnauthorizedError("user_id manquant dans le token")
-
+    payload = decode_access_token(token)
     return {
-        "user_id": user_id,
-        "role": role,
+        "user_id": payload["sub"],
+        "role": payload["role"],
+        "permissions": payload.get("permissions", []),
         "iat": payload.get("iat"),
-        "exp": payload.get("exp")
+        "exp": payload.get("exp"),
     }

@@ -95,8 +95,8 @@ class TasksRepository:
                 FROM intervention_task it
                 LEFT JOIN intervention i ON it.intervention_id = i.id
                 LEFT JOIN machine m ON i.machine_id = m.id
-                LEFT JOIN directus_users u_created ON it.created_by = u_created.id
-                LEFT JOIN directus_users u_assigned ON it.assigned_to = u_assigned.id
+                LEFT JOIN tunnel_user u_created ON it.created_by = u_created.id
+                LEFT JOIN tunnel_user u_assigned ON it.assigned_to = u_assigned.id
                 LEFT JOIN LATERAL (
                     SELECT COALESCE(SUM(ia.time_spent), 0.0) as time_spent
                     FROM intervention_action ia
@@ -231,7 +231,7 @@ class TasksRepository:
                 u.id as tech_id, u.initial as tech_initial, u.first_name as tech_first_name, u.last_name as tech_last_name,
                 it.id as task_id
             FROM intervention_action ia
-            LEFT JOIN directus_users u ON ia.tech = u.id
+            LEFT JOIN tunnel_user u ON ia.tech = u.id
             JOIN intervention_task it ON ia.task_id = it.id
             WHERE it.id IN ({ph})
             ORDER BY ia.created_at DESC
@@ -270,8 +270,8 @@ class TasksRepository:
         # Utilisateurs assignables
         cur.execute("""
             SELECT DISTINCT u.id, u.initial, u.first_name, u.last_name
-            FROM directus_users u
-            WHERE u.status = 'active'
+            FROM tunnel_user u
+            WHERE u.is_active = true
             ORDER BY u.first_name, u.last_name
             LIMIT 100
         """)

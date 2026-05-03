@@ -2,6 +2,91 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [3.1.0] - 3 mai 2026
+
+### Nouvelles fonctionnalités
+
+#### Clés d'API pour les intégrations machine-to-machine
+
+Les scripts, serveurs MCP et outils d'automatisation peuvent désormais s'authentifier sans JWT via une clé d'API dédiée.
+
+- **Nouveau rôle `MCP`** : lecture seule sur tous les endpoints non-sensibles, gérable via la matrice de permissions existante
+- **Table `api_key`** : clés hashées (SHA-256), jamais stockées en clair, avec support d'expiration
+- **Header `X-API-Key`** : s'utilise à la place du JWT, le middleware les distingue automatiquement
+- **CRUD admin** (`/api-keys`) : créer, lister, activer/désactiver, révoquer — ADMIN uniquement
+- **`last_used_at`** mis à jour de façon asynchrone (fire-and-forget) pour ne pas impacter les performances
+
+#### Utilisation
+
+```bash
+# Créer une clé (une seule fois — noter le secret immédiatement)
+POST /api-keys  {"name": "Serveur MCP production"}
+
+# Utiliser la clé
+curl https://api.example.com/interventions \
+  -H "X-API-Key: gmao_xxxxx..."
+```
+
+---
+
+## [3.0.0] - 3 mai 2026
+
+### Migration majeure — Auth souveraine Tunnel v3
+
+L'authentification est désormais entièrement gérée par Tunnel (plus de dépendance à Directus pour les utilisateurs terrain).
+
+#### Nouvelles tables BDD
+
+- `tunnel_role` — 4 rôles fixes : RESP, TECH, CONSULTANT, ADMIN
+- `tunnel_user` — utilisateurs souverains (migré depuis `directus_users`)
+- `tunnel_endpoint` — catalogue des endpoints (auto-peuplé au boot)
+- `tunnel_permission` — matrice M2M rôle ↔ endpoint
+- `refresh_token` — refresh tokens hashés SHA-256, rotation automatique
+- `auth_attempt` — antiflood login (email + IP)
+- `ip_blocklist` — IP bloquées (permanent ou temporaire)
+- `email_domain_rule` — whitelist de domaines email
+- `security_log` — logs d'événements sécurité
+- `permission_audit_log` — historique des modifications de permissions
+
+#### Nouveaux endpoints auth
+
+- `POST /auth/login` — authentification native JWT (access 15 min + refresh 8 h)
+- `POST /auth/refresh` — rotation du refresh token (détection de vol)
+- `POST /auth/logout` — révocation du refresh token
+- `GET /auth/me` — profil complet + permissions
+
+#### Nouveau module admin (`/admin/`)
+
+- Gestion des utilisateurs (RESP + ADMIN) : CRUD, reset password, soft delete
+- Gestion des rôles et permissions (ADMIN) : matrice, audit log
+- Catalogue des endpoints (ADMIN) : liste, métadonnées, sync forcée
+- Référentiel actions : catégories, sous-catégories, facteurs de complexité
+- Référentiel interventions : types, statuts
+- Sécurité (ADMIN) : logs, IP blocklist, règles domaines email
+- Configuration mail : aperçu config + test d'envoi
+
+#### Sécurité
+
+- JWT HS256 signé avec `JWT_SECRET_KEY` (RuntimeError au démarrage si absent/court)
+- Délai aléatoire 50-200 ms sur toutes les réponses 401 et login (timing attack)
+- Antiflood : 5 échecs/15 min par email, 20 tentatives/heure par IP
+- Vérification BDD à chaque requête : user actif + cohérence rôle token vs BDD
+- Rotation refresh token systématique ; détection de réutilisation → révocation globale
+
+#### Suppressions
+
+- Dépendance Directus pour l'auth supprimée (`DIRECTUS_URL`, `DIRECTUS_SECRET` retirés)
+- `httpx` retiré du chemin critique (health check ne pinge plus Directus)
+- `directus_users` conservée en BDD (FKs historiques) mais plus interrogée par l'API
+
+#### Migration DB
+
+- `directus_users` → `tunnel_user` dans tous les repos (11 fichiers)
+- Colonne `initial` conservée (même nom que `directus_users.initial`, pas de renommage)
+- Migration Alembic : `alembic/versions/20260503_s4t5u6v7w8x9_auth_sovereign_v3.py`
+
+---
+
 ## [2.24.0] - 30 avril 2026
 
 ### Nouveautés

@@ -1,4 +1,3 @@
-import httpx
 from api.settings import settings
 from api.db import check_connection
 from pydantic import BaseModel
@@ -19,22 +18,13 @@ def check_database_connection() -> str:
     return check_connection()
 
 
-def check_auth_service_connection() -> str:
-    """Vérifie la connexion au service d'authentification"""
+def check_auth_service() -> str:
+    """Vérifie que le système d'auth JWT natif est opérationnel."""
     try:
-        # /server/info est un endpoint public qui ne nécessite pas d'auth
-        response = httpx.get(
-            f"{settings.DIRECTUS_URL}/server/info",
-            timeout=5.0
-        )
-        if response.status_code == 200:
-            return "connected"
-        else:
-            return f"error: HTTP {response.status_code}"
-    except httpx.ConnectError:
-        return "error: Connection refused"
-    except httpx.TimeoutException:
-        return "error: Timeout"
+        key = settings.JWT_SECRET_KEY
+        if not key or len(key) < 32:
+            return "warning: JWT_SECRET_KEY absent ou trop court"
+        return "connected"
     except Exception as e:
         return f"error: {str(e)}"
 
@@ -42,7 +32,7 @@ def check_auth_service_connection() -> str:
 async def health_check() -> HealthCheckResponse:
     """Vérification complète de santé de l'API"""
     db_status = check_database_connection()
-    auth_status = check_auth_service_connection()
+    auth_status = check_auth_service()
 
     overall_status = "ok" if db_status == "connected" and auth_status == "connected" else "degraded"
 
@@ -50,5 +40,5 @@ async def health_check() -> HealthCheckResponse:
         status=overall_status,
         version=__version__,
         database=db_status,
-        auth_service=auth_status
+        auth_service=auth_status,
     )

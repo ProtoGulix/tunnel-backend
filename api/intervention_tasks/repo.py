@@ -25,10 +25,10 @@ _TASK_SELECT = """
         u.last_name  AS assigned_last_name,
         u.email      AS assigned_email,
         u.initial    AS assigned_initial,
-        u.status     AS assigned_status,
-        u.role       AS assigned_role
+        NULL::text   AS assigned_status,
+        NULL::text   AS assigned_role
     FROM intervention_task it
-    LEFT JOIN directus_users u ON u.id = it.assigned_to
+    LEFT JOIN tunnel_user u ON u.id = it.assigned_to
     LEFT JOIN LATERAL (
         SELECT
             COUNT(ia.id)                    AS action_count,

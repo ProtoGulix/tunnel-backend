@@ -41,6 +41,8 @@ from api.preventive_occurrences.routes import router as preventive_occurrences_r
 from api.intervention_tasks.routes import router as intervention_tasks_router
 from api.tasks.routes import router as tasks_router
 from api.dashboard.routes import router as dashboard_router
+from api.admin.routes import router as admin_router
+from api.api_keys.routes import router as api_keys_router
 from api.errors.handlers import register_error_handlers
 from api.health import health_check
 
@@ -78,9 +80,13 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Initialise et ferme le pool DB au démarrage/arrêt."""
+    """Initialise le pool DB, charge les permissions et synchronise le catalogue d'endpoints."""
     init_pool(settings.DATABASE_URL,
               settings.DB_POOL_MIN, settings.DB_POOL_MAX)
+    # Import lazy pour éviter la circularité avec auth au niveau module
+    from api.auth.permissions import permission_cache
+    permission_cache.load()
+    await sync_endpoints_catalog()
     yield
     close_pool()
 
@@ -151,6 +157,87 @@ app.include_router(intervention_tasks_router)
 app.include_router(tasks_router)
 app.include_router(dashboard_router)
 app.include_router(auth_router)
+app.include_router(admin_router)
+app.include_router(api_keys_router)
+
+
+@app.on_event("startup")
+async def sync_endpoints_catalog():
+    """
+    Scanne toutes les routes FastAPI et fait un UPSERT dans tunnel_endpoint.
+    Maintient le catalogue à jour après chaque déploiement.
+    Les routes /admin/* sont marquées is_sensitive=True par défaut.
+    Crée également les entrées tunnel_permission manquantes (allowed=False) pour chaque rôle.
+    """
+    from api.db import get_connection, release_connection
+    import re
+
+    conn = None
+    try:
+        conn = get_connection()
+        upserted = 0
+        for route in app.routes:
+            if not hasattr(route, "methods") or not hasattr(route, "path"):
+                continue
+            path = route.path
+            tags = getattr(route, "tags", None) or []
+            module = tags[0] if tags else None
+            summary = getattr(route, "summary", None) or getattr(
+                route, "name", None)
+            operation_id = getattr(route, "name", None) or ""
+            is_sensitive = path.startswith("/admin")
+
+            # code = "{module}:{operation_id}" normalisé
+            prefix = module or (path.split(
+                "/")[1] if path.count("/") >= 1 else "root")
+            code_raw = f"{prefix}:{operation_id}"
+            code = re.sub(r"[^a-z0-9:_\-]", "_", code_raw.lower())[:100]
+
+            for method in (route.methods or {"GET"}):
+                endpoint_code = f"{code}_{method.lower()}" if len(
+                    route.methods or set()) > 1 else code
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        INSERT INTO tunnel_endpoint
+                            (code, method, path, description, module, is_sensitive)
+                        VALUES (%s, %s, %s, %s, %s, %s)
+                        ON CONFLICT (code) DO UPDATE SET
+                            method       = EXCLUDED.method,
+                            path         = EXCLUDED.path,
+                            description  = EXCLUDED.description,
+                            module       = EXCLUDED.module,
+                            is_sensitive = EXCLUDED.is_sensitive
+                        RETURNING id
+                        """,
+                        (endpoint_code, method, path,
+                         summary, module, is_sensitive),
+                    )
+                    row = cur.fetchone()
+                    if row:
+                        endpoint_id = row[0]
+                        # Créer les permissions manquantes pour chaque rôle (allowed=False par défaut)
+                        cur.execute(
+                            """
+                            INSERT INTO tunnel_permission (role_id, endpoint_id, allowed)
+                            SELECT tr.id, %s::uuid, false
+                            FROM tunnel_role tr
+                            WHERE NOT EXISTS (
+                                SELECT 1 FROM tunnel_permission tp
+                                WHERE tp.role_id = tr.id AND tp.endpoint_id = %s::uuid
+                            )
+                            """,
+                            (endpoint_id, endpoint_id),
+                        )
+                upserted += 1
+        conn.commit()
+        logger.info(
+            "sync_endpoints_catalog : %d endpoints synchronisés", upserted)
+    except Exception as e:
+        logger.error("Erreur sync_endpoints_catalog : %s", e)
+    finally:
+        if conn:
+            release_connection(conn)
 
 
 @app.get("/health")

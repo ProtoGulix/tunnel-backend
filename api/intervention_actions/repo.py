@@ -159,14 +159,14 @@ class InterventionActionRepository:
                     ac.id as category_id, ac.name as category_name, ac.code as category_code, ac.color,
                     u.id as tech_id, u.first_name as tech_first_name,
                     u.last_name as tech_last_name, u.email as tech_email,
-                    u.initial as tech_initial, u.status as tech_status,
-                    u.role as tech_role,
+                    u.initial as tech_initial, NULL::text as tech_status,
+                    NULL::text as tech_role,
                     i.code as interv_code, i.title as interv_title, i.status_actual as interv_status,
                     m.id as interv_equipement_id, m.code as interv_equipement_code, m.name as interv_equipement_name
                 FROM intervention_action ia
                 LEFT JOIN action_subcategory sc ON ia.action_subcategory = sc.id
                 LEFT JOIN action_category ac ON sc.category_id = ac.id
-                LEFT JOIN directus_users u ON ia.tech = u.id
+                LEFT JOIN tunnel_user u ON ia.tech = u.id
                 LEFT JOIN intervention i ON ia.intervention_id = i.id
                 LEFT JOIN machine m ON i.machine_id = m.id
                 {where_sql}
@@ -281,14 +281,14 @@ class InterventionActionRepository:
                     ac.id as category_id, ac.name as category_name, ac.code as category_code, ac.color,
                     u.id as tech_id, u.first_name as tech_first_name,
                     u.last_name as tech_last_name, u.email as tech_email,
-                    u.initial as tech_initial, u.status as tech_status,
-                    u.role as tech_role,
+                    u.initial as tech_initial, NULL::text as tech_status,
+                    NULL::text as tech_role,
                     i.code as interv_code, i.title as interv_title, i.status_actual as interv_status,
                     m.id as interv_equipement_id, m.code as interv_equipement_code, m.name as interv_equipement_name
                 FROM intervention_action ia
                 LEFT JOIN action_subcategory sc ON ia.action_subcategory = sc.id
                 LEFT JOIN action_category ac ON sc.category_id = ac.id
-                LEFT JOIN directus_users u ON ia.tech = u.id
+                LEFT JOIN tunnel_user u ON ia.tech = u.id
                 LEFT JOIN intervention i ON ia.intervention_id = i.id
                 LEFT JOIN machine m ON i.machine_id = m.id
                 WHERE ia.id = %s
@@ -340,12 +340,12 @@ class InterventionActionRepository:
                     ac.id as category_id, ac.name as category_name, ac.code as category_code, ac.color,
                     u.id as tech_id, u.first_name as tech_first_name,
                     u.last_name as tech_last_name, u.email as tech_email,
-                    u.initial as tech_initial, u.status as tech_status,
-                    u.role as tech_role
+                    u.initial as tech_initial, NULL::text as tech_status,
+                    NULL::text as tech_role
                 FROM intervention_action ia
                 LEFT JOIN action_subcategory sc ON ia.action_subcategory = sc.id
                 LEFT JOIN action_category ac ON sc.category_id = ac.id
-                LEFT JOIN directus_users u ON ia.tech = u.id
+                LEFT JOIN tunnel_user u ON ia.tech = u.id
                 WHERE ia.intervention_id = %s
                 ORDER BY ia.created_at ASC
                 """,
@@ -445,12 +445,12 @@ class InterventionActionRepository:
                     ac.id as category_id, ac.name as category_name, ac.code as category_code, ac.color,
                     u.id as tech_id, u.first_name as tech_first_name,
                     u.last_name as tech_last_name, u.email as tech_email,
-                    u.initial as tech_initial, u.status as tech_status,
-                    u.role as tech_role
+                    u.initial as tech_initial, NULL::text as tech_status,
+                    NULL::text as tech_role
                 FROM intervention_action ia
                 LEFT JOIN action_subcategory sc ON ia.action_subcategory = sc.id
                 LEFT JOIN action_category ac ON sc.category_id = ac.id
-                LEFT JOIN directus_users u ON ia.tech = u.id
+                LEFT JOIN tunnel_user u ON ia.tech = u.id
                 WHERE ia.id = %s
                 """,
                 (action_id,)

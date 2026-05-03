@@ -65,13 +65,13 @@ class InterventionStatusLogValidator:
 
     @staticmethod
     def validate_technician_exists(technician_id: str) -> None:
-        """Vérifie que le technicien existe dans directus_users"""
+        """Vérifie que le technicien existe dans tunnel_user"""
         from api.db import get_connection, release_connection
 
         conn = get_connection()
         try:
             cur = conn.cursor()
-            cur.execute("SELECT id FROM directus_users WHERE id = %s", (technician_id,))
+            cur.execute("SELECT id FROM tunnel_user WHERE id = %s", (technician_id,))
             row = cur.fetchone()
 
             if not row:

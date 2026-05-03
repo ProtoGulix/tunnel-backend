@@ -1,88 +1,119 @@
-# Auth
+# Auth — JWT natif Tunnel v3
 
-Authentification via proxy Directus. Configure un cookie de session pour l'API.
-
-> Voir aussi : [Users](users.md) pour `/users/me`
+Authentification souveraine Tunnel. Plus de dépendance à Directus.
+Tokens JWT HS256, refresh token rotatif stocké hashé en BDD.
 
 ---
 
 ## `POST /auth/login`
 
-Authentification via Directus. Retourne la réponse Directus telle quelle + configure un cookie.
+**Auth** : Public  
+**Rate limit** : 10/minute (slowapi)
 
-**Auth** : Public
+Délai aléatoire 50-200 ms appliqué avant toute réponse (anti timing-attack).
 
 ### Entrée
 
 ```json
 {
   "email": "user@example.com",
-  "password": "secret",
-  "mode": "session"
+  "password": "secret"
 }
 ```
-
-| Champ      | Type   | Requis | Description                                 |
-| ---------- | ------ | ------ | ------------------------------------------- |
-| `email`    | string | oui    | Email de l'utilisateur                      |
-| `password` | string | oui    | Mot de passe                                |
-| `mode`     | string | non    | Mode d'authentification (défaut: `session`) |
 
 ### Réponse `200`
 
 ```json
 {
-  "data": {
-    "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-    "refresh_token": "abc123...",
-    "expires": 900000
+  "access_token": "eyJ...",
+  "refresh_token": "a3f9...",
+  "expires_in": 900,
+  "user": {
+    "id": "uuid",
+    "email": "user@example.com",
+    "first_name": "Jean",
+    "last_name": "Dupont",
+    "initial": "JD",
+    "role": "TECH"
   }
 }
 ```
 
-| Champ           | Type   | Description                                    |
-| --------------- | ------ | ---------------------------------------------- |
-| `access_token`  | string | JWT Bearer token (contenu identique au cookie) |
-| `refresh_token` | string | Token de rafraîchissement                      |
-| `expires`       | int    | Durée de validité en millisecondes             |
-
-### Cookie de session
-
-Un cookie `session_token` est automatiquement configuré :
-
-| Propriété | Valeur                           |
-| --------- | -------------------------------- |
-| Nom       | `session_token`                  |
-| Valeur    | JWT (identique à `access_token`) |
-| HttpOnly  | `true`                           |
-| SameSite  | `Lax`                            |
-| Path      | `/`                              |
-| Domain    | Domaine de l'API tunnel          |
-| Max-Age   | 86400 secondes (24h)             |
-
-### Utilisation du cookie
-
-**Option 1 : Cookie automatique** (recommandé pour navigateur)
-
-```bash
-# Le cookie est envoyé automatiquement par le navigateur
-GET /users/me
-# Cookie: session_token=eyJhbGci...
-```
-
-**Option 2 : Header Authorization** (recommandé pour mobile/API)
-
-```bash
-GET /users/me
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-```
-
 ### Erreurs
 
-| Code  | Cas                   | Message                      |
-| ----- | --------------------- | ---------------------------- |
-| `401` | Credentials invalides | Erreur Directus              |
-| `502` | Directus indisponible | `Directus indisponible: ...` |
+| Code  | Cas                                    |
+|-------|----------------------------------------|
+| `401` | Email ou mot de passe incorrect        |
+| `429` | Flood email (≥5 échecs / 15 min) ou flood IP (≥20 / h) ou IP bloquée |
+
+---
+
+## `POST /auth/refresh`
+
+**Auth** : Public
+
+Rotation du refresh token. L'ancien token est révoqué, un nouveau est émis.
+
+Détection de vol : si un token déjà révoqué est présenté, **tous** les tokens
+de l'utilisateur sont révoqués immédiatement.
+
+### Entrée
+
+```json
+{ "refresh_token": "a3f9..." }
+```
+
+### Réponse `200`
+
+```json
+{
+  "access_token": "eyJ...",
+  "refresh_token": "b7e2...",
+  "expires_in": 900
+}
+```
+
+---
+
+## `POST /auth/logout`
+
+**Auth** : Bearer token requis
+
+Révoque le refresh token présenté.
+
+### Entrée
+
+```json
+{ "refresh_token": "b7e2..." }
+```
+
+### Réponse `200`
+
+```json
+{ "message": "Déconnecté" }
+```
+
+---
+
+## `GET /auth/me`
+
+**Auth** : Bearer token requis
+
+Retourne le profil complet de l'utilisateur connecté avec ses permissions.
+
+### Réponse `200`
+
+```json
+{
+  "id": "uuid",
+  "email": "user@example.com",
+  "first_name": "Jean",
+  "last_name": "Dupont",
+  "initial": "JD",
+  "role": "TECH",
+  "permissions": ["interventions:list", "interventions:create", "actions:create"]
+}
+```
 
 ---
 
@@ -90,8 +121,13 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 
 Quand `AUTH_DISABLED=true` dans `.env` :
 
-- Les requêtes **sans** Authorization passent (pour tests rapides)
-- Les JWT valides sont quand même décodés et loggés
-- `/users/me` requiert toujours un JWT valide (retourne 401 sinon)
+- Les requêtes sans Authorization passent (user_id = null)
+- Les JWT valides sont décodés et loggés
+- Ne jamais utiliser en production (guard au démarrage)
 
-**⚠️ Ne jamais utiliser en production**
+## Durées de vie
+
+| Token         | Durée          | Variable env                    |
+|---------------|----------------|---------------------------------|
+| Access token  | 15 min         | `ACCESS_TOKEN_EXPIRE_MINUTES`   |
+| Refresh token | 8 h            | `REFRESH_TOKEN_EXPIRE_HOURS`    |
