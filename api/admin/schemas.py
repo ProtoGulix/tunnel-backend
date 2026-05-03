@@ -12,7 +12,7 @@ class AdminUserCreate(BaseModel):
     first_name: Optional[str] = None
     last_name: Optional[str] = None
     initial: str
-    role_id: UUID
+    role_code: str
 
 
 class AdminUserUpdate(BaseModel):
@@ -23,7 +23,7 @@ class AdminUserUpdate(BaseModel):
 
 
 class AdminUserRolePatch(BaseModel):
-    role_id: UUID
+    role_code: str
 
 
 class AdminUserActivePatch(BaseModel):

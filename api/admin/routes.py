@@ -57,7 +57,7 @@ def create_user(payload: AdminUserCreate):
         first_name=payload.first_name,
         last_name=payload.last_name,
         initial=payload.initial,
-        role_id=str(payload.role_id),
+        role_code=payload.role_code,
     )
 
 
@@ -80,7 +80,7 @@ def update_user(user_id: str, payload: AdminUserUpdate):
 @router.patch("/users/{user_id}/role", status_code=200)
 def patch_user_role(user_id: str, payload: AdminUserRolePatch,
                     request: Request, _=_resp_admin):
-    AdminUserRepository().set_role(user_id, str(payload.role_id), _get_user_id(request))
+    AdminUserRepository().set_role(user_id, payload.role_code, _get_user_id(request))
     return {"message": "Rôle mis à jour"}
 
 
@@ -113,6 +113,11 @@ def delete_user(user_id: str, _=_resp_admin):
 @router.get("/roles", response_model=List[RoleOut], dependencies=[_admin_only])
 def list_roles():
     return AdminRoleRepository().get_roles()
+
+
+@router.get("/roles/matrix", dependencies=[_admin_only])
+def get_permissions_matrix():
+    return AdminRoleRepository().get_permissions_matrix()
 
 
 @router.get("/roles/{role_id}/permissions", response_model=List[PermissionOut],
@@ -201,14 +206,17 @@ def patch_action_category(category_id: int, payload: ActionCategoryPatch):
         conn = get_connection()
         sets, params = [], []
         if payload.label is not None:
-            sets.append("name = %s"); params.append(payload.label)
+            sets.append("name = %s")
+            params.append(payload.label)
         if payload.color is not None:
-            sets.append("color = %s"); params.append(payload.color)
+            sets.append("color = %s")
+            params.append(payload.color)
         if not sets:
             raise HTTPException(status_code=400, detail="Rien à mettre à jour")
         params.append(category_id)
         with conn.cursor() as cur:
-            cur.execute(f"UPDATE action_category SET {', '.join(sets)} WHERE id = %s", params)
+            cur.execute(
+                f"UPDATE action_category SET {', '.join(sets)} WHERE id = %s", params)
         conn.commit()
         return {"message": "Catégorie mise à jour"}
     finally:
@@ -247,9 +255,11 @@ def list_action_subcategories(
         conn = get_connection()
         wheres, params = [], []
         if category_id is not None:
-            wheres.append("category_id = %s"); params.append(category_id)
+            wheres.append("category_id = %s")
+            params.append(category_id)
         if is_active is not None:
-            wheres.append("is_active = %s"); params.append(is_active)
+            wheres.append("is_active = %s")
+            params.append(is_active)
         where_sql = ("WHERE " + " AND ".join(wheres)) if wheres else ""
         with conn.cursor() as cur:
             cur.execute(
@@ -340,14 +350,17 @@ def patch_complexity_factor(factor_id: int, payload: ComplexityFactorPatch):
         conn = get_connection()
         sets, params = [], []
         if payload.label is not None:
-            sets.append("label = %s"); params.append(payload.label)
+            sets.append("label = %s")
+            params.append(payload.label)
         if payload.category is not None:
-            sets.append("category = %s"); params.append(payload.category)
+            sets.append("category = %s")
+            params.append(payload.category)
         if not sets:
             raise HTTPException(status_code=400, detail="Rien à mettre à jour")
         params.append(factor_id)
         with conn.cursor() as cur:
-            cur.execute(f"UPDATE complexity_factor SET {', '.join(sets)} WHERE id = %s", params)
+            cur.execute(
+                f"UPDATE complexity_factor SET {', '.join(sets)} WHERE id = %s", params)
         conn.commit()
         return {"message": "Facteur mis à jour"}
     finally:
@@ -454,7 +467,8 @@ def list_intervention_statuses():
     try:
         conn = get_connection()
         with conn.cursor() as cur:
-            cur.execute("SELECT * FROM intervention_status ORDER BY id ASC")
+            cur.execute(
+                "SELECT * FROM intervention_status_ref ORDER BY code ASC")
             cols = [d[0] for d in cur.description]
             return [dict(zip(cols, r)) for r in cur.fetchall()]
     finally:
@@ -462,22 +476,24 @@ def list_intervention_statuses():
             release_connection(conn)
 
 
-@router.patch("/intervention-statuses/{status_id}", dependencies=[_resp_admin])
-def patch_intervention_status(status_id: int, payload: InterventionStatusPatch):
+@router.patch("/intervention-statuses/{status_code}", dependencies=[_resp_admin])
+def patch_intervention_status(status_code: str, payload: InterventionStatusPatch):
     conn = None
     try:
         conn = get_connection()
         sets, params = [], []
         if payload.label is not None:
-            sets.append("label = %s"); params.append(payload.label)
+            sets.append("label = %s")
+            params.append(payload.label)
         if payload.color is not None:
-            sets.append("color = %s"); params.append(payload.color)
+            sets.append("color = %s")
+            params.append(payload.color)
         if not sets:
             raise HTTPException(status_code=400, detail="Rien à mettre à jour")
-        params.append(status_id)
+        params.append(status_code)
         with conn.cursor() as cur:
             cur.execute(
-                f"UPDATE intervention_status SET {', '.join(sets)} WHERE id = %s", params)
+                f"UPDATE intervention_status_ref SET {', '.join(sets)} WHERE code = %s", params)
         conn.commit()
         return {"message": "Statut mis à jour"}
     finally:
@@ -565,17 +581,20 @@ def get_mail_settings():
 async def test_mail(request: Request, _=_admin_only):
     """Envoie un email de test à l'adresse du user connecté."""
     if not settings.MAIL_ENABLED:
-        raise HTTPException(status_code=400, detail="MAIL_ENABLED=false — mail désactivé")
+        raise HTTPException(
+            status_code=400, detail="MAIL_ENABLED=false — mail désactivé")
 
     user_id = _get_user_id(request)
     conn = None
     try:
         conn = get_connection()
         with conn.cursor() as cur:
-            cur.execute("SELECT email FROM tunnel_user WHERE id = %s::uuid", (user_id,))
+            cur.execute(
+                "SELECT email FROM tunnel_user WHERE id = %s::uuid", (user_id,))
             row = cur.fetchone()
         if not row:
-            raise HTTPException(status_code=404, detail="Utilisateur non trouvé")
+            raise HTTPException(
+                status_code=404, detail="Utilisateur non trouvé")
         to_email = row[0]
     finally:
         if conn:
@@ -602,4 +621,5 @@ async def test_mail(request: Request, _=_admin_only):
                             detail="aiosmtplib non installé — ajouter au requirements.txt")
     except Exception as e:
         logger.error("Erreur envoi mail test : %s", e)
-        raise HTTPException(status_code=500, detail=f"Erreur envoi mail : {e}") from e
+        raise HTTPException(
+            status_code=500, detail=f"Erreur envoi mail : {e}") from e

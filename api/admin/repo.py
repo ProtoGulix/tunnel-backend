@@ -94,12 +94,19 @@ class AdminUserRepository:
                 release_connection(conn)
 
     def create(self, email: str, password: str, first_name: Optional[str],
-               last_name: Optional[str], initial: str, role_id: str) -> Dict[str, Any]:
+               last_name: Optional[str], initial: str, role_code: str) -> Dict[str, Any]:
         conn = None
         try:
             conn = get_connection()
-            password_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+            password_hash = bcrypt.hashpw(
+                password.encode(), bcrypt.gensalt()).decode()
             with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT id FROM tunnel_role WHERE code = %s", (role_code,))
+                row = cur.fetchone()
+                if not row:
+                    raise NotFoundError(f"Rôle inconnu : {role_code}")
+                role_id = row[0]
                 cur.execute(
                     """
                     INSERT INTO tunnel_user
@@ -132,13 +139,17 @@ class AdminUserRepository:
             conn = get_connection()
             sets, params = [], []
             if email is not None:
-                sets.append("email = %s"); params.append(email)
+                sets.append("email = %s")
+                params.append(email)
             if first_name is not None:
-                sets.append("first_name = %s"); params.append(strip_html(first_name))
+                sets.append("first_name = %s")
+                params.append(strip_html(first_name))
             if last_name is not None:
-                sets.append("last_name = %s"); params.append(strip_html(last_name))
+                sets.append("last_name = %s")
+                params.append(strip_html(last_name))
             if initial is not None:
-                sets.append("initial = %s"); params.append(strip_html(initial))
+                sets.append("initial = %s")
+                params.append(strip_html(initial))
             if not sets:
                 return self.get_by_id(user_id)
             params.append(user_id)
@@ -159,11 +170,19 @@ class AdminUserRepository:
             if conn:
                 release_connection(conn)
 
-    def set_role(self, user_id: str, role_id: str, changed_by: str) -> None:
+    def set_role(self, user_id: str, role_code: str, changed_by: str) -> None:
         conn = None
         try:
             conn = get_connection()
             with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT id FROM tunnel_role WHERE code = %s",
+                    (role_code,),
+                )
+                row = cur.fetchone()
+                if not row:
+                    raise NotFoundError(f"Rôle inconnu : {role_code}")
+                role_id = row[0]
                 cur.execute(
                     "UPDATE tunnel_user SET role_id = %s::uuid WHERE id = %s::uuid",
                     (role_id, user_id),
@@ -180,7 +199,7 @@ class AdminUserRepository:
                     VALUES ('ROLE_CHANGE', %s::uuid, %s::jsonb)
                     """,
                     (user_id, __import__("json").dumps(
-                        {"changed_by": changed_by, "new_role_id": str(role_id)})),
+                        {"changed_by": changed_by, "new_role_code": role_code})),
                 )
             conn.commit()
         except Exception as e:
@@ -210,7 +229,8 @@ class AdminUserRepository:
                         INSERT INTO security_log (event_type, user_id, detail)
                         VALUES ('USER_DEACTIVATED', %s::uuid, %s::jsonb)
                         """,
-                        (user_id, __import__("json").dumps({"changed_by": changed_by})),
+                        (user_id, __import__("json").dumps(
+                            {"changed_by": changed_by})),
                     )
             conn.commit()
         except Exception as e:
@@ -227,7 +247,8 @@ class AdminUserRepository:
         try:
             conn = get_connection()
             temp_password = secrets.token_urlsafe(16)
-            password_hash = bcrypt.hashpw(temp_password.encode(), bcrypt.gensalt()).decode()
+            password_hash = bcrypt.hashpw(
+                temp_password.encode(), bcrypt.gensalt()).decode()
             with conn.cursor() as cur:
                 cur.execute(
                     "UPDATE tunnel_user SET password_hash = %s WHERE id = %s::uuid",
@@ -281,7 +302,8 @@ class AdminRoleRepository:
         try:
             conn = get_connection()
             with conn.cursor() as cur:
-                cur.execute("SELECT id, code, label, created_at FROM tunnel_role ORDER BY code")
+                cur.execute(
+                    "SELECT id, code, label, created_at FROM tunnel_role ORDER BY code")
                 cols = [d[0] for d in cur.description]
                 return [dict(zip(cols, r)) for r in cur.fetchall()]
         except Exception as e:
@@ -378,11 +400,14 @@ class AdminRoleRepository:
             conn = get_connection()
             wheres, params = [], []
             if role_id:
-                wheres.append("pal.role_id = %s::uuid"); params.append(role_id)
+                wheres.append("pal.role_id = %s::uuid")
+                params.append(role_id)
             if start_date:
-                wheres.append("pal.created_at >= %s"); params.append(start_date)
+                wheres.append("pal.created_at >= %s")
+                params.append(start_date)
             if end_date:
-                wheres.append("pal.created_at <= %s"); params.append(end_date)
+                wheres.append("pal.created_at <= %s")
+                params.append(end_date)
             where_sql = ("WHERE " + " AND ".join(wheres)) if wheres else ""
             with conn.cursor() as cur:
                 cur.execute(
@@ -409,6 +434,68 @@ class AdminRoleRepository:
             if conn:
                 release_connection(conn)
 
+    def get_permissions_matrix(self) -> Dict[str, Any]:
+        """Retourne la matrice complète rôles × endpoints groupée par module."""
+        conn = None
+        try:
+            conn = get_connection()
+            with conn.cursor() as cur:
+                # Tous les rôles
+                cur.execute(
+                    "SELECT id, code, label FROM tunnel_role ORDER BY code")
+                roles = [{"id": str(r[0]), "code": r[1], "label": r[2]}
+                         for r in cur.fetchall()]
+                role_codes = [r["code"] for r in roles]
+
+                # Toutes les permissions jointes aux endpoints
+                cur.execute("""
+                    SELECT te.id AS endpoint_id,
+                           te.code, te.method, te.path,
+                           COALESCE(te.module, 'autres') AS module,
+                           te.description,
+                           tr.code AS role_code,
+                           tp.id  AS permission_id,
+                           tp.allowed
+                    FROM tunnel_endpoint te
+                    JOIN tunnel_permission tp ON tp.endpoint_id = te.id
+                    JOIN tunnel_role       tr ON tr.id = tp.role_id
+                    ORDER BY te.module, te.path, te.method, tr.code
+                """)
+                cols = [d[0] for d in cur.description]
+                rows = [dict(zip(cols, r)) for r in cur.fetchall()]
+
+            # Construction de la matrice par endpoint
+            endpoints: Dict[str, Any] = {}
+            for row in rows:
+                eid = str(row["endpoint_id"])
+                if eid not in endpoints:
+                    endpoints[eid] = {
+                        "endpoint_id": eid,
+                        "code": row["code"],
+                        "method": row["method"],
+                        "path": row["path"],
+                        "module": row["module"],
+                        "description": row["description"],
+                        "permissions": {},
+                    }
+                endpoints[eid]["permissions"][row["role_code"]] = {
+                    "permission_id": str(row["permission_id"]),
+                    "allowed": row["allowed"],
+                }
+
+            # Groupement par module
+            modules: Dict[str, List] = {}
+            for ep in endpoints.values():
+                mod = ep["module"]
+                modules.setdefault(mod, []).append(ep)
+
+            return {"roles": roles, "modules": modules}
+        except Exception as e:
+            _raise(e, "matrice permissions")
+        finally:
+            if conn:
+                release_connection(conn)
+
 
 class AdminEndpointRepository:
     """Accès BDD pour le catalogue des endpoints."""
@@ -420,9 +507,11 @@ class AdminEndpointRepository:
             conn = get_connection()
             wheres, params = [], []
             if module:
-                wheres.append("te.module = %s"); params.append(module)
+                wheres.append("te.module = %s")
+                params.append(module)
             if method:
-                wheres.append("te.method = %s"); params.append(method.upper())
+                wheres.append("te.method = %s")
+                params.append(method.upper())
             where_sql = ("WHERE " + " AND ".join(wheres)) if wheres else ""
             with conn.cursor() as cur:
                 cur.execute(
@@ -465,11 +554,14 @@ class AdminEndpointRepository:
             conn = get_connection()
             sets, params = [], []
             if description is not None:
-                sets.append("description = %s"); params.append(description)
+                sets.append("description = %s")
+                params.append(description)
             if module is not None:
-                sets.append("module = %s"); params.append(module)
+                sets.append("module = %s")
+                params.append(module)
             if is_sensitive is not None:
-                sets.append("is_sensitive = %s"); params.append(is_sensitive)
+                sets.append("is_sensitive = %s")
+                params.append(is_sensitive)
             if not sets:
                 raise NotFoundError(f"Rien à mettre à jour pour {endpoint_id}")
             params.append(endpoint_id)
@@ -487,7 +579,8 @@ class AdminEndpointRepository:
                 row = cur.fetchone()
             if not row:
                 raise NotFoundError(f"Endpoint {endpoint_id} non trouvé")
-            cols = ["id", "code", "method", "path", "description", "module", "is_sensitive"]
+            cols = ["id", "code", "method", "path",
+                    "description", "module", "is_sensitive"]
             return dict(zip(cols, row))
         except NotFoundError:
             raise
@@ -513,15 +606,20 @@ class AdminSecurityRepository:
             conn = get_connection()
             wheres, params = [], []
             if event_type:
-                wheres.append("event_type = %s"); params.append(event_type)
+                wheres.append("event_type = %s")
+                params.append(event_type)
             if user_id:
-                wheres.append("user_id = %s::uuid"); params.append(user_id)
+                wheres.append("user_id = %s::uuid")
+                params.append(user_id)
             if ip_address:
-                wheres.append("ip_address = %s"); params.append(ip_address)
+                wheres.append("ip_address = %s")
+                params.append(ip_address)
             if start_date:
-                wheres.append("created_at >= %s"); params.append(start_date)
+                wheres.append("created_at >= %s")
+                params.append(start_date)
             if end_date:
-                wheres.append("created_at <= %s"); params.append(end_date)
+                wheres.append("created_at <= %s")
+                params.append(end_date)
             where_sql = ("WHERE " + " AND ".join(wheres)) if wheres else ""
             params.append(min(limit, 1000))
             with conn.cursor() as cur:
@@ -578,7 +676,8 @@ class AdminSecurityRepository:
                 )
                 row = cur.fetchone()
             conn.commit()
-            cols = ["id", "ip_address", "reason", "blocked_until", "created_by", "created_at"]
+            cols = ["id", "ip_address", "reason",
+                    "blocked_until", "created_by", "created_at"]
             return dict(zip(cols, row))
         except Exception as e:
             if conn:
@@ -593,7 +692,8 @@ class AdminSecurityRepository:
         try:
             conn = get_connection()
             with conn.cursor() as cur:
-                cur.execute("DELETE FROM ip_blocklist WHERE id = %s::uuid", (block_id,))
+                cur.execute(
+                    "DELETE FROM ip_blocklist WHERE id = %s::uuid", (block_id,))
             conn.commit()
         except Exception as e:
             if conn:
@@ -650,7 +750,8 @@ class AdminSecurityRepository:
         try:
             conn = get_connection()
             with conn.cursor() as cur:
-                cur.execute("DELETE FROM email_domain_rule WHERE id = %s::uuid", (rule_id,))
+                cur.execute(
+                    "DELETE FROM email_domain_rule WHERE id = %s::uuid", (rule_id,))
             conn.commit()
         except Exception as e:
             if conn:

@@ -80,10 +80,12 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialise le pool DB, charge les permissions et synchronise le catalogue d'endpoints."""
-    init_pool(settings.DATABASE_URL, settings.DB_POOL_MIN, settings.DB_POOL_MAX)
+    init_pool(settings.DATABASE_URL,
+              settings.DB_POOL_MIN, settings.DB_POOL_MAX)
     # Import lazy pour éviter la circularité avec auth au niveau module
     from api.auth.permissions import permission_cache
     permission_cache.load()
+    await sync_endpoints_catalog()
     yield
     close_pool()
 
@@ -163,6 +165,7 @@ async def sync_endpoints_catalog():
     Scanne toutes les routes FastAPI et fait un UPSERT dans tunnel_endpoint.
     Maintient le catalogue à jour après chaque déploiement.
     Les routes /admin/* sont marquées is_sensitive=True par défaut.
+    Crée également les entrées tunnel_permission manquantes (allowed=False) pour chaque rôle.
     """
     from api.db import get_connection, release_connection
     import re
@@ -177,17 +180,20 @@ async def sync_endpoints_catalog():
             path = route.path
             tags = getattr(route, "tags", None) or []
             module = tags[0] if tags else None
-            summary = getattr(route, "summary", None) or getattr(route, "name", None)
+            summary = getattr(route, "summary", None) or getattr(
+                route, "name", None)
             operation_id = getattr(route, "name", None) or ""
             is_sensitive = path.startswith("/admin")
 
             # code = "{module}:{operation_id}" normalisé
-            prefix = module or (path.split("/")[1] if path.count("/") >= 1 else "root")
+            prefix = module or (path.split(
+                "/")[1] if path.count("/") >= 1 else "root")
             code_raw = f"{prefix}:{operation_id}"
             code = re.sub(r"[^a-z0-9:_\-]", "_", code_raw.lower())[:100]
 
             for method in (route.methods or {"GET"}):
-                endpoint_code = f"{code}_{method.lower()}" if len(route.methods or set()) > 1 else code
+                endpoint_code = f"{code}_{method.lower()}" if len(
+                    route.methods or set()) > 1 else code
                 with conn.cursor() as cur:
                     cur.execute(
                         """
@@ -200,12 +206,31 @@ async def sync_endpoints_catalog():
                             description  = EXCLUDED.description,
                             module       = EXCLUDED.module,
                             is_sensitive = EXCLUDED.is_sensitive
+                        RETURNING id
                         """,
-                        (endpoint_code, method, path, summary, module, is_sensitive),
+                        (endpoint_code, method, path,
+                         summary, module, is_sensitive),
                     )
+                    row = cur.fetchone()
+                    if row:
+                        endpoint_id = row[0]
+                        # Créer les permissions manquantes pour chaque rôle (allowed=False par défaut)
+                        cur.execute(
+                            """
+                            INSERT INTO tunnel_permission (role_id, endpoint_id, allowed)
+                            SELECT tr.id, %s::uuid, false
+                            FROM tunnel_role tr
+                            WHERE NOT EXISTS (
+                                SELECT 1 FROM tunnel_permission tp
+                                WHERE tp.role_id = tr.id AND tp.endpoint_id = %s::uuid
+                            )
+                            """,
+                            (endpoint_id, endpoint_id),
+                        )
                 upserted += 1
         conn.commit()
-        logger.info("sync_endpoints_catalog : %d endpoints synchronisés", upserted)
+        logger.info(
+            "sync_endpoints_catalog : %d endpoints synchronisés", upserted)
     except Exception as e:
         logger.error("Erreur sync_endpoints_catalog : %s", e)
     finally:
