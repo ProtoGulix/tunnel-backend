@@ -1086,7 +1086,7 @@ class StatsRepository:
                 JOIN intervention i ON ia.intervention_id = i.id
                 LEFT JOIN action_subcategory s ON ia.action_subcategory = s.id
                 LEFT JOIN machine m ON i.machine_id = m.id
-                LEFT JOIN directus_users u ON ia.tech = u.id
+                LEFT JOIN tunnel_user u ON ia.tech = u.id
                 WHERE ia.created_at >= %s AND ia.created_at <= %s
                   AND ia.time_spent > %s
                   AND s.code IN ({placeholders})
@@ -1154,7 +1154,7 @@ class StatsRepository:
                 JOIN intervention i ON ia.intervention_id = i.id
                 LEFT JOIN action_subcategory s ON ia.action_subcategory = s.id
                 LEFT JOIN machine m ON i.machine_id = m.id
-                LEFT JOIN directus_users u ON ia.tech = u.id
+                LEFT JOIN tunnel_user u ON ia.tech = u.id
                 WHERE ia.created_at >= %s AND ia.created_at <= %s
                   AND s.code = 'BAT_NET'
                 ORDER BY ia.created_at DESC
@@ -1222,7 +1222,7 @@ class StatsRepository:
                 LEFT JOIN action_subcategory s ON ia.action_subcategory = s.id
                 LEFT JOIN action_category c ON s.category_id = c.id
                 LEFT JOIN machine m ON i.machine_id = m.id
-                LEFT JOIN directus_users u ON ia.tech = u.id
+                LEFT JOIN tunnel_user u ON ia.tech = u.id
                 WHERE ia.created_at >= %s AND ia.created_at <= %s
                   AND (c.code IS NULL OR c.code != 'PREV')
                 ORDER BY ia.tech, ia.intervention_id, ia.created_at ASC

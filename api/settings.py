@@ -17,16 +17,25 @@ class Settings(BaseSettings):
     DB_POOL_MIN: int = int(os.getenv("DB_POOL_MIN", "2"))
     DB_POOL_MAX: int = int(os.getenv("DB_POOL_MAX", "10"))
 
-    # Directus
-    DIRECTUS_URL: str = os.getenv(
-        "DIRECTUS_URL",
-        "http://localhost:8055"
-    )
-    DIRECTUS_SECRET: str = os.getenv("DIRECTUS_SECRET", "")
+    # JWT souverain
+    JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "")
+    JWT_ALGORITHM: str = os.getenv("JWT_ALGORITHM", "HS256")
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "15"))
+    REFRESH_TOKEN_EXPIRE_HOURS: int = int(os.getenv("REFRESH_TOKEN_EXPIRE_HOURS", "8"))
+
+    # Mail
+    MAIL_ENABLED: bool = os.getenv("MAIL_ENABLED", "false").lower() == "true"
+    SMTP_HOST: str = os.getenv("SMTP_HOST", "smtp.example.com")
+    SMTP_PORT: int = int(os.getenv("SMTP_PORT", "587"))
+    SMTP_USER: str = os.getenv("SMTP_USER", "")
+    SMTP_PASSWORD: str = os.getenv("SMTP_PASSWORD", "")
+    SMTP_FROM: str = os.getenv("SMTP_FROM", "tunnel@example.com")
+    SMTP_FROM_NAME: str = os.getenv("SMTP_FROM_NAME", "Tunnel GMAO")
+    SMTP_STARTTLS: bool = os.getenv("SMTP_STARTTLS", "true").lower() == "true"
 
     # API
     API_TITLE: str = "GMAO API"
-    API_VERSION: str = "2.24.0"
+    API_VERSION: str = "3.0.0"
     API_ENV: str = os.getenv("API_ENV", "development")
     AUTH_DISABLED: bool = os.getenv("AUTH_DISABLED", "false").lower() == "true"
     FRONTEND_URL: str = os.getenv("FRONTEND_URL", "http://localhost:5173")
@@ -101,10 +110,10 @@ if settings.API_ENV == "production" and settings.AUTH_DISABLED:
     )
     sys.exit(1)
 
-if settings.API_ENV == "production" and not settings.DIRECTUS_SECRET:
+if settings.API_ENV == "production" and len(settings.JWT_SECRET_KEY) < 32:
     logger.critical(
-        "ERREUR DE SÉCURITÉ CRITIQUE : DIRECTUS_SECRET non configuré en production. "
-        "Les JWT ne peuvent pas être vérifiés. Configurer DIRECTUS_SECRET."
+        "ERREUR DE SÉCURITÉ CRITIQUE : JWT_SECRET_KEY absent ou trop court (< 32 chars) en production. "
+        "Les JWT ne peuvent pas être signés. Configurer JWT_SECRET_KEY."
     )
     sys.exit(1)
 
@@ -113,7 +122,7 @@ if settings.API_ENV != "production" and settings.AUTH_DISABLED:
         "⚠️  AUTH_DISABLED=true — authentification désactivée (mode développement uniquement)"
     )
 
-if settings.API_ENV != "production" and not settings.DIRECTUS_SECRET:
+if settings.API_ENV != "production" and len(settings.JWT_SECRET_KEY) < 32:
     logger.warning(
-        "⚠️  DIRECTUS_SECRET non configuré — les JWT sont décodés sans vérification de signature"
+        "⚠️  JWT_SECRET_KEY absent ou trop court — les JWT sont signés avec une clé faible"
     )

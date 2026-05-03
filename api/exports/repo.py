@@ -76,7 +76,7 @@ class ExportRepository:
                     asub.name as subcategory_name, asub.code as subcategory_code,
                     ac.name as category_name, ac.code as category_code
                 FROM intervention_action ia
-                LEFT JOIN directus_users u ON ia.tech = u.id
+                LEFT JOIN tunnel_user u ON ia.tech = u.id
                 LEFT JOIN action_subcategory asub ON ia.action_subcategory = asub.id
                 LEFT JOIN action_category ac ON asub.category_id = ac.id
                 WHERE ia.intervention_id = %s
@@ -117,7 +117,7 @@ class ExportRepository:
                     sl.date, sl.status_from, sl.status_to,
                     u.first_name, u.last_name
                 FROM intervention_status_log sl
-                LEFT JOIN directus_users u ON sl.technician_id = u.id
+                LEFT JOIN tunnel_user u ON sl.technician_id = u.id
                 WHERE sl.intervention_id = %s
                 ORDER BY sl.date ASC
             """, (intervention_id,))

@@ -380,12 +380,12 @@ class InterventionRepository:
             release_connection(conn)
 
     def _resolve_tech_initials(self, cur: Any, data: Dict[str, Any]) -> None:
-        """Résout tech_initials depuis directus_users.initial si tech_id est fourni."""
+        """Résout tech_initials depuis tunnel_user.initial si tech_id est fourni."""
         tech_id = data.get('tech_id')
         if not tech_id:
             return
         cur.execute(
-            "SELECT initial FROM directus_users WHERE id = %s",
+            "SELECT initial FROM tunnel_user WHERE id = %s",
             (str(tech_id),),
         )
         row = cur.fetchone()

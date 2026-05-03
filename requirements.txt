@@ -4,6 +4,8 @@ psycopg2-binary==2.9.11
 pydantic==2.5.3
 pydantic-settings==2.1.0
 PyJWT==2.10.1
+bcrypt==5.0.0
+argon2-cffi==25.1.0
 python-dotenv==1.0.0
 httpx==0.25.2
 Jinja2==3.1.6
