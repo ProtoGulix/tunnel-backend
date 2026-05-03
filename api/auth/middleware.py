@@ -44,6 +44,11 @@ class JWTMiddleware(BaseHTTPMiddleware):
         if _is_public(path, request.method, settings.API_ENV):
             return await call_next(request)
 
+        # --- Clé d'API machine-to-machine (X-API-Key) ---
+        api_key_header = request.headers.get("X-API-Key")
+        if api_key_header:
+            return await _handle_api_key(request, call_next, api_key_header, path)
+
         # --- Mode AUTH_DISABLED (dev uniquement) ---
         if settings.AUTH_DISABLED:
             auth_header = request.headers.get("Authorization")
@@ -134,6 +139,43 @@ class JWTMiddleware(BaseHTTPMiddleware):
                     user_id, token_role, request.method, path)
 
         return await call_next(request)
+
+
+async def _handle_api_key(request: Request, call_next, raw_key: str, path: str):
+    """Branche d'authentification par clé d'API (X-API-Key)."""
+    # Import lazy pour éviter la circularité avec api_keys au niveau module
+    from api.api_keys.repo import ApiKeyRepository
+
+    repo = ApiKeyRepository()
+    key_info = repo.verify(raw_key)
+
+    if not key_info:
+        await _random_delay()
+        logger.warning("Clé d'API invalide ou expirée — %s %s", request.method, path)
+        return JSONResponse(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            content={"detail": "Clé d'API invalide ou expirée",
+                     "error_type": "UnauthorizedError"},
+        )
+
+    request.state.user_id = None
+    request.state.role = key_info["role_code"]
+    request.state.permissions = []
+    request.state.api_key_id = key_info["key_id"]
+
+    logger.info("✓ API key valide — role=%s key_id=%s %s %s",
+                key_info["role_code"], key_info["key_id"], request.method, path)
+
+    # Mise à jour last_used_at en fire-and-forget (ne bloque pas la requête)
+    asyncio.create_task(_touch_key(repo, key_info["key_id"]))
+
+    return await call_next(request)
+
+
+async def _touch_key(repo, key_id: str) -> None:
+    """Fire-and-forget : met à jour last_used_at."""
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, repo.touch_last_used, key_id)
 
 
 async def _verify_user_db(user_id: str, token_role: str, path: str, method: str) -> bool:

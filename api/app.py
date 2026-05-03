@@ -42,6 +42,7 @@ from api.intervention_tasks.routes import router as intervention_tasks_router
 from api.tasks.routes import router as tasks_router
 from api.dashboard.routes import router as dashboard_router
 from api.admin.routes import router as admin_router
+from api.api_keys.routes import router as api_keys_router
 from api.errors.handlers import register_error_handlers
 from api.health import health_check
 
@@ -157,6 +158,7 @@ app.include_router(tasks_router)
 app.include_router(dashboard_router)
 app.include_router(auth_router)
 app.include_router(admin_router)
+app.include_router(api_keys_router)
 
 
 @app.on_event("startup")
