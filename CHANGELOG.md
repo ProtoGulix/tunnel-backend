@@ -2,6 +2,33 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [3.1.0] - 3 mai 2026
+
+### Nouvelles fonctionnalités
+
+#### Clés d'API pour les intégrations machine-to-machine
+
+Les scripts, serveurs MCP et outils d'automatisation peuvent désormais s'authentifier sans JWT via une clé d'API dédiée.
+
+- **Nouveau rôle `MCP`** : lecture seule sur tous les endpoints non-sensibles, gérable via la matrice de permissions existante
+- **Table `api_key`** : clés hashées (SHA-256), jamais stockées en clair, avec support d'expiration
+- **Header `X-API-Key`** : s'utilise à la place du JWT, le middleware les distingue automatiquement
+- **CRUD admin** (`/api-keys`) : créer, lister, activer/désactiver, révoquer — ADMIN uniquement
+- **`last_used_at`** mis à jour de façon asynchrone (fire-and-forget) pour ne pas impacter les performances
+
+#### Utilisation
+
+```bash
+# Créer une clé (une seule fois — noter le secret immédiatement)
+POST /api-keys  {"name": "Serveur MCP production"}
+
+# Utiliser la clé
+curl https://api.example.com/interventions \
+  -H "X-API-Key: gmao_xxxxx..."
+```
+
+---
+
 ## [3.0.0] - 3 mai 2026
 
 ### Migration majeure — Auth souveraine Tunnel v3
