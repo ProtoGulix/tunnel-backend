@@ -13,7 +13,8 @@ logger = logging.getLogger(__name__)
 
 
 def _is_public(path: str, method: str, api_env: str) -> bool:
-    always_public = {"/health", "/server/ping", "/favicon.ico", "/auth/login", "/auth/refresh"}
+    always_public = {"/health", "/server/ping",
+                     "/favicon.ico", "/auth/login", "/auth/refresh"}
     if path in always_public:
         return True
     if path.endswith("/qrcode"):
@@ -59,7 +60,8 @@ class JWTMiddleware(BaseHTTPMiddleware):
                         user_info = extract_user_from_token(token)
                         request.state.user_id = user_info["user_id"]
                         request.state.role = user_info["role"]
-                        request.state.permissions = user_info.get("permissions", [])
+                        request.state.permissions = user_info.get(
+                            "permissions", [])
                         logger.info(
                             "[AUTH_DISABLED] ✓ JWT valide — user=%s role=%s %s %s",
                             user_info["user_id"], user_info["role"],
@@ -85,7 +87,8 @@ class JWTMiddleware(BaseHTTPMiddleware):
         auth_header = request.headers.get("Authorization")
         if not auth_header:
             await _random_delay()
-            logger.warning("Authorization manquant — %s %s", request.method, path)
+            logger.warning("Authorization manquant — %s %s",
+                           request.method, path)
             return JSONResponse(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 content={"detail": "Header Authorization manquant",
@@ -111,7 +114,8 @@ class JWTMiddleware(BaseHTTPMiddleware):
             user_info = extract_user_from_token(token)
         except Exception as e:
             await _random_delay()
-            logger.warning("JWT invalide — %s %s : %s", request.method, path, e)
+            logger.warning("JWT invalide — %s %s : %s",
+                           request.method, path, e)
             return JSONResponse(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 content={"detail": "Token invalide ou expiré",
@@ -151,7 +155,8 @@ async def _handle_api_key(request: Request, call_next, raw_key: str, path: str):
 
     if not key_info:
         await _random_delay()
-        logger.warning("Clé d'API invalide ou expirée — %s %s", request.method, path)
+        logger.warning("Clé d'API invalide ou expirée — %s %s",
+                       request.method, path)
         return JSONResponse(
             status_code=status.HTTP_401_UNAUTHORIZED,
             content={"detail": "Clé d'API invalide ou expirée",

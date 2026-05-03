@@ -210,7 +210,8 @@ class ApiKeyRepository:
                 )
             conn.commit()
         except Exception as e:
-            logger.warning("Impossible de mettre à jour last_used_at pour %s : %s", key_id, e)
+            logger.warning(
+                "Impossible de mettre à jour last_used_at pour %s : %s", key_id, e)
         finally:
             if conn:
                 release_connection(conn)

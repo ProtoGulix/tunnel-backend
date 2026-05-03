@@ -1,6 +1,6 @@
-# API Manifest — GMAO API v2.5.0
+# API Manifest — GMAO API v3.1.0
 
-> Dernière mise à jour : 2026-02-27
+> Dernière mise à jour : 2026-05-03
 
 Documentation complète de l'API. Chaque endpoint possède sa propre page avec formats JSON d'entrée/sortie, règles métier et exemples.
 
@@ -77,7 +77,7 @@ Documentation OpenAPI interactive : `http://localhost:8000/docs`
 | GET     | `/intervention-requests/{id}`                          | Détail DI                     | [intervention-requests.md](docs/endpoints/intervention-requests.md)     |
 | POST    | `/intervention-requests`                               | Créer DI                      | [intervention-requests.md](docs/endpoints/intervention-requests.md)     |
 | POST    | `/intervention-requests/{id}/transition`               | Transition de statut DI       | [intervention-requests.md](docs/endpoints/intervention-requests.md)     |
-| POST    | `/intervention-requests/repair`                        | Réparation DIs orphelines      | [intervention-requests.md](docs/endpoints/intervention-requests.md)     |
+| POST    | `/intervention-requests/repair`                        | Réparation DIs orphelines     | [intervention-requests.md](docs/endpoints/intervention-requests.md)     |
 | GET     | `/stock-items`                                         | Liste articles                | [stock-items.md](docs/endpoints/stock-items.md)                         |
 | GET     | `/stock-items/{id}`                                    | Détail article                | [stock-items.md](docs/endpoints/stock-items.md)                         |
 | GET     | `/stock-items/{id}/with-characteristics`               | Article avec caractéristiques | [stock-items.md](docs/endpoints/stock-items.md)                         |
@@ -132,6 +132,10 @@ Documentation OpenAPI interactive : `http://localhost:8000/docs`
 | GET     | `/stats/anomalies-saisie`                              | Anomalies de saisie [BETA]    | [stats.md](docs/endpoints/stats.md)                                     |
 | POST    | `/exports/intervention/{id}/pdf`                       | Export PDF intervention       | [exports.md](docs/endpoints/exports.md)                                 |
 | GET     | `/exports/intervention/{id}/qr`                        | QR Code intervention          | [exports.md](docs/endpoints/exports.md)                                 |
+| GET     | `/api-keys`                                            | Liste clés d'API              | [api-keys.md](docs/endpoints/api-keys.md)                               |
+| POST    | `/api-keys`                                            | Créer clé d'API               | [api-keys.md](docs/endpoints/api-keys.md)                               |
+| PATCH   | `/api-keys/{id}`                                       | Modifier clé d'API            | [api-keys.md](docs/endpoints/api-keys.md)                               |
+| DELETE  | `/api-keys/{id}`                                       | Révoquer clé d'API            | [api-keys.md](docs/endpoints/api-keys.md)                               |
 
 ## Configuration
 
