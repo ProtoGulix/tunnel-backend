@@ -189,7 +189,7 @@ class InterventionActionOut(BaseModel):
     action_end: Optional[time] = None
     purchase_requests: List[PurchaseRequestListItem] = Field(
         default_factory=list)
-    tasks: List[InterventionTaskRef] = Field(
+    tasks: List[InterventionTaskOut] = Field(
         default_factory=list,
         description="Tâches taggées par cette action",
     )

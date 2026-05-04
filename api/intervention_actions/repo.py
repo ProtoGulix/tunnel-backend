@@ -220,15 +220,35 @@ class InterventionActionRepository:
                         ]
 
                 # Batch tâches liées : it.action_id (nouveau modèle) OU ia.task_id (ancien modèle)
+                # Import lazy pour éviter la circularité avec intervention_tasks.repo
+                from api.intervention_tasks.repo import _map_task as _mt
                 cur.execute(
                     f"""
                     SELECT COALESCE(it.action_id, ia_legacy.id) AS action_id,
-                           it.id, it.label, it.status, it.origin, it.optional
+                           it.id, it.intervention_id, it.label, it.origin, it.status,
+                           it.optional, it.due_date, it.sort_order, it.skip_reason,
+                           it.gamme_step_id, it.occurrence_id,
+                           it.closed_by, it.created_by, it.created_at, it.updated_at,
+                           COALESCE(agg.action_count, 0) AS action_count,
+                           COALESCE(agg.time_spent, 0.0) AS time_spent,
+                           u.id AS assigned_id,
+                           u.first_name AS assigned_first_name,
+                           u.last_name AS assigned_last_name,
+                           u.email AS assigned_email,
+                           u.initial AS assigned_initial,
+                           NULL::text AS assigned_status,
+                           NULL::text AS assigned_role
                     FROM intervention_task it
+                    LEFT JOIN tunnel_user u ON u.id = it.assigned_to
+                    LEFT JOIN LATERAL (
+                        SELECT COUNT(ia.id) AS action_count, COALESCE(SUM(ia.time_spent), 0) AS time_spent
+                        FROM intervention_action ia WHERE ia.id = it.action_id
+                    ) agg ON TRUE
                     LEFT JOIN intervention_action ia_legacy ON ia_legacy.task_id = it.id
                         AND ia_legacy.id IN ({placeholders})
                     WHERE it.action_id IN ({placeholders})
                        OR (it.action_id IS NULL AND ia_legacy.id IS NOT NULL)
+                    ORDER BY it.sort_order ASC
                     """,
                     action_ids + action_ids
                 )
@@ -239,7 +259,8 @@ class InterventionActionRepository:
                     for row in task_rows:
                         row_dict = dict(zip(cols_task, row))
                         aid = str(row_dict.pop('action_id'))
-                        tasks_by_action.setdefault(aid, []).append(row_dict)
+                        tasks_by_action.setdefault(
+                            aid, []).append(_mt(row_dict))
                     for action in all_actions:
                         action['tasks'] = tasks_by_action.get(
                             str(action['id']), [])
@@ -286,7 +307,8 @@ class InterventionActionRepository:
             cols = [d[0] for d in cur.description]
             stats = dict(zip(cols, row))
             if stats.get('avg_complexity') is not None:
-                stats['avg_complexity'] = round(float(stats['avg_complexity']), 2)
+                stats['avg_complexity'] = round(
+                    float(stats['avg_complexity']), 2)
             stats['total_time'] = float(stats['total_time'] or 0)
             return stats
         except Exception:
@@ -301,13 +323,15 @@ class InterventionActionRepository:
         # Import lazy pour éviter la circularité avec interventions.repo
         from api.interventions.repo import InterventionRepository
         try:
-            detail = InterventionRepository().get_by_id(intervention_id, include_actions=False)
+            detail = InterventionRepository().get_by_id(
+                intervention_id, include_actions=False)
             if detail is None:
                 return None
             # Recalculer les stats via SQL agrégé (include_actions=False les met à zéro)
             stats_conn = self._get_connection()
             try:
-                detail['stats'] = self._get_intervention_stats(intervention_id, stats_conn)
+                detail['stats'] = self._get_intervention_stats(
+                    intervention_id, stats_conn)
             finally:
                 release_connection(stats_conn)
             return detail
@@ -350,8 +374,10 @@ class InterventionActionRepository:
             action['tasks'] = self._get_tasks_for_action(
                 str(action['id']), conn)
 
-            intervention_id_str = str(action['intervention_id']) if action.get('intervention_id') else None
-            action['intervention'] = self._build_intervention_detail(intervention_id_str) if intervention_id_str else None
+            intervention_id_str = str(action['intervention_id']) if action.get(
+                'intervention_id') else None
+            action['intervention'] = self._build_intervention_detail(
+                intervention_id_str) if intervention_id_str else None
 
             return action
         except NotFoundError:
@@ -437,15 +463,35 @@ class InterventionActionRepository:
                     ]
 
             # Batch tâches liées : it.action_id (nouveau modèle) OU ia.task_id (ancien modèle)
+            # Import lazy pour éviter la circularité avec intervention_tasks.repo
+            from api.intervention_tasks.repo import _map_task as _mt
             cur.execute(
                 f"""
                 SELECT COALESCE(it.action_id, ia_legacy.id) AS action_id,
-                       it.id, it.label, it.status, it.origin, it.optional
+                       it.id, it.intervention_id, it.label, it.origin, it.status,
+                       it.optional, it.due_date, it.sort_order, it.skip_reason,
+                       it.gamme_step_id, it.occurrence_id,
+                       it.closed_by, it.created_by, it.created_at, it.updated_at,
+                       COALESCE(agg.action_count, 0) AS action_count,
+                       COALESCE(agg.time_spent, 0.0) AS time_spent,
+                       u.id AS assigned_id,
+                       u.first_name AS assigned_first_name,
+                       u.last_name AS assigned_last_name,
+                       u.email AS assigned_email,
+                       u.initial AS assigned_initial,
+                       NULL::text AS assigned_status,
+                       NULL::text AS assigned_role
                 FROM intervention_task it
+                LEFT JOIN tunnel_user u ON u.id = it.assigned_to
+                LEFT JOIN LATERAL (
+                    SELECT COUNT(ia.id) AS action_count, COALESCE(SUM(ia.time_spent), 0) AS time_spent
+                    FROM intervention_action ia WHERE ia.id = it.action_id
+                ) agg ON TRUE
                 LEFT JOIN intervention_action ia_legacy ON ia_legacy.task_id = it.id
                     AND ia_legacy.id IN ({placeholders})
                 WHERE it.action_id IN ({placeholders})
                    OR (it.action_id IS NULL AND ia_legacy.id IS NOT NULL)
+                ORDER BY it.sort_order ASC
                 """,
                 action_ids + action_ids
             )
@@ -456,7 +502,7 @@ class InterventionActionRepository:
                 for row in task_rows:
                     row_dict = dict(zip(cols_task, row))
                     aid = str(row_dict.pop('action_id'))
-                    tasks_by_action.setdefault(aid, []).append(row_dict)
+                    tasks_by_action.setdefault(aid, []).append(_mt(row_dict))
                 for action in results:
                     action['tasks'] = tasks_by_action.get(
                         str(action['id']), [])
