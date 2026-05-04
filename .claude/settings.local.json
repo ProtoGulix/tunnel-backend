@@ -88,7 +88,10 @@
       "Bash(cp C:/Users/QUENTIN/DEV/web.tunnel-db/scripts/migration_runner.py C:/Users/QUENTIN/DEV/tunnel-backend/scripts/migration_runner.py)",
       "Bash(cp C:/Users/QUENTIN/DEV/web.tunnel-db/scripts/convert_to_alembic.py C:/Users/QUENTIN/DEV/tunnel-backend/scripts/convert_to_alembic.py)",
       "Bash(cp C:/Users/QUENTIN/DEV/web.tunnel-db/scripts/seed_equipement_class.sql C:/Users/QUENTIN/DEV/tunnel-backend/scripts/seed_equipement_class.sql)",
-      "Bash(.venv/Scripts/alembic upgrade *)"
+      "Bash(.venv/Scripts/alembic upgrade *)",
+      "Bash(echo \"EXIT:$?\")",
+      "Bash(alembic stamp *)",
+      "Bash(alembic current *)"
     ]
   }
 }
