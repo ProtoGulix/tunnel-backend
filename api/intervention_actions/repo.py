@@ -105,21 +105,18 @@ class InterventionActionRepository:
             return []
 
     def _get_tasks_for_action(self, action_id: str, conn) -> List[Dict[str, Any]]:
-        """Récupère les tâches liées à cette action via intervention_action.task_id."""
+        """Récupère les tâches liées à cette action avec leur détail complet (assigned_to, skip_reason, stats)."""
+        # Import lazy pour éviter la circularité avec intervention_tasks.repo
+        from api.intervention_tasks.repo import _TASK_SELECT, _map_task
         try:
             cur = conn.cursor()
             cur.execute(
-                """
-                SELECT it.id, it.label, it.status, it.origin, it.optional
-                FROM intervention_action ia
-                JOIN intervention_task it ON ia.task_id = it.id
-                WHERE ia.id = %s
-                """,
+                f"{_TASK_SELECT} WHERE it.action_id = %s ORDER BY it.sort_order ASC",
                 (action_id,)
             )
             rows = cur.fetchall()
             cols = [d[0] for d in cur.description]
-            return [dict(zip(cols, row)) for row in rows]
+            return [_map_task(dict(zip(cols, row))) for row in rows]
         except Exception:
             return []
 
@@ -266,8 +263,59 @@ class InterventionActionRepository:
         finally:
             release_connection(conn)
 
+    def _get_intervention_stats(self, intervention_id: str, conn) -> Dict[str, Any]:
+        """Calcule les stats agrégées d'une intervention depuis ses actions (sans les charger)."""
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                SELECT
+                    COUNT(ia.id)                          AS action_count,
+                    COALESCE(SUM(ia.time_spent), 0)       AS total_time,
+                    AVG(NULLIF(ia.complexity_score, 0))   AS avg_complexity,
+                    COUNT(DISTINCT iapr.purchase_request_id) AS purchase_count
+                FROM intervention_action ia
+                LEFT JOIN intervention_action_purchase_request iapr ON iapr.intervention_action_id = ia.id
+                WHERE ia.intervention_id = %s
+                """,
+                (intervention_id,),
+            )
+            row = cur.fetchone()
+            if not row:
+                return {'action_count': 0, 'total_time': 0, 'avg_complexity': None, 'purchase_count': 0}
+            cols = [d[0] for d in cur.description]
+            stats = dict(zip(cols, row))
+            if stats.get('avg_complexity') is not None:
+                stats['avg_complexity'] = round(float(stats['avg_complexity']), 2)
+            stats['total_time'] = float(stats['total_time'] or 0)
+            return stats
+        except Exception:
+            return {'action_count': 0, 'total_time': 0, 'avg_complexity': None, 'purchase_count': 0}
+
+    def _build_intervention_detail(self, intervention_id: str) -> Dict[str, Any]:
+        """Construit le détail complet d'une intervention parente pour l'analyse IA.
+
+        Utilise include_actions=False pour éviter la récursion infinie, puis injecte
+        les stats calculées via une requête SQL agrégée séparée.
+        """
+        # Import lazy pour éviter la circularité avec interventions.repo
+        from api.interventions.repo import InterventionRepository
+        try:
+            detail = InterventionRepository().get_by_id(intervention_id, include_actions=False)
+            if detail is None:
+                return None
+            # Recalculer les stats via SQL agrégé (include_actions=False les met à zéro)
+            stats_conn = self._get_connection()
+            try:
+                detail['stats'] = self._get_intervention_stats(intervention_id, stats_conn)
+            finally:
+                release_connection(stats_conn)
+            return detail
+        except Exception:
+            return None
+
     def get_by_id(self, action_id: str) -> Dict[str, Any]:
-        """Récupère une action par ID avec tech, subcategory et intervention hydratés"""
+        """Récupère une action par ID avec contexte complet de l'intervention parente"""
         conn = self._get_connection()
         try:
             cur = conn.cursor()
@@ -282,15 +330,11 @@ class InterventionActionRepository:
                     u.id as tech_id, u.first_name as tech_first_name,
                     u.last_name as tech_last_name, u.email as tech_email,
                     u.initial as tech_initial, NULL::text as tech_status,
-                    NULL::text as tech_role,
-                    i.code as interv_code, i.title as interv_title, i.status_actual as interv_status,
-                    m.id as interv_equipement_id, m.code as interv_equipement_code, m.name as interv_equipement_name
+                    NULL::text as tech_role
                 FROM intervention_action ia
                 LEFT JOIN action_subcategory sc ON ia.action_subcategory = sc.id
                 LEFT JOIN action_category ac ON sc.category_id = ac.id
                 LEFT JOIN tunnel_user u ON ia.tech = u.id
-                LEFT JOIN intervention i ON ia.intervention_id = i.id
-                LEFT JOIN machine m ON i.machine_id = m.id
                 WHERE ia.id = %s
             """, (action_id,))
             row = cur.fetchone()
@@ -301,19 +345,14 @@ class InterventionActionRepository:
             cols = [desc[0] for desc in cur.description]
             action = self._map_action_with_subcategory(dict(zip(cols, row)))
             action = self._map_tech_user(action)
-            action['intervention'] = {
-                'id': action['intervention_id'],
-                'code': action.pop('interv_code', None),
-                'title': action.pop('interv_title', None),
-                'status_actual': action.pop('interv_status', None),
-                'equipement_id': action.pop('interv_equipement_id', None),
-                'equipement_code': action.pop('interv_equipement_code', None),
-                'equipement_name': action.pop('interv_equipement_name', None),
-            } if action.get('intervention_id') else None
             action['purchase_requests'] = self._get_linked_purchase_requests(
                 str(action['id']), conn)
             action['tasks'] = self._get_tasks_for_action(
                 str(action['id']), conn)
+
+            intervention_id_str = str(action['intervention_id']) if action.get('intervention_id') else None
+            action['intervention'] = self._build_intervention_detail(intervention_id_str) if intervention_id_str else None
+
             return action
         except NotFoundError:
             raise

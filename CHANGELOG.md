@@ -2,6 +2,33 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [3.2.0] - 4 mai 2026
+
+### Nouvelles fonctionnalités
+
+#### Actions d'intervention enrichies
+
+Le détail d'une action d'intervention (`GET /intervention-actions/{id}`) retourne désormais des informations complètes :
+
+- **Stats calculées** : temps total, nombre de pièces utilisées, coût estimé
+- **Informations tâche liée** : titre, statut, `assigned_to`, `due_date`
+- **Données contextuelle intervention** : code, équipement, statut courant
+
+#### Migration Alembic — redirection FK vers `tunnel_user`
+
+Nouvelle migration (`20260504_001_fk_tunnel_user.py`) qui redirige toutes les clés étrangères pointant encore vers `directus_users` vers la table `tunnel_user` :
+
+- Backfill UUID automatique sur toutes les colonnes impactées
+- Suppression des anciennes contraintes, création des nouvelles FK sur `tunnel_user.id`
+- Zéro perte de données
+
+#### Scripts utilitaires DB
+
+- **`scripts/consolidate_db.py`** : archive les anciennes versions Alembic et répertoires SQL, met à jour la config et régénère le schéma courant
+- **`scripts/dump_schema.py`** : extrait le schéma public PostgreSQL complet dans un fichier SQL (utilisable comme baseline Alembic)
+
+---
+
 ## [3.1.0] - 3 mai 2026
 
 ### Nouvelles fonctionnalités

@@ -28,26 +28,40 @@ Liste les actions groupées par date (`created_at::date`), du plus récent au pl
     "date": "2026-03-15",
     "actions": [
       {
-        "id": "uuid",
-        "intervention_id": "uuid",
+        "id": "c3d4e5f6-1234-5678-9abc-def012345678",
+        "intervention_id": "5ecf60d5-8471-4739-8ba8-0fdad7b51781",
         "intervention": {
-          "id": "uuid",
+          "id": "5ecf60d5-8471-4739-8ba8-0fdad7b51781",
           "code": "CN001-REA-20260315-QC",
           "title": "Remplacement roulement principal",
           "status_actual": "en_cours",
-          "equipement_id": "uuid",
+          "equipement_id": "e1f2a3b4-aaaa-bbbb-cccc-111122223333",
           "equipement_code": "EQ-001",
           "equipement_name": "Scie principale"
         },
-        "description": "Diagnostic complet",
+        "description": "Diagnostic complet de la transmission",
         "time_spent": 1.5,
-        "subcategory": { "id": 30, "name": "Remplacement pièce", "code": "DEP_REM", "category": { "..." } },
-        "tech": { "..." },
+        "subcategory": {
+          "id": 30,
+          "name": "Remplacement pièce",
+          "code": "DEP_REM",
+          "category": { "id": 3, "name": "Dépannage", "code": "DEP", "color": "#e53e3e" }
+        },
+        "tech": {
+          "id": "a1b2c3d4-1111-2222-3333-444455556666",
+          "first_name": "Jean",
+          "last_name": "Dupont",
+          "email": "jean.dupont@example.com",
+          "initial": "JD",
+          "status": "active",
+          "role": "b9f3e2a1-0000-1111-2222-333344445555"
+        },
         "complexity_score": 5,
         "complexity_factor": null,
         "action_start": "08:00:00",
         "action_end": "09:30:00",
         "purchase_requests": [],
+        "tasks": [],
         "created_at": "2026-03-15T08:00:00",
         "updated_at": "2026-03-15T08:00:00"
       }
@@ -55,7 +69,46 @@ Liste les actions groupées par date (`created_at::date`), du plus récent au pl
   },
   {
     "date": "2026-03-14",
-    "actions": [ { "..." } ]
+    "actions": [
+      {
+        "id": "a0b1c2d3-9999-8888-7777-666655554444",
+        "intervention_id": "5ecf60d5-8471-4739-8ba8-0fdad7b51781",
+        "intervention": {
+          "id": "5ecf60d5-8471-4739-8ba8-0fdad7b51781",
+          "code": "CN001-REA-20260315-QC",
+          "title": "Remplacement roulement principal",
+          "status_actual": "en_cours",
+          "equipement_id": "e1f2a3b4-aaaa-bbbb-cccc-111122223333",
+          "equipement_code": "EQ-001",
+          "equipement_name": "Scie principale"
+        },
+        "description": null,
+        "time_spent": 0.5,
+        "subcategory": {
+          "id": 12,
+          "name": "Inspection visuelle",
+          "code": "DIAG_VIS",
+          "category": { "id": 1, "name": "Diagnostic", "code": "DIAG", "color": "#3b82f6" }
+        },
+        "tech": {
+          "id": "a1b2c3d4-1111-2222-3333-444455556666",
+          "first_name": "Jean",
+          "last_name": "Dupont",
+          "email": "jean.dupont@example.com",
+          "initial": "JD",
+          "status": "active",
+          "role": "b9f3e2a1-0000-1111-2222-333344445555"
+        },
+        "complexity_score": 3,
+        "complexity_factor": null,
+        "action_start": "14:00:00",
+        "action_end": "14:30:00",
+        "purchase_requests": [],
+        "tasks": [],
+        "created_at": "2026-03-14T14:00:00",
+        "updated_at": "2026-03-14T14:00:00"
+      }
+    ]
   }
 ]
 ```
@@ -64,15 +117,15 @@ Liste les actions groupées par date (`created_at::date`), du plus récent au pl
 
 ## `GET /intervention-actions/{id}`
 
-Détail d'une action avec sous-catégorie et demandes d'achat.
+Détail complet d'une action avec tout le contexte de l'intervention parente. Conçu pour permettre une analyse complète par un agent IA sans appel supplémentaire.
 
-### Réponse `200` — InterventionActionOut
+### Réponse `200` — InterventionActionDetail
 
 ```json
 {
-  "id": "uuid",
-  "intervention_id": "uuid",
-  "description": "Remplacement du roulement SKF 6205",
+  "id": "c3d4e5f6-1234-5678-9abc-def012345678",
+  "intervention_id": "5ecf60d5-8471-4739-8ba8-0fdad7b51781",
+  "description": "Remplacement du roulement SKF 6205 — graissage effectué",
   "time_spent": 1.5,
   "subcategory": {
     "id": 30,
@@ -86,13 +139,13 @@ Détail d'une action avec sous-catégorie et demandes d'achat.
     }
   },
   "tech": {
-    "id": "a1b2c3d4-...",
+    "id": "a1b2c3d4-1111-2222-3333-444455556666",
     "first_name": "Jean",
     "last_name": "Dupont",
     "email": "jean.dupont@example.com",
     "initial": "JD",
     "status": "active",
-    "role": "uuid"
+    "role": "b9f3e2a1-0000-1111-2222-333344445555"
   },
   "complexity_score": 7,
   "complexity_factor": "PCE",
@@ -100,16 +153,12 @@ Détail d'une action avec sous-catégorie et demandes d'achat.
   "action_end": "09:30:00",
   "purchase_requests": [
     {
-      "id": "uuid",
+      "id": "d5e6f7a8-2345-6789-abcd-ef0123456789",
       "item_label": "Roulement SKF 6205",
       "quantity": 2,
       "unit": "pcs",
-      "derived_status": {
-        "code": "PENDING_DISPATCH",
-        "label": "À dispatcher",
-        "color": "#A855F7"
-      },
-      "stock_item_id": "uuid",
+      "derived_status": { "code": "PENDING_DISPATCH", "label": "À dispatcher", "color": "#A855F7" },
+      "stock_item_id": "f9a0b1c2-3456-789a-bcde-f01234567890",
       "stock_item_ref": "OUT-ROUL-SKF-6205",
       "stock_item_name": "Roulement SKF 6205",
       "intervention_code": "CN001-REA-20260113-QC",
@@ -125,32 +174,219 @@ Détail d'une action avec sous-catégorie et demandes d'achat.
   "tasks": [
     {
       "id": "550e8400-e29b-41d4-a716-446655440000",
-      "label": "Diagnostic initial",
-      "status": "in_progress",
+      "intervention_id": "5ecf60d5-8471-4739-8ba8-0fdad7b51781",
+      "label": "Remplacement roulement SKF 6205",
       "origin": "plan",
-      "optional": false
+      "status": "done",
+      "optional": false,
+      "assigned_to": {
+        "id": "a1b2c3d4-1111-2222-3333-444455556666",
+        "first_name": "Jean",
+        "last_name": "Dupont",
+        "email": "jean.dupont@example.com",
+        "initial": "JD",
+        "status": "active",
+        "role": "b9f3e2a1-0000-1111-2222-333344445555"
+      },
+      "due_date": "2026-01-14",
+      "sort_order": 2,
+      "skip_reason": null,
+      "closed_by": "a1b2c3d4-1111-2222-3333-444455556666",
+      "created_by": "f7c9d0e1-aaaa-bbbb-cccc-ddddeeee0000",
+      "action_count": 1,
+      "time_spent": 1.5,
+      "created_at": "2026-01-13T08:00:00",
+      "updated_at": "2026-01-13T15:00:00"
     }
   ],
   "created_at": "2026-01-13T14:30:00",
-  "updated_at": "2026-01-13T15:00:00"
+  "updated_at": "2026-01-13T15:00:00",
+  "intervention": {
+    "id": "5ecf60d5-8471-4739-8ba8-0fdad7b51781",
+    "code": "CN001-REA-20260113-QC",
+    "title": "Remplacement roulement principal",
+    "status_actual": "en_cours",
+    "type_inter": "corrective",
+    "priority": "high",
+    "reported_by": "Chef atelier",
+    "tech_initials": "JD",
+    "tech_id": "a1b2c3d4-1111-2222-3333-444455556666",
+    "reported_date": "2026-01-13",
+    "equipements": {
+      "id": "e1f2a3b4-aaaa-bbbb-cccc-111122223333",
+      "code": "EQ-001",
+      "name": "Scie principale",
+      "health": "degraded",
+      "parent": {
+        "id": "b2c3d4e5-ffff-eeee-dddd-000011112222",
+        "code": "LIGNE-A",
+        "name": "Ligne de production A"
+      },
+      "equipement_class": {
+        "id": 4,
+        "name": "Machine rotative",
+        "code": "ROT"
+      }
+    },
+    "request": {
+      "id": "77c8d9e0-5678-90ab-cdef-012345678901",
+      "code": "DI-2026-0042",
+      "demandeur_nom": "Marie Curie",
+      "demandeur_service": "Production",
+      "description": "Bruit anormal sur la scie depuis 2 jours, vibrations importantes",
+      "statut": "accepted",
+      "statut_label": "Acceptée",
+      "statut_color": "#22c55e",
+      "intervention_id": "5ecf60d5-8471-4739-8ba8-0fdad7b51781",
+      "created_at": "2026-01-12T09:00:00",
+      "updated_at": "2026-01-13T08:00:00"
+    },
+    "stats": {
+      "action_count": 3,
+      "total_time": 4.5,
+      "avg_complexity": 6.33,
+      "purchase_count": 1
+    },
+    "tasks": [
+      {
+        "id": "440d7300-d18a-30c3-9605-335544330000",
+        "intervention_id": "5ecf60d5-8471-4739-8ba8-0fdad7b51781",
+        "label": "Diagnostic vibratoire",
+        "origin": "plan",
+        "status": "done",
+        "optional": false,
+        "assigned_to": null,
+        "due_date": null,
+        "sort_order": 1,
+        "skip_reason": null,
+        "closed_by": "a1b2c3d4-1111-2222-3333-444455556666",
+        "created_by": "f7c9d0e1-aaaa-bbbb-cccc-ddddeeee0000",
+        "action_count": 1,
+        "time_spent": 0.5,
+        "created_at": "2026-01-13T07:00:00",
+        "updated_at": "2026-01-13T09:00:00"
+      },
+      {
+        "id": "550e8400-e29b-41d4-a716-446655440000",
+        "intervention_id": "5ecf60d5-8471-4739-8ba8-0fdad7b51781",
+        "label": "Remplacement roulement SKF 6205",
+        "origin": "plan",
+        "status": "done",
+        "optional": false,
+        "assigned_to": {
+          "id": "a1b2c3d4-1111-2222-3333-444455556666",
+          "first_name": "Jean",
+          "last_name": "Dupont",
+          "email": "jean.dupont@example.com",
+          "initial": "JD",
+          "status": "active",
+          "role": "b9f3e2a1-0000-1111-2222-333344445555"
+        },
+        "due_date": "2026-01-14",
+        "sort_order": 2,
+        "skip_reason": null,
+        "closed_by": "a1b2c3d4-1111-2222-3333-444455556666",
+        "created_by": "f7c9d0e1-aaaa-bbbb-cccc-ddddeeee0000",
+        "action_count": 1,
+        "time_spent": 1.5,
+        "created_at": "2026-01-13T08:00:00",
+        "updated_at": "2026-01-13T15:00:00"
+      },
+      {
+        "id": "661f9511-f3ac-52e5-b827-557766551111",
+        "intervention_id": "5ecf60d5-8471-4739-8ba8-0fdad7b51781",
+        "label": "Test de remise en service",
+        "origin": "plan",
+        "status": "in_progress",
+        "optional": false,
+        "assigned_to": null,
+        "due_date": null,
+        "sort_order": 3,
+        "skip_reason": null,
+        "closed_by": null,
+        "created_by": "f7c9d0e1-aaaa-bbbb-cccc-ddddeeee0000",
+        "action_count": 0,
+        "time_spent": 0.0,
+        "created_at": "2026-01-13T07:00:00",
+        "updated_at": "2026-01-13T15:00:00"
+      }
+    ],
+    "task_progress": {
+      "total": 3,
+      "done": 2,
+      "in_progress": 1,
+      "todo": 0,
+      "skipped": 0,
+      "blocking_pending": 0,
+      "is_complete": false
+    },
+    "status_logs": [
+      {
+        "id": "88d0e1f2-6789-01bc-def0-123456789012",
+        "from_status": null,
+        "to_status": "ouvert",
+        "changed_by": "f7c9d0e1-aaaa-bbbb-cccc-ddddeeee0000",
+        "changed_at": "2026-01-13T08:00:00",
+        "note": null
+      },
+      {
+        "id": "99e1f2a3-7890-12cd-ef01-234567890123",
+        "from_status": "ouvert",
+        "to_status": "en_cours",
+        "changed_by": "a1b2c3d4-1111-2222-3333-444455556666",
+        "changed_at": "2026-01-13T09:00:00",
+        "note": null
+      }
+    ]
+  }
 }
 ```
 
-> **Schemas imbriqués :**
+> **Champs de l'action :**
 >
-> - `tech` : [UserListItem](users.md#userlistitem) (informations du technicien)
-> - `purchase_requests` : tableau de [PurchaseRequestListItem](purchase-requests.md#get-purchase-requestslist-v120) — demandes d'achat liées à cette action via `intervention_action_purchase_request`. `intervention_code` est déduit via la jonction `→ intervention_action → intervention`.
-> - `task` : objet [InterventionTaskRef](#interventiontaskref) — tâche liée à cette action (via `intervention_action.task_id`). `null` si l'action n'est pas liée à une tâche.
+> - `purchase_requests` : demandes d'achat liées à **cette action** via `intervention_action_purchase_request` → [PurchaseRequestListItem](purchase-requests.md)
+> - `tasks` : tâches traitées par **cette action** (via `intervention_task.action_id`) → `InterventionTaskOut` complet avec `skip_reason`, `assigned_to`, `closed_by`, `action_count`, `time_spent`
+>
+> **Champs de `intervention` (contexte parente) :**
+>
+> - `equipements` : équipement complet avec santé, parent et classe → [EquipementDetail](equipements.md)
+> - `request` : demande d'intervention à l'origine de l'intervention → [InterventionRequestListItem](intervention-requests.md)
+> - `stats` : statistiques agrégées sur **toutes** les actions de l'intervention
+> - `tasks` : **toutes** les tâches de l'intervention (pas uniquement celles de cette action)
+> - `task_progress` : avancement global des tâches
+> - `status_logs` : historique complet des transitions de statut
 
-### InterventionTaskRef
+### InterventionTaskOut (tâches de l'action)
 
-| Champ      | Type   | Description                              |
-| ---------- | ------ | ---------------------------------------- |
-| `id`       | uuid   | ID de la tâche                           |
-| `label`    | string | Intitulé de la tâche                     |
-| `status`   | string | `todo`, `in_progress`, `done`, `skipped` |
-| `origin`   | string | `plan`, `resp`, `tech`                   |
-| `optional` | bool   | La tâche est-elle optionnelle            |
+| Champ            | Type   | Description                                                         |
+| ---------------- | ------ | ------------------------------------------------------------------- |
+| `id`             | uuid   | ID de la tâche                                                      |
+| `intervention_id`| uuid   | Intervention parente                                                |
+| `label`          | string | Intitulé de la tâche                                                |
+| `status`         | string | `todo`, `in_progress`, `done`, `skipped`                            |
+| `origin`         | string | `plan`, `resp`, `tech`                                              |
+| `optional`       | bool   | Tâche optionnelle                                                   |
+| `assigned_to`    | object | Technicien assigné ([UserListItem](users.md)) — `null` si non assigné |
+| `due_date`       | date   | Échéance — `null` si non définie                                    |
+| `sort_order`     | int    | Ordre d'affichage dans la liste des tâches                          |
+| `skip_reason`    | string | Raison du skip — `null` si non skippée                              |
+| `closed_by`      | uuid   | UUID de l'utilisateur qui a clôturé la tâche                        |
+| `created_by`     | uuid   | UUID de l'utilisateur qui a créé la tâche                           |
+| `action_count`   | int    | Nombre d'actions ayant contribué à cette tâche                      |
+| `time_spent`     | float  | Temps total passé sur cette tâche (heures, via l'action liée)       |
+| `created_at`     | datetime | Date de création                                                  |
+| `updated_at`     | datetime | Date de dernière modification                                     |
+
+> **`InterventionTaskRef`** (version légère) est uniquement utilisé dans `GET /intervention-actions` (liste) où les tâches ne sont pas enrichies pour des raisons de performance.
+
+### InterventionStats
+
+| Champ           | Type  | Description                                         |
+| --------------- | ----- | --------------------------------------------------- |
+| `action_count`  | int   | Nombre total d'actions sur l'intervention           |
+| `total_time`    | float | Temps total cumulé (heures)                         |
+| `avg_complexity`| float | Complexité moyenne des actions (`null` si aucune)   |
+| `purchase_count`| int   | Nombre de demandes d'achat liées via les actions    |
 
 ---
 

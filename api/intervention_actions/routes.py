@@ -3,7 +3,7 @@ from typing import List, Optional
 from datetime import date
 from uuid import UUID
 from api.intervention_actions.repo import InterventionActionRepository
-from api.intervention_actions.schemas import InterventionActionOut, InterventionActionIn, InterventionActionPatch, InterventionActionsByDate
+from api.intervention_actions.schemas import InterventionActionOut, InterventionActionIn, InterventionActionPatch, InterventionActionsByDate, InterventionActionDetail
 
 from api.auth.permissions import require_authenticated
 
@@ -30,9 +30,9 @@ def list_actions(
     )
 
 
-@router.get("/{action_id}", response_model=InterventionActionOut)
+@router.get("/{action_id}", response_model=InterventionActionDetail)
 def get_action(action_id: str):
-    """Récupère une action par ID"""
+    """Récupère une action par ID avec le contexte complet de l'intervention parente"""
     repo = InterventionActionRepository()
     return repo.get_by_id(action_id)
 
