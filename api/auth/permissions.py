@@ -64,48 +64,52 @@ permission_cache = PermissionCache()
 
 # --- Dépendances FastAPI ---
 
-def require_authenticated(request: Request) -> str:
+def _is_authenticated(request: Request) -> bool:
+    """Retourne True si la requête est authentifiée par JWT (user_id) ou clé API (api_key_id)."""
+    return bool(getattr(request.state, "user_id", None)) or bool(getattr(request.state, "api_key_id", None))
+
+
+def require_authenticated(request: Request) -> str | None:
     """
-    Vérifie que l'utilisateur est authentifié (tout rôle).
-    Maintenu pour compatibilité avec les routes existantes.
+    Vérifie que la requête est authentifiée (JWT ou clé API).
+    Retourne user_id (None pour les clés API — pas d'utilisateur associé).
     """
-    user_id = getattr(request.state, "user_id", None)
-    if not user_id:
+    if not _is_authenticated(request):
         raise UnauthorizedError("Authentification requise")
-    return user_id
+    return getattr(request.state, "user_id", None)
 
 
 def require_role(*roles: str):
     """
     Dépendance FastAPI : restreint l'accès aux rôles listés.
+    Accepte JWT et clés API (le rôle est porté par les deux).
 
     Usage : Depends(require_role("RESP", "ADMIN"))
     """
-    def _check(request: Request) -> str:
-        user_id = getattr(request.state, "user_id", None)
-        if not user_id:
+    def _check(request: Request) -> str | None:
+        if not _is_authenticated(request):
             raise UnauthorizedError("Authentification requise")
         role = getattr(request.state, "role", None)
         if role not in roles:
             raise ForbiddenError(f"Rôle requis : {', '.join(roles)}")
-        return user_id
+        return getattr(request.state, "user_id", None)
     return _check
 
 
 def require_permission(endpoint_code: str):
     """
     Dépendance FastAPI : vérifie qu'un endpoint_code est autorisé pour le rôle.
+    Accepte JWT et clés API.
 
     Usage : Depends(require_permission("interventions:create"))
     """
-    def _check(request: Request) -> str:
-        user_id = getattr(request.state, "user_id", None)
-        if not user_id:
+    def _check(request: Request) -> str | None:
+        if not _is_authenticated(request):
             raise UnauthorizedError("Authentification requise")
         role = getattr(request.state, "role", None)
         if not permission_cache.check(role, endpoint_code):
             raise ForbiddenError(f"Permission refusée : {endpoint_code}")
-        return user_id
+        return getattr(request.state, "user_id", None)
     return _check
 
 
