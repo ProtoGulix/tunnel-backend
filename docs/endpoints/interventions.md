@@ -45,12 +45,20 @@ Liste les interventions avec filtres, tri et pagination.
       "name": "Scie principale",
       "health": {
         "level": "maintenance",
-        "reason": "1 intervention ouverte",
+        "reason": "2 tâches non clôturées",
         "open_interventions_count": 1,
         "urgent_count": 0,
-        "new_requests_count": 0,
-        "rules_triggered": ["OPEN_TOTAL > 0"]
-      },
+        "open_requests_count": 2,
+        "new_requests_count": 1,
+        "request_status_counts": {"nouvelle": 1, "en_attente": 1},
+        "open_tasks_count": 2,
+        "overdue_tasks_count": 1,
+        "unassigned_tasks_count": 1,
+        "open_purchase_requests_count": 1,
+        "purchase_request_status_counts": {"OPEN": 1},
+        "has_affectation": true,
+        "rules_triggered": ["OPEN_TOTAL > 0", "OVERDUE_TASKS > 0", "OPEN_REQUESTS > 0", "OPEN_TASKS > 0", "OPEN_PURCHASE_REQUESTS > 0"]
+      }
       "parent": { "id": "uuid", "code": "VLT", "name": "Site des villettes" },
       "equipement_class": { "id": "uuid", "code": "SCIE", "label": "Scie" },
       "statut": {
@@ -104,17 +112,25 @@ Liste les interventions avec filtres, tri et pagination.
 
 ### Champs `equipements` en liste
 
-| Champ                             | Description                                                                                                |
-| --------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `health`                          | Calculé depuis le compte réel des interventions ouvertes sur l'équipement (toutes, pas seulement filtrées) |
-| `health.level`                    | `ok`, `maintenance` (≥ 1 ouverte), `critical` (≥ 1 urgente)                                                |
-| `health.open_interventions_count` | Nombre d'interventions ouvertes                                                                            |
-| `health.urgent_count`             | Nombre d'interventions urgentes ouvertes                                                                   |
-| `health.new_requests_count`       | Nombre de demandes en statut `nouvelle`                                                                    |
-| `health.rules_triggered`          | Règles ayant déclenché le niveau de santé (ex: `["OPEN_TOTAL > 0"]`)                                       |
-| `parent`                          | Équipement parent `{id, code, name}`. `null` si racine                                                     |
-| `statut`                          | Statut opérationnel `{id, code, label, interventions, couleur}`. `null` si non renseigné                   |
-| `equipement_class`                | Classe d'équipement `{id, code, label}`. `null` si non renseignée                                          |
+| Champ                                   | Description                                                                                            |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `health`                                | Exactement le même objet que `GET /equipements/{id}/health` (même logique, mêmes règles, mêmes champs) |
+| `health.level`                          | `ok`, `maintenance`, `warning`, `critical`                                                             |
+| `health.open_interventions_count`       | Nombre d'interventions ouvertes                                                                        |
+| `health.urgent_count`                   | Nombre d'interventions urgentes ouvertes                                                               |
+| `health.open_requests_count`            | Nombre de DI ouvertes (hors `rejetee` et `cloturee`)                                                   |
+| `health.new_requests_count`             | Nombre de DI en statut `nouvelle`                                                                      |
+| `health.request_status_counts`          | Répartition des DI ouvertes par statut                                                                 |
+| `health.open_tasks_count`               | Nombre de tâches non clôturées (`status != done/skipped`)                                              |
+| `health.overdue_tasks_count`            | Nombre de tâches en retard (`due_date < aujourd'hui`)                                                  |
+| `health.unassigned_tasks_count`         | Nombre de tâches ouvertes non affectées                                                                |
+| `health.open_purchase_requests_count`   | Nombre de DA ouvertes (hors `closed`, `cloturee`, `cancelled`, `annulee`)                              |
+| `health.purchase_request_status_counts` | Répartition des DA ouvertes par statut                                                                 |
+| `health.has_affectation`                | `true` si `affectation` est renseignée sur l'équipement                                                |
+| `health.rules_triggered`                | Règles ayant déclenché le niveau de santé                                                              |
+| `parent`                                | Équipement parent `{id, code, name}`. `null` si racine                                                 |
+| `statut`                                | Statut opérationnel `{id, code, label, interventions, couleur}`. `null` si non renseigné               |
+| `equipement_class`                      | Classe d'équipement `{id, code, label}`. `null` si non renseignée                                      |
 
 ---
 
@@ -165,12 +181,20 @@ Détail complet d'une intervention. **La structure est différente de la liste**
     "notes": null,
     "health": {
       "level": "maintenance",
-      "reason": "1 intervention ouverte",
+      "reason": "2 tâches non clôturées",
       "open_interventions_count": 1,
       "urgent_count": 0,
-      "new_requests_count": 0,
-      "rules_triggered": ["OPEN_TOTAL > 0"]
-    },
+      "open_requests_count": 2,
+      "new_requests_count": 1,
+      "request_status_counts": {"nouvelle": 1, "en_attente": 1},
+      "open_tasks_count": 2,
+      "overdue_tasks_count": 1,
+      "unassigned_tasks_count": 1,
+      "open_purchase_requests_count": 1,
+      "purchase_request_status_counts": {"OPEN": 1},
+      "has_affectation": true,
+      "rules_triggered": ["OPEN_TOTAL > 0", "OVERDUE_TASKS > 0", "OPEN_REQUESTS > 0", "OPEN_TASKS > 0", "OPEN_PURCHASE_REQUESTS > 0"]
+    }
     "parent": { "id": "uuid", "code": "VLT", "name": "Site des villettes" },
     "equipement_class": { "id": "uuid", "code": "SCIE", "label": "Scie" },
     "statut": {
@@ -391,7 +415,7 @@ Crée une nouvelle intervention.
 | --------------- | ------ | ------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `machine_id`    | uuid   | **oui** | —        | Équipement concerné (trigger exige une machine existante)                                                                                                                                                                                                   |
 | `type_inter`    | string | **oui** | —        | Type d'intervention (`CUR`, `PRE`, `REA`, `BAT`, `PRO`, `COF`, `PIL`, `MES`) — voir `GET /interventions/types`                                                                                                                                              |
-| `tech_id`       | uuid   | **oui** | —        | UUID du technicien pilote (`directus_users.id`). L'API résout les initiales en interne pour le trigger de génération de code                                                                                                                                 |
+| `tech_id`       | uuid   | **oui** | —        | UUID du technicien pilote (`directus_users.id`). L'API résout les initiales en interne pour le trigger de génération de code                                                                                                                                |
 | `title`         | string | non     | null     | Titre de l'intervention                                                                                                                                                                                                                                     |
 | `priority`      | string | non     | null     | `faible`, `normale`, `important`, `urgent`                                                                                                                                                                                                                  |
 | `reported_by`   | string | non     | null     | Nom du signaleur                                                                                                                                                                                                                                            |
@@ -435,11 +459,11 @@ Intervention complète mise à jour. La demande liée (`request`) est désormais
 
 ### Erreurs
 
-| Code | Cas                                                        |
-| ---- | ---------------------------------------------------------- |
-| 404  | Intervention introuvable                                   |
-| 400  | L'intervention n'est pas au statut `ferme`                 |
-| 400  | Aucune demande en statut `acceptee` n'est liée             |
+| Code | Cas                                            |
+| ---- | ---------------------------------------------- |
+| 404  | Intervention introuvable                       |
+| 400  | L'intervention n'est pas au statut `ferme`     |
+| 400  | Aucune demande en statut `acceptee` n'est liée |
 
 ---
 

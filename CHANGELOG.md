@@ -20,6 +20,7 @@ Ces nouveaux indicateurs sont exposés dans les réponses health de :
 - `GET /equipements`
 - `GET /equipements/{id}`
 - `GET /equipements/{id}/health`
+- `GET /interventions` (objet `equipements.health` aligné sur la même logique)
 
 ## [3.2.0] - 4 mai 2026
 

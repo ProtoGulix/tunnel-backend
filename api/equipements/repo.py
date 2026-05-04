@@ -104,18 +104,21 @@ class EquipementRepository:
             cols = [desc[0] for desc in cur.description]
             equipements = [dict(zip(cols, row)) for row in rows]
 
-            equipement_ids = [str(e.get('id')) for e in equipements if e.get('id')]
+            equipement_ids = [str(e.get('id'))
+                              for e in equipements if e.get('id')]
             health_inputs_map = self._fetch_health_inputs(cur, equipement_ids)
 
             # Enrichir avec health et restructurer equipement_class
             for equipement in equipements:
                 open_count = equipement.pop('open_interventions_count', 0) or 0
                 urgent_count = equipement.pop('urgent_count', 0) or 0
-                new_requests_count = equipement.pop('new_requests_count', 0) or 0
+                new_requests_count = equipement.pop(
+                    'new_requests_count', 0) or 0
                 metrics = health_inputs_map.get(str(equipement.get('id')), {})
                 metrics.setdefault('open_interventions_count', int(open_count))
                 metrics.setdefault('urgent_count', int(urgent_count))
-                metrics.setdefault('new_requests_count', int(new_requests_count))
+                metrics.setdefault('new_requests_count',
+                                   int(new_requests_count))
 
                 equipement['health'] = self._calculate_health(metrics)
                 equipement['parent_id'] = equipement.pop(
@@ -133,7 +136,8 @@ class EquipementRepository:
                 statut_id = equipement.pop('statut_id', None)
                 statut_code = equipement.pop('statut_code', None)
                 statut_label = equipement.pop('statut_label', None)
-                statut_interventions = equipement.pop('statut_interventions', None)
+                statut_interventions = equipement.pop(
+                    'statut_interventions', None)
                 statut_couleur = equipement.pop('statut_couleur', None)
                 equipement['statut'] = (
                     {'id': statut_id, 'code': statut_code, 'label': statut_label,
@@ -373,14 +377,17 @@ class EquipementRepository:
             # Enrichir avec les blocs contextuels (plans, occurrences, demandes)
             # Extraire equipement_class_id depuis l'objet déjà construit
             equipement_class = equipement.get('equipement_class')
-            equipement_class_id = equipement_class.get('id') if equipement_class else None
+            equipement_class_id = equipement_class.get(
+                'id') if equipement_class else None
             if equipement_class_id:
                 equipement_class_id = str(equipement_class_id)
 
-            plans = self._fetch_preventive_plans(cur, equipement_class_id, equipement_id)
+            plans = self._fetch_preventive_plans(
+                cur, equipement_class_id, equipement_id)
             equipement['preventive_plans'] = plans or None
 
-            occurrences_summary = self._fetch_preventive_occurrences_summary(cur, equipement_id)
+            occurrences_summary = self._fetch_preventive_occurrences_summary(
+                cur, equipement_id)
             equipement['preventive_occurrences_summary'] = occurrences_summary
 
             open_requests = self._fetch_open_requests(cur, equipement_id)
@@ -434,7 +441,8 @@ class EquipementRepository:
                     data.get('date_mise_service'),
                     data.get('notes'),
                     str(data['parent_id']) if data.get('parent_id') else None,
-                    str(data['equipement_class_id']) if data.get('equipement_class_id') else None,
+                    str(data['equipement_class_id']) if data.get(
+                        'equipement_class_id') else None,
                     data.get('statut_id'),
                 )
             )
@@ -551,18 +559,21 @@ class EquipementRepository:
             cols = [desc[0] for desc in cur.description]
             equipements = [dict(zip(cols, row)) for row in rows]
 
-            equipement_ids = [str(e.get('id')) for e in equipements if e.get('id')]
+            equipement_ids = [str(e.get('id'))
+                              for e in equipements if e.get('id')]
             health_inputs_map = self._fetch_health_inputs(cur, equipement_ids)
 
             # Enrichir avec health et restructurer equipement_class
             for equipement in equipements:
                 open_count = equipement.pop('open_interventions_count', 0) or 0
                 urgent_count = equipement.pop('urgent_count', 0) or 0
-                new_requests_count = equipement.pop('new_requests_count', 0) or 0
+                new_requests_count = equipement.pop(
+                    'new_requests_count', 0) or 0
                 metrics = health_inputs_map.get(str(equipement.get('id')), {})
                 metrics.setdefault('open_interventions_count', int(open_count))
                 metrics.setdefault('urgent_count', int(urgent_count))
-                metrics.setdefault('new_requests_count', int(new_requests_count))
+                metrics.setdefault('new_requests_count',
+                                   int(new_requests_count))
 
                 equipement['health'] = self._calculate_health(metrics)
                 equipement['parent_id'] = equipement.pop(
@@ -685,7 +696,8 @@ class EquipementRepository:
         conn = self._get_connection()
         try:
             cur = conn.cursor()
-            cur.execute("SELECT id FROM machine WHERE id = %s", (equipement_id,))
+            cur.execute("SELECT id FROM machine WHERE id = %s",
+                        (equipement_id,))
             if not cur.fetchone():
                 raise NotFoundError(f"Équipement {equipement_id} non trouvé")
 
@@ -739,7 +751,8 @@ class EquipementRepository:
             cols = [desc[0] for desc in cur.description]
             return [dict(zip(cols, row)) for row in rows]
         except Exception as e:
-            logger.error("Erreur récupération plans préventifs pour équipement: %s", e)
+            logger.error(
+                "Erreur récupération plans préventifs pour équipement: %s", e)
             return []
 
     def _fetch_preventive_occurrences_summary(self, cur, equipement_id: str) -> Dict[str, Any]:
@@ -944,7 +957,8 @@ class EquipementRepository:
             LEFT JOIN purchase_status_agg ps ON ps.machine_id = t.machine_id
         """
 
-        cur.execute(query, (equipement_ids, CLOSED_STATUS_CODE, CLOSED_STATUS_CODE))
+        cur.execute(
+            query, (equipement_ids, CLOSED_STATUS_CODE, CLOSED_STATUS_CODE))
         rows = cur.fetchall()
 
         health_inputs: Dict[str, Dict[str, Any]] = {}
@@ -966,6 +980,14 @@ class EquipementRepository:
 
         return health_inputs
 
+    def get_health_map(self, cur, equipement_ids: List[str]) -> Dict[str, Dict[str, Any]]:
+        """Retourne le health calculé pour une liste d'équipements (clé = machine_id)."""
+        inputs_map = self._fetch_health_inputs(cur, equipement_ids)
+        return {
+            machine_id: self._calculate_health(metrics)
+            for machine_id, metrics in inputs_map.items()
+        }
+
     def _calculate_health(self, metrics: Dict[str, Any]) -> Dict[str, Any]:
         """Calcule le health d'un équipement selon interventions, demandes, DA et tâches."""
         open_count = int(metrics.get('open_interventions_count', 0) or 0)
@@ -974,11 +996,15 @@ class EquipementRepository:
         new_requests_count = int(metrics.get('new_requests_count', 0) or 0)
         open_tasks_count = int(metrics.get('open_tasks_count', 0) or 0)
         overdue_tasks_count = int(metrics.get('overdue_tasks_count', 0) or 0)
-        unassigned_tasks_count = int(metrics.get('unassigned_tasks_count', 0) or 0)
-        open_purchase_requests_count = int(metrics.get('open_purchase_requests_count', 0) or 0)
+        unassigned_tasks_count = int(
+            metrics.get('unassigned_tasks_count', 0) or 0)
+        open_purchase_requests_count = int(
+            metrics.get('open_purchase_requests_count', 0) or 0)
         has_affectation = bool(metrics.get('has_affectation', False))
-        request_status_counts = self._normalize_status_counts(metrics.get('request_status_counts'))
-        purchase_request_status_counts = self._normalize_status_counts(metrics.get('purchase_request_status_counts'))
+        request_status_counts = self._normalize_status_counts(
+            metrics.get('request_status_counts'))
+        purchase_request_status_counts = self._normalize_status_counts(
+            metrics.get('purchase_request_status_counts'))
 
         rules_triggered = []
         level = 'ok'
