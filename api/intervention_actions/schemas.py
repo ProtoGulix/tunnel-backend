@@ -4,6 +4,10 @@ from datetime import datetime, time, date
 from uuid import UUID
 from api.users.schemas import UserListItem
 from api.purchase_requests.schemas import PurchaseRequestListItem
+from api.equipements.schemas import EquipementDetail
+from api.intervention_requests.schemas import InterventionRequestListItem
+from api.intervention_tasks.schemas import TaskProgressOut, InterventionTaskOut
+from api.intervention_status_log.schemas import InterventionStatusLogOut
 
 
 class InterventionTaskRef(BaseModel):
@@ -123,7 +127,7 @@ class InterventionActionPatch(BaseModel):
 
 
 class InterventionRef(BaseModel):
-    """Intervention légère embarquée dans une action"""
+    """Intervention légère embarquée dans une action (utilisée dans get_all)"""
     id: UUID
     code: Optional[str] = None
     title: Optional[str] = None
@@ -135,11 +139,46 @@ class InterventionRef(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class InterventionStats(BaseModel):
+    """Stats calculées pour une intervention"""
+    action_count: int = 0
+    total_time: float = 0
+    avg_complexity: Optional[float] = None
+    purchase_count: int = 0
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class InterventionDetail(BaseModel):
+    """Détail complet d'une intervention embarqué dans une action (endpoint GET /action/{id})"""
+    id: UUID
+    code: Optional[str] = None
+    title: Optional[str] = None
+    status_actual: Optional[str] = None
+    type_inter: Optional[str] = None
+    priority: Optional[str] = None
+    reported_by: Optional[str] = None
+    tech_initials: Optional[str] = None
+    tech_id: Optional[UUID] = None
+    reported_date: Optional[date] = None
+    equipements: Optional[EquipementDetail] = None
+    request: Optional[InterventionRequestListItem] = None
+    stats: Optional[InterventionStats] = None
+    tasks: List[InterventionTaskOut] = Field(default_factory=list)
+    task_progress: Optional[TaskProgressOut] = None
+    status_logs: List[InterventionStatusLogOut] = Field(default_factory=list)
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class InterventionActionOut(BaseModel):
     """Schéma de sortie pour une action d'intervention"""
     id: UUID
     intervention_id: Optional[UUID] = Field(default=None)
-    intervention: Optional[InterventionRef] = Field(default=None)
+    intervention: Optional[InterventionRef] = Field(
+        default=None,
+        description="Référence légère (liste) ou détail complet (GET /{id})",
+    )
     description: Optional[str] = Field(default=None)
     time_spent: Optional[float] = Field(default=None)
     subcategory: Optional[ActionSubcategoryDetail] = Field(default=None)
@@ -153,6 +192,34 @@ class InterventionActionOut(BaseModel):
     tasks: List[InterventionTaskRef] = Field(
         default_factory=list,
         description="Tâches taggées par cette action",
+    )
+    created_at: Optional[datetime] = Field(default=None)
+    updated_at: Optional[datetime] = Field(default=None)
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class InterventionActionDetail(BaseModel):
+    """Schéma de sortie enrichi pour GET /intervention-actions/{id} — contexte complet pour analyse IA"""
+    id: UUID
+    intervention_id: Optional[UUID] = Field(default=None)
+    intervention: Optional[InterventionDetail] = Field(
+        default=None,
+        description="Détail complet de l'intervention parente (équipement, request, stats, tâches, logs)",
+    )
+    description: Optional[str] = Field(default=None)
+    time_spent: Optional[float] = Field(default=None)
+    subcategory: Optional[ActionSubcategoryDetail] = Field(default=None)
+    tech: Optional[UserListItem] = Field(default=None)
+    complexity_score: Optional[int] = Field(default=None)
+    complexity_factor: Optional[str] = Field(default=None)
+    action_start: Optional[time] = None
+    action_end: Optional[time] = None
+    purchase_requests: List[PurchaseRequestListItem] = Field(
+        default_factory=list)
+    tasks: List[InterventionTaskOut] = Field(
+        default_factory=list,
+        description="Tâches traitées par cette action — détail complet avec statut, assigned_to, skip_reason, temps passé",
     )
     created_at: Optional[datetime] = Field(default=None)
     updated_at: Optional[datetime] = Field(default=None)
