@@ -39,7 +39,16 @@ Tri par défaut : urgents DESC, ouverts DESC, nom ASC.
         "reason": "Aucune intervention ouverte",
         "open_interventions_count": 0,
         "urgent_count": 0,
-        "new_requests_count": 0
+        "open_requests_count": 0,
+        "new_requests_count": 0,
+        "request_status_counts": {},
+        "open_tasks_count": 0,
+        "overdue_tasks_count": 0,
+        "unassigned_tasks_count": 0,
+        "open_purchase_requests_count": 0,
+        "purchase_request_status_counts": {},
+        "has_affectation": true,
+        "rules_triggered": []
       },
       "parent": null,
       "equipement_class": {
@@ -109,8 +118,28 @@ Détail complet d'un équipement avec tous les champs de la base, `children_coun
     "reason": "1 intervention urgente ouverte",
     "open_interventions_count": 3,
     "urgent_count": 1,
+    "open_requests_count": 2,
     "new_requests_count": 2,
-    "rules_triggered": ["URGENT_OPEN >= 1", "NEW_REQUESTS > 0"]
+    "request_status_counts": {
+      "nouvelle": 2,
+      "en_attente": 1
+    },
+    "open_tasks_count": 4,
+    "overdue_tasks_count": 1,
+    "unassigned_tasks_count": 2,
+    "open_purchase_requests_count": 3,
+    "purchase_request_status_counts": {
+      "OPEN": 2,
+      "ORDERED": 1
+    },
+    "has_affectation": true,
+    "rules_triggered": [
+      "URGENT_OPEN >= 1",
+      "OVERDUE_TASKS > 0",
+      "OPEN_TASKS > 0",
+      "OPEN_REQUESTS > 0",
+      "OPEN_PURCHASE_REQUESTS > 0"
+    ]
   },
   "parent": {
     "id": "uuid-parent",
@@ -186,16 +215,16 @@ Détail complet d'un équipement avec tous les champs de la base, `children_coun
 
 Plans de maintenance préventive applicables à cet équipement (via sa classe d'équipement).
 
-| Champ               | Type           | Description                                                   |
-| ------------------- | -------------- | ------------------------------------------------------------- |
-| `id`                | UUID           | ID du plan                                                    |
-| `code`              | string         | Code du plan                                                  |
-| `label`             | string         | Libellé descriptif                                            |
-| `trigger_type`      | string         | Type de déclenchement : `"periodicity"` ou `"hours"`         |
-| `periodicity_days`  | int \| null    | Intervalle en jours (si trigger_type = periodicity)          |
-| `hours_threshold`   | int \| null    | Seuil d'heures (si trigger_type = hours)                    |
-| `active`            | bool           | Statut d'activation du plan                                   |
-| `next_occurrence`   | date \| null   | Date de la prochaine occurrence pending/générée, si existe   |
+| Champ              | Type         | Description                                                |
+| ------------------ | ------------ | ---------------------------------------------------------- |
+| `id`               | UUID         | ID du plan                                                 |
+| `code`             | string       | Code du plan                                               |
+| `label`            | string       | Libellé descriptif                                         |
+| `trigger_type`     | string       | Type de déclenchement : `"periodicity"` ou `"hours"`       |
+| `periodicity_days` | int \| null  | Intervalle en jours (si trigger_type = periodicity)        |
+| `hours_threshold`  | int \| null  | Seuil d'heures (si trigger_type = hours)                   |
+| `active`           | bool         | Statut d'activation du plan                                |
+| `next_occurrence`  | date \| null | Date de la prochaine occurrence pending/générée, si existe |
 
 Retourne `null` si aucune classe d'équipement assignée. Vide `[]` si la classe n'a pas de plans actifs.
 
@@ -203,13 +232,13 @@ Retourne `null` si aucune classe d'équipement assignée. Vide `[]` si la classe
 
 Résumé agrégé des occurrences préventives liées à cet équipement.
 
-| Champ                | Type          | Description                                       |
-| -------------------- | ------------- | ------------------------------------------------- |
-| `pending_count`      | int           | Nombre d'occurrences en attente (pending)        |
-| `generated_count`    | int           | Nombre d'occurrences générées                    |
-| `skipped_count`      | int           | Nombre d'occurrences skippées                    |
-| `next_scheduled`     | date \| null  | Date de la prochaine occurrence pending          |
-| `last_skipped_reason` | string \| null | Raison du dernier skip                           |
+| Champ                 | Type           | Description                               |
+| --------------------- | -------------- | ----------------------------------------- |
+| `pending_count`       | int            | Nombre d'occurrences en attente (pending) |
+| `generated_count`     | int            | Nombre d'occurrences générées             |
+| `skipped_count`       | int            | Nombre d'occurrences skippées             |
+| `next_scheduled`      | date \| null   | Date de la prochaine occurrence pending   |
+| `last_skipped_reason` | string \| null | Raison du dernier skip                    |
 
 Retourne toujours un objet, avec compteurs à zéro et dates `null` si aucune occurrence.
 
@@ -217,16 +246,16 @@ Retourne toujours un objet, avec compteurs à zéro et dates `null` si aucune oc
 
 Demandes d'intervention ouvertes liées à cet équipement (tous les statuts sauf `"rejetee"` et `"cloturee"`).
 
-| Champ        | Type          | Description                              |
-| ------------ | ------------- | ---------------------------------------- |
-| `id`         | UUID          | ID de la demande                         |
-| `code`       | string \| null | Code de la demande                       |
-| `description` | string \| null | Description de la demande               |
-| `statut`     | string        | Code du statut (ex. `"nouvelle"`)        |
-| `statut_label` | string \| null | Libellé du statut                       |
-| `statut_color` | string \| null | Couleur associée au statut (hex)        |
-| `is_system`  | bool          | Indique si c'est une demande système    |
-| `created_at` | date \| null  | Date de création                        |
+| Champ          | Type           | Description                          |
+| -------------- | -------------- | ------------------------------------ |
+| `id`           | UUID           | ID de la demande                     |
+| `code`         | string \| null | Code de la demande                   |
+| `description`  | string \| null | Description de la demande            |
+| `statut`       | string         | Code du statut (ex. `"nouvelle"`)    |
+| `statut_label` | string \| null | Libellé du statut                    |
+| `statut_color` | string \| null | Couleur associée au statut (hex)     |
+| `is_system`    | bool           | Indique si c'est une demande système |
+| `created_at`   | date \| null   | Date de création                     |
 
 Retourne `null` si aucune demande ouverte. Triées par `created_at DESC`.
 
@@ -261,21 +290,21 @@ Crée un équipement.
 }
 ```
 
-| Champ                 | Type       | Requis | Description                                                         |
-| --------------------- | ---------- | ------ | ------------------------------------------------------------------- |
-| `name`                | string     | oui    | Nom de l'équipement                                                 |
-| `code`                | string     | non    | Code unique                                                         |
-| `no_machine`          | string     | non    | Numéro machine interne                                              |
-| `affectation`         | string     | non    | Lieu ou service d'affectation                                       |
-| `is_mere`             | bool       | non    | Indique si l'équipement est une machine mère                        |
-| `fabricant`           | string     | non    | Fabricant                                                           |
-| `numero_serie`        | string     | non    | Numéro de série                                                     |
-| `date_mise_service`   | date       | non    | Date de mise en service (YYYY-MM-DD)                                |
-| `notes`               | string     | non    | Notes libres                                                        |
-| `parent_id`           | uuid       | non    | UUID de l'équipement parent                                         |
-| `equipement_class_id` | uuid       | non    | UUID de la classe d'équipement                                      |
-| `statut_id`           | int        | non    | ID du statut (voir `GET /equipement-statuts`)                       |
-| `children_ids`        | uuid[]     | non    | UUIDs des équipements à rattacher comme enfants de cet équipement   |
+| Champ                 | Type   | Requis | Description                                                       |
+| --------------------- | ------ | ------ | ----------------------------------------------------------------- |
+| `name`                | string | oui    | Nom de l'équipement                                               |
+| `code`                | string | non    | Code unique                                                       |
+| `no_machine`          | string | non    | Numéro machine interne                                            |
+| `affectation`         | string | non    | Lieu ou service d'affectation                                     |
+| `is_mere`             | bool   | non    | Indique si l'équipement est une machine mère                      |
+| `fabricant`           | string | non    | Fabricant                                                         |
+| `numero_serie`        | string | non    | Numéro de série                                                   |
+| `date_mise_service`   | date   | non    | Date de mise en service (YYYY-MM-DD)                              |
+| `notes`               | string | non    | Notes libres                                                      |
+| `parent_id`           | uuid   | non    | UUID de l'équipement parent                                       |
+| `equipement_class_id` | uuid   | non    | UUID de la classe d'équipement                                    |
+| `statut_id`           | int    | non    | ID du statut (voir `GET /equipement-statuts`)                     |
+| `children_ids`        | uuid[] | non    | UUIDs des équipements à rattacher comme enfants de cet équipement |
 
 ### Réponse `201`
 
@@ -364,6 +393,15 @@ Statistiques détaillées pour un équipement.
   "reason": "Aucune intervention ouverte",
   "open_interventions_count": 0,
   "urgent_count": 0,
-  "new_requests_count": 0
+  "open_requests_count": 0,
+  "new_requests_count": 0,
+  "request_status_counts": {},
+  "open_tasks_count": 0,
+  "overdue_tasks_count": 0,
+  "unassigned_tasks_count": 0,
+  "open_purchase_requests_count": 0,
+  "purchase_request_status_counts": {},
+  "has_affectation": true,
+  "rules_triggered": []
 }
 ```

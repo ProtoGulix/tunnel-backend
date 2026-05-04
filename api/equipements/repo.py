@@ -1,5 +1,5 @@
-from fastapi import HTTPException
 """Requêtes pour le domaine équipements"""
+from fastapi import HTTPException
 import logging
 from typing import Dict, Any, List
 from uuid import uuid4
@@ -104,13 +104,20 @@ class EquipementRepository:
             cols = [desc[0] for desc in cur.description]
             equipements = [dict(zip(cols, row)) for row in rows]
 
+            equipement_ids = [str(e.get('id')) for e in equipements if e.get('id')]
+            health_inputs_map = self._fetch_health_inputs(cur, equipement_ids)
+
             # Enrichir avec health et restructurer equipement_class
             for equipement in equipements:
                 open_count = equipement.pop('open_interventions_count', 0) or 0
                 urgent_count = equipement.pop('urgent_count', 0) or 0
                 new_requests_count = equipement.pop('new_requests_count', 0) or 0
+                metrics = health_inputs_map.get(str(equipement.get('id')), {})
+                metrics.setdefault('open_interventions_count', int(open_count))
+                metrics.setdefault('urgent_count', int(urgent_count))
+                metrics.setdefault('new_requests_count', int(new_requests_count))
 
-                equipement['health'] = self._calculate_health(open_count, urgent_count, new_requests_count)
+                equipement['health'] = self._calculate_health(metrics)
                 equipement['parent_id'] = equipement.pop(
                     'equipement_mere', None)
 
@@ -256,7 +263,12 @@ class EquipementRepository:
             open_count = equipement.pop('open_interventions_count', 0) or 0
             urgent_count = equipement.pop('urgent_count', 0) or 0
             new_requests_count = equipement.pop('new_requests_count', 0) or 0
-            health = self._calculate_health(open_count, urgent_count, new_requests_count)
+            health_inputs_map = self._fetch_health_inputs(cur, [equipement_id])
+            metrics = health_inputs_map.get(str(equipement_id), {})
+            metrics.setdefault('open_interventions_count', int(open_count))
+            metrics.setdefault('urgent_count', int(urgent_count))
+            metrics.setdefault('new_requests_count', int(new_requests_count))
+            health = self._calculate_health(metrics)
 
             equipement['health'] = health
 
@@ -366,13 +378,13 @@ class EquipementRepository:
                 equipement_class_id = str(equipement_class_id)
 
             plans = self._fetch_preventive_plans(cur, equipement_class_id, equipement_id)
-            equipement['preventive_plans'] = plans if plans else None
+            equipement['preventive_plans'] = plans or None
 
             occurrences_summary = self._fetch_preventive_occurrences_summary(cur, equipement_id)
             equipement['preventive_occurrences_summary'] = occurrences_summary
 
             open_requests = self._fetch_open_requests(cur, equipement_id)
-            equipement['open_requests'] = open_requests if open_requests else None
+            equipement['open_requests'] = open_requests or None
 
             return equipement
         except NotFoundError:
@@ -539,13 +551,20 @@ class EquipementRepository:
             cols = [desc[0] for desc in cur.description]
             equipements = [dict(zip(cols, row)) for row in rows]
 
+            equipement_ids = [str(e.get('id')) for e in equipements if e.get('id')]
+            health_inputs_map = self._fetch_health_inputs(cur, equipement_ids)
+
             # Enrichir avec health et restructurer equipement_class
             for equipement in equipements:
                 open_count = equipement.pop('open_interventions_count', 0) or 0
                 urgent_count = equipement.pop('urgent_count', 0) or 0
                 new_requests_count = equipement.pop('new_requests_count', 0) or 0
+                metrics = health_inputs_map.get(str(equipement.get('id')), {})
+                metrics.setdefault('open_interventions_count', int(open_count))
+                metrics.setdefault('urgent_count', int(urgent_count))
+                metrics.setdefault('new_requests_count', int(new_requests_count))
 
-                equipement['health'] = self._calculate_health(open_count, urgent_count, new_requests_count)
+                equipement['health'] = self._calculate_health(metrics)
                 equipement['parent_id'] = equipement.pop(
                     'equipement_mere', None)
 
@@ -666,38 +685,26 @@ class EquipementRepository:
         conn = self._get_connection()
         try:
             cur = conn.cursor()
-            csq = self._closed_status_subquery()
+            cur.execute("SELECT id FROM machine WHERE id = %s", (equipement_id,))
+            if not cur.fetchone():
+                raise NotFoundError(f"Équipement {equipement_id} non trouvé")
 
-            query = f"""
-                SELECT
-                    COUNT(CASE WHEN i.status_actual != {csq} THEN i.id END) as open_count,
-                    COUNT(CASE WHEN i.status_actual != {csq} AND i.priority = 'urgent' THEN i.id END) as urgent_count,
-                    (SELECT COUNT(*) FROM intervention_request WHERE machine_id = m.id AND statut = 'nouvelle') as new_requests_count
-                FROM machine m
-                LEFT JOIN intervention i ON i.machine_id = m.id
-                WHERE m.id = %s
-                GROUP BY m.id
-            """
+            health_inputs_map = self._fetch_health_inputs(cur, [equipement_id])
+            metrics = health_inputs_map.get(str(equipement_id), {
+                'open_interventions_count': 0,
+                'urgent_count': 0,
+                'open_requests_count': 0,
+                'new_requests_count': 0,
+                'request_status_counts': {},
+                'open_tasks_count': 0,
+                'overdue_tasks_count': 0,
+                'unassigned_tasks_count': 0,
+                'open_purchase_requests_count': 0,
+                'purchase_request_status_counts': {},
+                'has_affectation': False,
+            })
 
-            cur.execute(query, (CLOSED_STATUS_CODE,
-                        CLOSED_STATUS_CODE, equipement_id))
-            row = cur.fetchone()
-
-            if row is None:
-                # Vérifier si l'équipement existe
-                cur.execute("SELECT id FROM machine WHERE id = %s",
-                            (equipement_id,))
-                if not cur.fetchone():
-                    raise NotFoundError(
-                        f"Équipement {equipement_id} non trouvé")
-                # Équipement existe mais pas d'interventions
-                open_count, urgent_count = 0, 0
-            else:
-                open_count = row[0] or 0
-                urgent_count = row[1] or 0
-                new_requests_count = row[2] or 0
-
-            return self._calculate_health(open_count, urgent_count, new_requests_count)
+            return self._calculate_health(metrics)
         except NotFoundError:
             raise
         except HTTPException:
@@ -732,7 +739,7 @@ class EquipementRepository:
             cols = [desc[0] for desc in cur.description]
             return [dict(zip(cols, row)) for row in rows]
         except Exception as e:
-            logger.error(f"Erreur récupération plans préventifs pour équipement: {e}")
+            logger.error("Erreur récupération plans préventifs pour équipement: %s", e)
             return []
 
     def _fetch_preventive_occurrences_summary(self, cur, equipement_id: str) -> Dict[str, Any]:
@@ -765,7 +772,7 @@ class EquipementRepository:
             cols = [desc[0] for desc in cur.description]
             return dict(zip(cols, row))
         except Exception as e:
-            logger.error(f"Erreur récupération résumé occurrences: {e}")
+            logger.error("Erreur récupération résumé occurrences: %s", e)
             return {
                 'pending_count': 0,
                 'generated_count': 0,
@@ -793,11 +800,186 @@ class EquipementRepository:
             cols = [desc[0] for desc in cur.description]
             return [dict(zip(cols, row)) for row in rows]
         except Exception as e:
-            logger.error(f"Erreur récupération demandes ouvertes: {e}")
+            logger.error("Erreur récupération demandes ouvertes: %s", e)
             return []
 
-    def _calculate_health(self, open_count: int, urgent_count: int, new_requests_count: int = 0) -> Dict[str, Any]:
-        """Calcule le health d'un équipement selon interventions et demandes"""
+    def _normalize_status_counts(self, raw_counts: Any) -> Dict[str, int]:
+        """Normalise un objet de compteurs de statuts en dict[str, int]."""
+        if not raw_counts:
+            return {}
+        if not isinstance(raw_counts, dict):
+            return {}
+        normalized: Dict[str, int] = {}
+        for key, value in raw_counts.items():
+            normalized[str(key)] = int(value or 0)
+        return normalized
+
+    def _fetch_health_inputs(self, cur, equipement_ids: List[str]) -> Dict[str, Dict[str, Any]]:
+        """Récupère toutes les métriques nécessaires au calcul de santé pour une liste d'équipements."""
+        if not equipement_ids:
+            return {}
+
+        query = """
+            WITH target AS (
+                SELECT UNNEST(%s::uuid[]) AS machine_id
+            ),
+            interventions_agg AS (
+                SELECT
+                    i.machine_id,
+                    COUNT(*) FILTER (WHERE i.status_actual != %s) AS open_interventions_count,
+                    COUNT(*) FILTER (WHERE i.status_actual != %s AND i.priority = 'urgent') AS urgent_count
+                FROM intervention i
+                JOIN target t ON t.machine_id = i.machine_id
+                GROUP BY i.machine_id
+            ),
+            requests_agg AS (
+                SELECT
+                    ir.machine_id,
+                    COUNT(*) FILTER (WHERE ir.statut NOT IN ('rejetee', 'cloturee')) AS open_requests_count,
+                    COUNT(*) FILTER (WHERE ir.statut = 'nouvelle') AS new_requests_count
+                FROM intervention_request ir
+                JOIN target t ON t.machine_id = ir.machine_id
+                GROUP BY ir.machine_id
+            ),
+            request_status_agg AS (
+                SELECT
+                    x.machine_id,
+                    COALESCE(jsonb_object_agg(x.statut, x.cnt), '{}'::jsonb) AS request_status_counts
+                FROM (
+                    SELECT
+                        ir.machine_id,
+                        ir.statut,
+                        COUNT(*)::int AS cnt
+                    FROM intervention_request ir
+                    JOIN target t ON t.machine_id = ir.machine_id
+                    WHERE ir.statut NOT IN ('rejetee', 'cloturee')
+                    GROUP BY ir.machine_id, ir.statut
+                ) x
+                GROUP BY x.machine_id
+            ),
+            tasks_agg AS (
+                SELECT
+                    i.machine_id,
+                    COUNT(*) FILTER (WHERE it.status NOT IN ('done', 'skipped')) AS open_tasks_count,
+                    COUNT(*) FILTER (
+                        WHERE it.status NOT IN ('done', 'skipped')
+                          AND it.due_date IS NOT NULL
+                          AND it.due_date < CURRENT_DATE
+                    ) AS overdue_tasks_count,
+                    COUNT(*) FILTER (
+                        WHERE it.status NOT IN ('done', 'skipped')
+                          AND it.assigned_to IS NULL
+                    ) AS unassigned_tasks_count
+                FROM intervention_task it
+                JOIN intervention i ON i.id = it.intervention_id
+                JOIN target t ON t.machine_id = i.machine_id
+                GROUP BY i.machine_id
+            ),
+            purchase_request_machine AS (
+                SELECT DISTINCT
+                    pr.id AS purchase_request_id,
+                    i.machine_id,
+                    pr.status
+                FROM purchase_request pr
+                JOIN intervention i ON i.id = pr.intervention_id
+                JOIN target t ON t.machine_id = i.machine_id
+                UNION
+                SELECT DISTINCT
+                    pr.id AS purchase_request_id,
+                    i.machine_id,
+                    pr.status
+                FROM purchase_request pr
+                JOIN intervention_action_purchase_request iapr ON iapr.purchase_request_id = pr.id
+                JOIN intervention_action ia ON ia.id = iapr.intervention_action_id
+                JOIN intervention i ON i.id = ia.intervention_id
+                JOIN target t ON t.machine_id = i.machine_id
+            ),
+            purchase_agg AS (
+                SELECT
+                    prm.machine_id,
+                    COUNT(*) FILTER (
+                        WHERE LOWER(COALESCE(prm.status, '')) NOT IN ('closed', 'cloturee', 'cancelled', 'annulee')
+                    ) AS open_purchase_requests_count
+                FROM purchase_request_machine prm
+                GROUP BY prm.machine_id
+            ),
+            purchase_status_agg AS (
+                SELECT
+                    y.machine_id,
+                    COALESCE(jsonb_object_agg(y.status, y.cnt), '{}'::jsonb) AS purchase_request_status_counts
+                FROM (
+                    SELECT
+                        prm.machine_id,
+                        UPPER(COALESCE(prm.status, 'UNKNOWN')) AS status,
+                        COUNT(*)::int AS cnt
+                    FROM purchase_request_machine prm
+                    WHERE LOWER(COALESCE(prm.status, '')) NOT IN ('closed', 'cloturee', 'cancelled', 'annulee')
+                    GROUP BY prm.machine_id, UPPER(COALESCE(prm.status, 'UNKNOWN'))
+                ) y
+                GROUP BY y.machine_id
+            )
+            SELECT
+                t.machine_id,
+                COALESCE(i.open_interventions_count, 0) AS open_interventions_count,
+                COALESCE(i.urgent_count, 0) AS urgent_count,
+                COALESCE(r.open_requests_count, 0) AS open_requests_count,
+                COALESCE(r.new_requests_count, 0) AS new_requests_count,
+                COALESCE(rs.request_status_counts, '{}'::jsonb) AS request_status_counts,
+                COALESCE(ts.open_tasks_count, 0) AS open_tasks_count,
+                COALESCE(ts.overdue_tasks_count, 0) AS overdue_tasks_count,
+                COALESCE(ts.unassigned_tasks_count, 0) AS unassigned_tasks_count,
+                COALESCE(p.open_purchase_requests_count, 0) AS open_purchase_requests_count,
+                COALESCE(ps.purchase_request_status_counts, '{}'::jsonb) AS purchase_request_status_counts,
+                CASE
+                    WHEN NULLIF(BTRIM(COALESCE(m.affectation::text, '')), '') IS NULL THEN FALSE
+                    ELSE TRUE
+                END AS has_affectation
+            FROM target t
+            JOIN machine m ON m.id = t.machine_id
+            LEFT JOIN interventions_agg i ON i.machine_id = t.machine_id
+            LEFT JOIN requests_agg r ON r.machine_id = t.machine_id
+            LEFT JOIN request_status_agg rs ON rs.machine_id = t.machine_id
+            LEFT JOIN tasks_agg ts ON ts.machine_id = t.machine_id
+            LEFT JOIN purchase_agg p ON p.machine_id = t.machine_id
+            LEFT JOIN purchase_status_agg ps ON ps.machine_id = t.machine_id
+        """
+
+        cur.execute(query, (equipement_ids, CLOSED_STATUS_CODE, CLOSED_STATUS_CODE))
+        rows = cur.fetchall()
+
+        health_inputs: Dict[str, Dict[str, Any]] = {}
+        for row in rows:
+            machine_id = str(row[0])
+            health_inputs[machine_id] = {
+                'open_interventions_count': int(row[1] or 0),
+                'urgent_count': int(row[2] or 0),
+                'open_requests_count': int(row[3] or 0),
+                'new_requests_count': int(row[4] or 0),
+                'request_status_counts': self._normalize_status_counts(row[5]),
+                'open_tasks_count': int(row[6] or 0),
+                'overdue_tasks_count': int(row[7] or 0),
+                'unassigned_tasks_count': int(row[8] or 0),
+                'open_purchase_requests_count': int(row[9] or 0),
+                'purchase_request_status_counts': self._normalize_status_counts(row[10]),
+                'has_affectation': bool(row[11]),
+            }
+
+        return health_inputs
+
+    def _calculate_health(self, metrics: Dict[str, Any]) -> Dict[str, Any]:
+        """Calcule le health d'un équipement selon interventions, demandes, DA et tâches."""
+        open_count = int(metrics.get('open_interventions_count', 0) or 0)
+        urgent_count = int(metrics.get('urgent_count', 0) or 0)
+        open_requests_count = int(metrics.get('open_requests_count', 0) or 0)
+        new_requests_count = int(metrics.get('new_requests_count', 0) or 0)
+        open_tasks_count = int(metrics.get('open_tasks_count', 0) or 0)
+        overdue_tasks_count = int(metrics.get('overdue_tasks_count', 0) or 0)
+        unassigned_tasks_count = int(metrics.get('unassigned_tasks_count', 0) or 0)
+        open_purchase_requests_count = int(metrics.get('open_purchase_requests_count', 0) or 0)
+        has_affectation = bool(metrics.get('has_affectation', False))
+        request_status_counts = self._normalize_status_counts(metrics.get('request_status_counts'))
+        purchase_request_status_counts = self._normalize_status_counts(metrics.get('purchase_request_status_counts'))
+
         rules_triggered = []
         level = 'ok'
         reason = 'Aucune intervention ouverte'
@@ -806,6 +988,14 @@ class EquipementRepository:
             level = 'critical'
             reason = f"{urgent_count} intervention{'s' if urgent_count > 1 else ''} urgente{'s' if urgent_count > 1 else ''} ouverte{'s' if urgent_count > 1 else ''}"
             rules_triggered.append('URGENT_OPEN >= 1')
+        elif overdue_tasks_count >= 3:
+            level = 'critical'
+            reason = f"{overdue_tasks_count} tâches en retard"
+            rules_triggered.append('OVERDUE_TASKS >= 3')
+        elif overdue_tasks_count > 0:
+            level = 'warning'
+            reason = f"{overdue_tasks_count} tâche{'s' if overdue_tasks_count > 1 else ''} en retard"
+            rules_triggered.append('OVERDUE_TASKS > 0')
         elif open_count > 5:
             level = 'warning'
             reason = f"{open_count} interventions ouvertes"
@@ -815,17 +1005,61 @@ class EquipementRepository:
             reason = f"{open_count} intervention{'s' if open_count > 1 else ''} ouverte{'s' if open_count > 1 else ''}"
             rules_triggered.append('OPEN_TOTAL > 0')
 
+        if open_tasks_count > 0:
+            rules_triggered.append('OPEN_TASKS > 0')
+            if level == 'ok':
+                level = 'maintenance'
+                reason = f"{open_tasks_count} tâche{'s' if open_tasks_count > 1 else ''} non clôturée{'s' if open_tasks_count > 1 else ''}"
+
+        if unassigned_tasks_count > 0:
+            rules_triggered.append('UNASSIGNED_TASKS > 0')
+            if level == 'ok':
+                level = 'maintenance'
+                reason = f"{unassigned_tasks_count} tâche{'s' if unassigned_tasks_count > 1 else ''} non affectée{'s' if unassigned_tasks_count > 1 else ''}"
+
         if new_requests_count > 0:
             rules_triggered.append('NEW_REQUESTS > 0')
             if level == 'ok':
                 level = 'maintenance'
                 reason = f"{new_requests_count} demande{'s' if new_requests_count > 1 else ''} en attente de traitement"
 
+        if open_requests_count > 0:
+            rules_triggered.append('OPEN_REQUESTS > 0')
+            if level == 'ok':
+                level = 'maintenance'
+                reason = f"{open_requests_count} demande{'s' if open_requests_count > 1 else ''} d'intervention ouverte{'s' if open_requests_count > 1 else ''}"
+
+        if open_purchase_requests_count > 0:
+            rules_triggered.append('OPEN_PURCHASE_REQUESTS > 0')
+            if level == 'ok':
+                level = 'maintenance'
+                reason = f"{open_purchase_requests_count} demande{'s' if open_purchase_requests_count > 1 else ''} d'achat ouverte{'s' if open_purchase_requests_count > 1 else ''}"
+
+        has_open_work = (
+            open_count > 0
+            or open_requests_count > 0
+            or open_tasks_count > 0
+            or open_purchase_requests_count > 0
+        )
+        if has_open_work and not has_affectation:
+            rules_triggered.append('OPEN_WORK_WITHOUT_AFFECTATION')
+            if level in ('ok', 'maintenance'):
+                level = 'warning'
+                reason = "Travaux en cours sans affectation d'équipement"
+
         return {
             'level': level,
             'reason': reason,
             'open_interventions_count': open_count,
             'urgent_count': urgent_count,
+            'open_requests_count': open_requests_count,
             'new_requests_count': new_requests_count,
+            'request_status_counts': request_status_counts,
+            'open_tasks_count': open_tasks_count,
+            'overdue_tasks_count': overdue_tasks_count,
+            'unassigned_tasks_count': unassigned_tasks_count,
+            'open_purchase_requests_count': open_purchase_requests_count,
+            'purchase_request_status_counts': purchase_request_status_counts,
+            'has_affectation': has_affectation,
             'rules_triggered': rules_triggered
         }

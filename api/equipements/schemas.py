@@ -1,6 +1,5 @@
 """Schémas Pydantic pour le domaine équipements"""
 from datetime import date, datetime
-from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel
@@ -30,7 +29,15 @@ class EquipementHealth(BaseModel):
     reason: str
     open_interventions_count: int = 0
     urgent_count: int = 0
+    open_requests_count: int = 0
     new_requests_count: int = 0
+    request_status_counts: dict[str, int] | None = None
+    open_tasks_count: int = 0
+    overdue_tasks_count: int = 0
+    unassigned_tasks_count: int = 0
+    open_purchase_requests_count: int = 0
+    purchase_request_status_counts: dict[str, int] | None = None
+    has_affectation: bool = False
     rules_triggered: list[str] | None = None
 
 
@@ -231,6 +238,16 @@ class EquipementHealthOnly(BaseModel):
     reason: str
     open_interventions_count: int = 0
     urgent_count: int = 0
+    open_requests_count: int = 0
+    new_requests_count: int = 0
+    request_status_counts: dict[str, int] | None = None
+    open_tasks_count: int = 0
+    overdue_tasks_count: int = 0
+    unassigned_tasks_count: int = 0
+    open_purchase_requests_count: int = 0
+    purchase_request_status_counts: dict[str, int] | None = None
+    has_affectation: bool = False
+    rules_triggered: list[str] | None = None
 
 
 class EquipementClassFacetItem(BaseModel):

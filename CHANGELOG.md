@@ -2,6 +2,25 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [3.3.0] - 5 mai 2026
+
+### Améliorations
+
+#### Health équipements plus fidèle au terrain
+
+Le calcul du health des équipements prend désormais en compte l'ensemble des signaux opérationnels, pas seulement les interventions ouvertes.
+
+- **Demandes d'intervention** : comptage des demandes ouvertes (hors `rejetee` / `cloturee`) et détail par statut
+- **Demandes d'achat (DA)** : comptage des DA ouvertes (hors statuts clôturés/annulés) et détail par statut
+- **Tâches** : comptage des tâches non clôturées, des tâches en retard (`due_date < aujourd'hui`) et des tâches non affectées
+- **Affectation équipement** : signal spécifique si des travaux sont ouverts sans affectation renseignée
+
+Ces nouveaux indicateurs sont exposés dans les réponses health de :
+
+- `GET /equipements`
+- `GET /equipements/{id}`
+- `GET /equipements/{id}/health`
+
 ## [3.2.0] - 4 mai 2026
 
 ### Nouvelles fonctionnalités

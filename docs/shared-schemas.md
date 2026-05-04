@@ -50,14 +50,17 @@ Exemple : avec `offset=50` et `page_size=50`, on est à la page 2.
 
 ## EquipementHealth
 
-Indicateur de santé calculé automatiquement selon les interventions ouvertes.
+Indicateur de santé calculé automatiquement selon les interventions, demandes et tâches en cours.
 
-| Règle                      | Niveau        |
-| -------------------------- | ------------- |
-| Intervention urgente >= 1  | `critical`    |
-| Interventions ouvertes > 5 | `warning`     |
-| Interventions ouvertes > 0 | `maintenance` |
-| Aucune intervention        | `ok`          |
+| Règle                                   | Niveau        |
+| --------------------------------------- | ------------- |
+| Intervention urgente >= 1               | `critical`    |
+| Tâches en retard >= 3                   | `critical`    |
+| Tâches en retard > 0                    | `warning`     |
+| Interventions ouvertes > 5              | `warning`     |
+| Travail ouvert sans affectation machine | `warning`     |
+| Interventions / demandes / tâches > 0   | `maintenance` |
+| Aucune activité                         | `ok`          |
 
 ```json
 {
@@ -65,12 +68,22 @@ Indicateur de santé calculé automatiquement selon les interventions ouvertes.
   "reason": "string",
   "open_interventions_count": 3,
   "urgent_count": 1,
+  "open_requests_count": 2,
+  "new_requests_count": 1,
+  "request_status_counts": { "nouvelle": 1, "en_attente": 1 },
+  "open_tasks_count": 4,
+  "overdue_tasks_count": 1,
+  "unassigned_tasks_count": 2,
+  "open_purchase_requests_count": 3,
+  "purchase_request_status_counts": { "OPEN": 2, "ORDERED": 1 },
+  "has_affectation": true,
   "rules_triggered": ["string"]
 }
 ```
 
-> `rules_triggered` est inclus uniquement dans le détail (`GET /equipements/{id}`), pas dans les listes.
-> `open_interventions_count` et `urgent_count` sont présents dans tous les contextes (liste, détail, endpoint `/health`).
+> `request_status_counts` exclut les statuts DI terminaux (`rejetee`, `cloturee`).
+> `purchase_request_status_counts` exclut les statuts DA terminaux (`closed`, `cloturee`, `cancelled`, `annulee`).
+> Les compteurs de tâches considèrent comme non clôturées les statuts différents de `done` et `skipped`.
 
 ---
 
@@ -286,11 +299,11 @@ Toutes les réponses d'erreur suivent le format :
 }
 ```
 
-| Code | `error_type`          | Signification                                                        |
-| ---- | --------------------- | -------------------------------------------------------------------- |
-| 400  | `ValidationError`     | Validation échouée (format UUID, champs requis, règle métier, FK)   |
-| 401  | `UnauthorizedError`   | JWT manquant ou invalide                                             |
-| 403  | `ForbiddenError`      | Accès refusé                                                         |
-| 404  | `NotFoundError`       | Ressource non trouvée                                                |
-| 409  | `ConflictError`       | Ressource déjà existante (contrainte d'unicité)                      |
-| 500  | `DatabaseError`       | Erreur serveur — détail technique loggé côté serveur uniquement      |
+| Code | `error_type`        | Signification                                                     |
+| ---- | ------------------- | ----------------------------------------------------------------- |
+| 400  | `ValidationError`   | Validation échouée (format UUID, champs requis, règle métier, FK) |
+| 401  | `UnauthorizedError` | JWT manquant ou invalide                                          |
+| 403  | `ForbiddenError`    | Accès refusé                                                      |
+| 404  | `NotFoundError`     | Ressource non trouvée                                             |
+| 409  | `ConflictError`     | Ressource déjà existante (contrainte d'unicité)                   |
+| 500  | `DatabaseError`     | Erreur serveur — détail technique loggé côté serveur uniquement   |
