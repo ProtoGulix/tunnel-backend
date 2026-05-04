@@ -98,6 +98,26 @@ def _backfill_uuids(conn: sa.engine.Connection) -> None:
 
 
 def upgrade() -> None:
+    # 0. Créer tunnel_user si elle n'existe pas encore (prod pre-v3.1.0)
+    op.execute(sa.text("""
+        CREATE TABLE IF NOT EXISTS tunnel_user (
+            id UUID DEFAULT gen_random_uuid() NOT NULL,
+            email VARCHAR(255) NOT NULL,
+            password_hash VARCHAR(255) NOT NULL,
+            first_name VARCHAR(100),
+            last_name VARCHAR(100),
+            initial VARCHAR(5) NOT NULL,
+            role_id UUID NOT NULL,
+            auth_provider VARCHAR(20) DEFAULT 'local' NOT NULL,
+            external_id VARCHAR(255),
+            is_active BOOLEAN DEFAULT true NOT NULL,
+            provisioning VARCHAR(20) DEFAULT 'manual' NOT NULL,
+            created_at TIMESTAMPTZ DEFAULT now() NOT NULL,
+            updated_at TIMESTAMPTZ DEFAULT now() NOT NULL,
+            PRIMARY KEY (id)
+        )
+    """))
+
     # 1. Supprimer les FK avant le backfill (sinon l'UPDATE viole la contrainte existante)
     for table, column, constraint, on_delete in _FK:
         op.drop_constraint(constraint, table, type_="foreignkey")

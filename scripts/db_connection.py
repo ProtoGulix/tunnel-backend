@@ -19,9 +19,30 @@ def load_env() -> None:
     load_dotenv(env_path)
 
 
+def _parse_database_url(url: str) -> dict:
+    """Parse une DATABASE_URL PostgreSQL en paramètres de connexion."""
+    from urllib.parse import urlparse
+    parsed = urlparse(url)
+    return {
+        'host': parsed.hostname or 'localhost',
+        'port': parsed.port or 5432,
+        'dbname': parsed.path.lstrip('/'),
+        'user': parsed.username,
+        'password': parsed.password,
+        'sslmode': 'prefer',
+    }
+
+
 def get_connection_params() -> dict:
-    """Récupère les paramètres de connexion depuis l'environnement."""
+    """Récupère les paramètres de connexion depuis l'environnement.
+    Utilise les variables POSTGRES_* individuelles, ou parse DATABASE_URL en fallback.
+    """
     load_env()
+    # Fallback : parser DATABASE_URL si les variables individuelles sont absentes
+    if not os.getenv('POSTGRES_USER'):
+        database_url = os.getenv('DATABASE_URL')
+        if database_url:
+            return _parse_database_url(database_url)
     return {
         'host': os.getenv('POSTGRES_HOST', 'localhost'),
         'port': int(os.getenv('POSTGRES_PORT', '5432')),
