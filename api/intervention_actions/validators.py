@@ -85,6 +85,14 @@ class InterventionActionValidator:
 
         return sanitized
 
+    @staticmethod
+    def validate_tasks_required(tasks: list) -> None:
+        """RÈGLE MÉTIER : une action doit être liée à au moins une tâche."""
+        if not tasks:
+            raise ValidationError(
+                "Une action doit obligatoirement être liée à au moins une tâche (tasks manquant ou vide)."
+            )
+
     @classmethod
     def validate_and_prepare(cls, action_data: Dict[str, Any]) -> Dict[str, Any]:
         """

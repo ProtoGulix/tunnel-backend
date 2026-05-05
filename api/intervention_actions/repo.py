@@ -570,6 +570,9 @@ class InterventionActionRepository:
         # Extraire tasks avant validation (champ non géré par le validateur)
         tasks = action_data.pop('tasks', None) or []
 
+        # RÈGLE MÉTIER : définie dans InterventionActionValidator
+        InterventionActionValidator.validate_tasks_required(tasks)
+
         validated_data = InterventionActionValidator.validate_and_prepare(
             action_data)
 
