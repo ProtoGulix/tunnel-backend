@@ -3,6 +3,7 @@ from typing import List, Dict, Any
 from api.interventions.repo import InterventionRepository
 from api.intervention_actions.repo import InterventionActionRepository
 from api.interventions.schemas import InterventionOut, InterventionIn, InterventionCreate
+from api.interventions.validators import InterventionValidator
 from api.intervention_actions.schemas import InterventionActionOut
 from api.constants import INTERVENTION_TYPES
 from api.errors.exceptions import ValidationError
@@ -48,7 +49,8 @@ def list_interventions(
     include: str | None = Query(None, description="Ex: stats"),
     printed: bool | None = Query(
         False, description="Filtre par statut d'impression/archivage. false=actives (défaut), true=archivées, null=toutes"),
-    tech_id: str | None = Query(None, description="Filtrer par UUID technicien pilote"),
+    tech_id: str | None = Query(
+        None, description="Filtrer par UUID technicien pilote"),
 ):
     """Liste interventions avec filtres/sort et stats optionnelles (sans actions)"""
     intervention_repo = InterventionRepository()
@@ -89,8 +91,10 @@ def get_intervention_actions(intervention_id: str, request: Request):
 @router.post("", response_model=InterventionOut)
 def create_intervention(data: InterventionCreate, request: Request):
     """Crée une nouvelle intervention"""
+    payload = data.model_dump(exclude_none=True)
+    InterventionValidator.validate_request_required(payload)
     repo = InterventionRepository()
-    return repo.add(data.model_dump(exclude_none=True))
+    return repo.add(payload)
 
 
 @router.put("/{intervention_id}", response_model=InterventionOut)
