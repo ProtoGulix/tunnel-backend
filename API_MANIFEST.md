@@ -359,6 +359,17 @@ Note: `GET /interventions` returns `actions: []` and `status_logs: []` (empty), 
 {
   "level": "ok|maintenance|warning|critical",
   "reason": "string",
+  "open_interventions_count": "int",
+  "urgent_count": "int",
+  "open_requests_count": "int",
+  "new_requests_count": "int",
+  "request_status_counts": { "statut": "int" },
+  "open_tasks_count": "int",
+  "overdue_tasks_count": "int",
+  "unassigned_tasks_count": "int",
+  "open_purchase_requests_count": "int",
+  "purchase_request_status_counts": { "status": "int" },
+  "has_affectation": "bool",
   "rules_triggered": ["string"] // Optional, for debug/audit
 }
 ```
@@ -372,13 +383,18 @@ Note: `GET /interventions` returns `actions: []` and `status_logs: []` (empty), 
   "name": "string",
   "health": {
     "level": "ok|maintenance|warning|critical",
-    "reason": "string"
+    "reason": "string",
+    "open_interventions_count": "int",
+    "urgent_count": "int",
+    "open_requests_count": "int",
+    "open_tasks_count": "int",
+    "open_purchase_requests_count": "int"
   },
   "parent_id": "uuid|null"
 }
 ```
 
-Note: Sorted by urgent count (desc), then open count (desc), then name (asc). Health rules: urgent >= 1 → critical, open > 5 → warning, open > 0 → maintenance, else ok.
+Note: Sorted by urgent count (desc), then open count (desc), then name (asc). Health rules intègrent aussi DI ouvertes, DA ouvertes (hors statuts clôturés), tâches non clôturées et tâches en retard.
 
 ### EquipementDetail (GET /equipements/{id})
 
@@ -390,7 +406,22 @@ Note: Sorted by urgent count (desc), then open count (desc), then name (asc). He
   "health": {
     "level": "ok|maintenance|warning|critical",
     "reason": "string",
-    "rules_triggered": ["URGENT_OPEN >= 1", "OPEN_TOTAL > 5"]
+    "open_interventions_count": "int",
+    "urgent_count": "int",
+    "open_requests_count": "int",
+    "new_requests_count": "int",
+    "request_status_counts": { "statut": "int" },
+    "open_tasks_count": "int",
+    "overdue_tasks_count": "int",
+    "unassigned_tasks_count": "int",
+    "open_purchase_requests_count": "int",
+    "purchase_request_status_counts": { "status": "int" },
+    "has_affectation": "bool",
+    "rules_triggered": [
+      "URGENT_OPEN >= 1",
+      "OVERDUE_TASKS > 0",
+      "OPEN_PURCHASE_REQUESTS > 0"
+    ]
   },
   "parent_id": "uuid|null",
   "children_ids": ["uuid"]
@@ -429,7 +460,19 @@ Query params:
 ```json
 {
   "level": "ok|maintenance|warning|critical",
-  "reason": "string"
+  "reason": "string",
+  "open_interventions_count": "int",
+  "urgent_count": "int",
+  "open_requests_count": "int",
+  "new_requests_count": "int",
+  "request_status_counts": { "statut": "int" },
+  "open_tasks_count": "int",
+  "overdue_tasks_count": "int",
+  "unassigned_tasks_count": "int",
+  "open_purchase_requests_count": "int",
+  "purchase_request_status_counts": { "status": "int" },
+  "has_affectation": "bool",
+  "rules_triggered": ["string"]
 }
 ```
 

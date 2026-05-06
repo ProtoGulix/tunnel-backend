@@ -46,13 +46,62 @@ class PreventivePlanRepository:
             )
 
     def _replace_steps_in_tx(self, cur, plan_id: str, steps: List[GammeStepIn]) -> None:
-        """Remplace les steps dans une transaction existante (sans commit)"""
+        """Remplace les steps dans une transaction existante (sans commit).
+
+        Utilise un UPSERT par sort_order pour préserver les IDs existants :
+        intervention_task.gamme_step_id a une FK RESTRICT, un DELETE en masse
+        échouerait si des tâches référencent déjà ces steps.
+        - UPDATE les steps existants (même sort_order) en conservant leur ID
+        - INSERT les nouveaux sort_order
+        - DELETE les sort_order supprimés, seulement s'ils n'ont pas de tâches liées
+        """
+        # Récupérer les steps existants indexés par sort_order
         cur.execute(
-            "DELETE FROM preventive_plan_gamme_step WHERE plan_id = %s",
+            "SELECT id, sort_order FROM preventive_plan_gamme_step WHERE plan_id = %s",
             (plan_id,),
         )
-        if steps:
-            self._insert_steps(cur, plan_id, steps)
+        existing = {row[1]: str(row[0]) for row in cur.fetchall()}
+
+        incoming_orders = {s.sort_order for s in steps}
+
+        for step in steps:
+            if step.sort_order in existing:
+                # UPDATE en préservant l'ID (les FK intervention_task restent valides)
+                cur.execute(
+                    """
+                    UPDATE preventive_plan_gamme_step
+                    SET label = %s, optional = %s
+                    WHERE id = %s
+                    """,
+                    (step.label, step.optional, existing[step.sort_order]),
+                )
+            else:
+                # INSERT nouveau step
+                cur.execute(
+                    """
+                    INSERT INTO preventive_plan_gamme_step (id, plan_id, label, sort_order, optional)
+                    VALUES (%s, %s, %s, %s, %s)
+                    """,
+                    (str(uuid4()), plan_id, step.label, step.sort_order, step.optional),
+                )
+
+        # Supprimer les sort_order retirés, seulement s'ils n'ont pas de tâches liées
+        for order, step_id in existing.items():
+            if order not in incoming_orders:
+                cur.execute(
+                    "SELECT 1 FROM intervention_task WHERE gamme_step_id = %s LIMIT 1",
+                    (step_id,),
+                )
+                if cur.fetchone():
+                    logger.warning(
+                        "Step %s (sort_order=%s) non supprimé : des tâches y font référence",
+                        step_id, order,
+                    )
+                else:
+                    cur.execute(
+                        "DELETE FROM preventive_plan_gamme_step WHERE id = %s",
+                        (step_id,),
+                    )
 
     # ── Lecture ──────────────────────────────────────────────────
 

@@ -59,6 +59,14 @@ class InterventionValidator:
             )
 
     @staticmethod
+    def validate_request_required(data: Dict[str, Any]) -> None:
+        """RÈGLE MÉTIER : Toute intervention doit être liée à une demande (request_id obligatoire)."""
+        if not data.get('request_id'):
+            raise ValidationError(
+                "Une intervention doit obligatoirement être liée à une demande d'intervention (request_id manquant)."
+            )
+
+    @staticmethod
     def validate_deletable(intervention_id: str) -> None:
         """
         RÈGLE MÉTIER : Une intervention ne peut être supprimée que si elle
@@ -105,7 +113,8 @@ class InterventionValidator:
             cls.validate_type_inter(data["type_inter"])
         if data.get("machine_id"):
             from api.equipement_statuts.repo import check_equipement_statut_allows_interventions
-            check_equipement_statut_allows_interventions(str(data["machine_id"]))
+            check_equipement_statut_allows_interventions(
+                str(data["machine_id"]))
         if data.get("machine_id") and data.get("type_inter") and data.get("tech_initials"):
             cls.validate_unique_code(
                 machine_id=str(data["machine_id"]),

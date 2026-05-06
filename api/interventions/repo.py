@@ -121,7 +121,6 @@ class InterventionRepository:
                     pm.code AS m_parent_code,
                     pm.name AS m_parent_name,
                     ec.id as ec_id, ec.code as ec_code, ec.label as ec_label,
-                    mh.m_open_count, mh.m_urgent_count,
                     COALESCE(SUM(ia.time_spent), 0) as total_time,
                     COUNT(DISTINCT ia.id) as action_count,
                     ROUND(AVG(ia.complexity_score)::numeric, 2)::float as avg_complexity,
@@ -132,49 +131,54 @@ class InterventionRepository:
                 LEFT JOIN machine m ON i.machine_id = m.id
                 LEFT JOIN machine pm ON pm.id = m.equipement_mere
                 LEFT JOIN equipement_class ec ON ec.id = m.equipement_class_id
-                LEFT JOIN LATERAL (
-                    SELECT
-                        COUNT(CASE WHEN i2.status_actual != (SELECT id FROM intervention_status_ref WHERE code = %s LIMIT 1) THEN i2.id END) as m_open_count,
-                        COUNT(CASE WHEN i2.status_actual != (SELECT id FROM intervention_status_ref WHERE code = %s LIMIT 1) AND i2.priority = 'urgent' THEN i2.id END) as m_urgent_count
-                    FROM intervention i2
-                    WHERE i2.machine_id = m.id
-                ) mh ON TRUE
                 LEFT JOIN intervention_action ia ON i.id = ia.intervention_id
                 LEFT JOIN intervention_action_purchase_request iapr ON ia.id = iapr.intervention_action_id
                 {" ".join(joins)}
                 {where_sql}
-                GROUP BY i.id, ir.id, ir.code, ir.demandeur_nom, ir.demandeur_service_legacy, ir.description, ir.statut, rs2.label, rs2.color, ir.intervention_id, ir.created_at, ir.updated_at, m.id, pm.id, pm.code, pm.name, ec.id, mh.m_open_count, mh.m_urgent_count
+                GROUP BY i.id, ir.id, ir.code, ir.demandeur_nom, ir.demandeur_service_legacy, ir.description, ir.statut, rs2.label, rs2.color, ir.intervention_id, ir.created_at, ir.updated_at, m.id, pm.id, pm.code, pm.name, ec.id
                 {order_sql}
                 LIMIT %s OFFSET %s
             """
-            cur.execute(query, (CLOSED_STATUS_CODE,
-                        CLOSED_STATUS_CODE, *params, limit, offset))
+            cur.execute(query, (*params, limit, offset))
             rows = cur.fetchall()
             cols = [desc[0] for desc in cur.description]
 
-            result = []
-            for row in rows:
-                row_dict = dict(zip(cols, row))
+            raw_rows = [dict(zip(cols, row)) for row in rows]
 
+            # Import lazy pour rester aligné sur la logique health centralisée des équipements.
+            from api.equipements.repo import EquipementRepository
+            equipement_repo = EquipementRepository()
+            equipement_ids = [str(r['machine_id'])
+                              for r in raw_rows if r.get('machine_id') is not None]
+            health_map = equipement_repo.get_health_map(cur, equipement_ids)
+
+            result = []
+            for row_dict in raw_rows:
                 # Construire l'objet equipement depuis les colonnes préfixées
                 if row_dict.get('machine_id') is not None:
-                    open_count = row_dict.pop('m_open_count', 0) or 0
-                    urgent_count = row_dict.pop('m_urgent_count', 0) or 0
-                    if urgent_count > 0:
-                        health = {
-                            'level': 'critical', 'reason': f'{urgent_count} intervention(s) urgente(s)', 'rules_triggered': None}
-                    elif open_count > 0:
-                        health = {
-                            'level': 'maintenance', 'reason': f'{open_count} intervention(s) ouverte(s)', 'rules_triggered': None}
-                    else:
-                        health = {
-                            'level': 'ok', 'reason': 'Aucune intervention ouverte', 'rules_triggered': None}
+                    machine_id = str(row_dict.get('machine_id'))
+                    health = health_map.get(machine_id, {
+                        'level': 'ok',
+                        'reason': 'Aucune intervention ouverte',
+                        'open_interventions_count': 0,
+                        'urgent_count': 0,
+                        'open_requests_count': 0,
+                        'new_requests_count': 0,
+                        'request_status_counts': {},
+                        'open_tasks_count': 0,
+                        'overdue_tasks_count': 0,
+                        'unassigned_tasks_count': 0,
+                        'open_purchase_requests_count': 0,
+                        'purchase_request_status_counts': {},
+                        'has_affectation': False,
+                        'rules_triggered': []
+                    })
 
                     ec_id = row_dict.pop('ec_id', None)
                     ec_code = row_dict.pop('ec_code', None)
                     ec_label = row_dict.pop('ec_label', None)
 
-                    p_id = row_dict.pop('m_parent_id',   None)
+                    p_id = row_dict.pop('m_parent_id', None)
                     p_code = row_dict.pop('m_parent_code', None)
                     p_name = row_dict.pop('m_parent_name', None)
 
@@ -189,7 +193,7 @@ class InterventionRepository:
                 else:
                     row_dict['equipements'] = None
                     for key in list(row_dict.keys()):
-                        if key.startswith('m_') or key.startswith('ec_') or key in ('m_open_count', 'm_urgent_count'):
+                        if key.startswith('m_') or key.startswith('ec_'):
                             row_dict.pop(key)
 
                 # Créer l'objet stats si demandé

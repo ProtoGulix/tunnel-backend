@@ -45,7 +45,12 @@ Liste les actions groupées par date (`created_at::date`), du plus récent au pl
           "id": 30,
           "name": "Remplacement pièce",
           "code": "DEP_REM",
-          "category": { "id": 3, "name": "Dépannage", "code": "DEP", "color": "#e53e3e" }
+          "category": {
+            "id": 3,
+            "name": "Dépannage",
+            "code": "DEP",
+            "color": "#e53e3e"
+          }
         },
         "tech": {
           "id": "a1b2c3d4-1111-2222-3333-444455556666",
@@ -61,7 +66,34 @@ Liste les actions groupées par date (`created_at::date`), du plus récent au pl
         "action_start": "08:00:00",
         "action_end": "09:30:00",
         "purchase_requests": [],
-        "tasks": [],
+        "tasks": [
+          {
+            "id": "550e8400-e29b-41d4-a716-446655440000",
+            "intervention_id": "5ecf60d5-8471-4739-8ba8-0fdad7b51781",
+            "label": "Remplacement roulement SKF 6205",
+            "origin": "plan",
+            "status": "done",
+            "optional": false,
+            "assigned_to": {
+              "id": "a1b2c3d4-1111-2222-3333-444455556666",
+              "first_name": "Jean",
+              "last_name": "Dupont",
+              "email": "jean.dupont@example.com",
+              "initial": "JD",
+              "status": "active",
+              "role": "b9f3e2a1-0000-1111-2222-333344445555"
+            },
+            "due_date": "2026-03-16",
+            "sort_order": 1,
+            "skip_reason": null,
+            "closed_by": "a1b2c3d4-1111-2222-3333-444455556666",
+            "created_by": "f7c9d0e1-aaaa-bbbb-cccc-ddddeeee0000",
+            "action_count": 1,
+            "time_spent": 1.5,
+            "created_at": "2026-03-15T07:00:00",
+            "updated_at": "2026-03-15T09:30:00"
+          }
+        ],
         "created_at": "2026-03-15T08:00:00",
         "updated_at": "2026-03-15T08:00:00"
       }
@@ -88,7 +120,12 @@ Liste les actions groupées par date (`created_at::date`), du plus récent au pl
           "id": 12,
           "name": "Inspection visuelle",
           "code": "DIAG_VIS",
-          "category": { "id": 1, "name": "Diagnostic", "code": "DIAG", "color": "#3b82f6" }
+          "category": {
+            "id": 1,
+            "name": "Diagnostic",
+            "code": "DIAG",
+            "color": "#3b82f6"
+          }
         },
         "tech": {
           "id": "a1b2c3d4-1111-2222-3333-444455556666",
@@ -157,7 +194,11 @@ Détail complet d'une action avec tout le contexte de l'intervention parente. Co
       "item_label": "Roulement SKF 6205",
       "quantity": 2,
       "unit": "pcs",
-      "derived_status": { "code": "PENDING_DISPATCH", "label": "À dispatcher", "color": "#A855F7" },
+      "derived_status": {
+        "code": "PENDING_DISPATCH",
+        "label": "À dispatcher",
+        "color": "#A855F7"
+      },
       "stock_item_id": "f9a0b1c2-3456-789a-bcde-f01234567890",
       "stock_item_ref": "OUT-ROUL-SKF-6205",
       "stock_item_name": "Roulement SKF 6205",
@@ -356,37 +397,37 @@ Détail complet d'une action avec tout le contexte de l'intervention parente. Co
 > - `task_progress` : avancement global des tâches
 > - `status_logs` : historique complet des transitions de statut
 
-### InterventionTaskOut (tâches de l'action)
+### InterventionTaskOut (tâches liées à une action)
 
-| Champ            | Type   | Description                                                         |
-| ---------------- | ------ | ------------------------------------------------------------------- |
-| `id`             | uuid   | ID de la tâche                                                      |
-| `intervention_id`| uuid   | Intervention parente                                                |
-| `label`          | string | Intitulé de la tâche                                                |
-| `status`         | string | `todo`, `in_progress`, `done`, `skipped`                            |
-| `origin`         | string | `plan`, `resp`, `tech`                                              |
-| `optional`       | bool   | Tâche optionnelle                                                   |
-| `assigned_to`    | object | Technicien assigné ([UserListItem](users.md)) — `null` si non assigné |
-| `due_date`       | date   | Échéance — `null` si non définie                                    |
-| `sort_order`     | int    | Ordre d'affichage dans la liste des tâches                          |
-| `skip_reason`    | string | Raison du skip — `null` si non skippée                              |
-| `closed_by`      | uuid   | UUID de l'utilisateur qui a clôturé la tâche                        |
-| `created_by`     | uuid   | UUID de l'utilisateur qui a créé la tâche                           |
-| `action_count`   | int    | Nombre d'actions ayant contribué à cette tâche                      |
-| `time_spent`     | float  | Temps total passé sur cette tâche (heures, via l'action liée)       |
-| `created_at`     | datetime | Date de création                                                  |
-| `updated_at`     | datetime | Date de dernière modification                                     |
+| Champ             | Type     | Description                                                           |
+| ----------------- | -------- | --------------------------------------------------------------------- |
+| `id`              | uuid     | ID de la tâche                                                        |
+| `intervention_id` | uuid     | Intervention parente                                                  |
+| `label`           | string   | Intitulé de la tâche                                                  |
+| `status`          | string   | `todo`, `in_progress`, `done`, `skipped`                              |
+| `origin`          | string   | `plan`, `resp`, `tech`                                                |
+| `optional`        | bool     | Tâche optionnelle                                                     |
+| `assigned_to`     | object   | Technicien assigné ([UserListItem](users.md)) — `null` si non assigné |
+| `due_date`        | date     | Échéance — `null` si non définie                                      |
+| `sort_order`      | int      | Ordre d'affichage dans la liste des tâches                            |
+| `skip_reason`     | string   | Raison du skip — `null` si non skippée                                |
+| `closed_by`       | uuid     | UUID de l'utilisateur qui a clôturé la tâche                          |
+| `created_by`      | uuid     | UUID de l'utilisateur qui a créé la tâche                             |
+| `action_count`    | int      | Nombre d'actions ayant contribué à cette tâche                        |
+| `time_spent`      | float    | Temps total passé sur cette tâche (heures, via l'action liée)         |
+| `created_at`      | datetime | Date de création                                                      |
+| `updated_at`      | datetime | Date de dernière modification                                         |
 
-> **`InterventionTaskRef`** (version légère) est uniquement utilisé dans `GET /intervention-actions` (liste) où les tâches ne sont pas enrichies pour des raisons de performance.
+> `InterventionTaskOut` est utilisé dans **tous** les endpoints (`GET /intervention-actions`, `GET /intervention-actions/{id}`) — la réponse est identique en liste et en détail.
 
 ### InterventionStats
 
-| Champ           | Type  | Description                                         |
-| --------------- | ----- | --------------------------------------------------- |
-| `action_count`  | int   | Nombre total d'actions sur l'intervention           |
-| `total_time`    | float | Temps total cumulé (heures)                         |
-| `avg_complexity`| float | Complexité moyenne des actions (`null` si aucune)   |
-| `purchase_count`| int   | Nombre de demandes d'achat liées via les actions    |
+| Champ            | Type  | Description                                       |
+| ---------------- | ----- | ------------------------------------------------- |
+| `action_count`   | int   | Nombre total d'actions sur l'intervention         |
+| `total_time`     | float | Temps total cumulé (heures)                       |
+| `avg_complexity` | float | Complexité moyenne des actions (`null` si aucune) |
+| `purchase_count` | int   | Nombre de demandes d'achat liées via les actions  |
 
 ---
 
