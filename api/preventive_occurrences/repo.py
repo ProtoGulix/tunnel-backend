@@ -517,6 +517,14 @@ class PreventiveOccurrenceRepository:
         Bug 6 — référence à l'ancienne table gamme_step_validation dans repair :
           L'étape 3 de repair utilisait encore l'ancien nom de table (avant migration
           du 2026-04-25). Le UPDATE ne touchait rien. Fix : corriger le nom.
+
+        Bug 7 — intervention_task absentes pour une occurrence liée à une intervention :
+          Si les étapes de gamme ont été ajoutées au plan APRÈS la génération de
+          l'occurrence, la boucle d'insertion dans trigger_occurrence() n'a trouvé
+          0 steps → 0 tâches créées. L'occurrence et l'intervention existent mais la
+          gamme est invisible dans le frontend.
+          Fix : INSERT manquants pour toute occurrence (intervention_id NOT NULL,
+          plan_id NOT NULL) sans aucune intervention_task.
         """
         conn = self._get_connection()
         tasks_relinked = 0
@@ -526,6 +534,7 @@ class PreventiveOccurrenceRepository:
         requests_closed = 0
         interventions_plan_fixed = 0
         tasks_optional_resynced = 0
+        tasks_generated_missing = 0
         details = []
 
         try:
@@ -747,6 +756,50 @@ class PreventiveOccurrenceRepository:
                             f"Bug 2 : demande {req_id} → 'cloturee' (liée à l'occurrence {occ_id})"
                         )
 
+            # ── Bug 7 : tâches de gamme absentes (steps ajoutés après génération) ────
+            # Occurrences déjà liées à une intervention mais sans aucune intervention_task.
+            cur.execute(
+                """
+                SELECT po.id AS occurrence_id, po.intervention_id, po.plan_id
+                FROM preventive_occurrence po
+                WHERE po.intervention_id IS NOT NULL
+                  AND po.plan_id IS NOT NULL
+                  AND NOT EXISTS (
+                      SELECT 1 FROM intervention_task it
+                      WHERE it.occurrence_id = po.id
+                  )
+                """
+            )
+            missing_task_rows = cur.fetchall()
+            for occ_id, intervention_id, plan_id in missing_task_rows:
+                occ_id = str(occ_id)
+                intervention_id = str(intervention_id)
+                cur.execute(
+                    """
+                    INSERT INTO intervention_task
+                        (gamme_step_id, occurrence_id, intervention_id, label, origin,
+                         status, optional, sort_order)
+                    SELECT
+                        pgs.id, %s, %s, pgs.label, 'plan', 'todo', pgs.optional, pgs.sort_order
+                    FROM preventive_plan_gamme_step pgs
+                    WHERE pgs.plan_id = %s
+                    ON CONFLICT (gamme_step_id, occurrence_id) DO NOTHING
+                    """,
+                    (occ_id, intervention_id, str(plan_id)),
+                )
+                inserted = cur.rowcount
+                tasks_generated_missing += inserted
+                if inserted:
+                    details.append(
+                        f"Bug 7 : {inserted} tâche(s) générée(s) pour l'occurrence {occ_id} "
+                        f"(intervention {intervention_id})"
+                    )
+            if missing_task_rows:
+                logger.info(
+                    "Repair Bug 7 : %s tâche(s) de gamme générée(s) pour %s occurrence(s) sans tâches",
+                    tasks_generated_missing, len(missing_task_rows),
+                )
+
             # ── Bug 5 : optional désynchronisé entre tâche et step de gamme ──────
             # Si le plan a été modifié après génération, les tâches origin='plan'
             # conservent l'ancienne valeur de optional et bloquent à tort la fermeture.
@@ -776,10 +829,10 @@ class PreventiveOccurrenceRepository:
             logger.info(
                 "Repair terminé : %s tâches rattachées, %s occurrences reliées, "
                 "%s → in_progress, %s complétées, %s demandes clôturées, %s plan_id corrigés, "
-                "%s optional resynchronisés",
+                "%s optional resynchronisés, %s tâches générées (Bug 7)",
                 tasks_relinked, occurrences_relinked, occurrences_set_in_progress,
                 occurrences_completed, requests_closed, interventions_plan_fixed,
-                tasks_optional_resynced,
+                tasks_optional_resynced, tasks_generated_missing,
             )
 
         except Exception as e:
@@ -796,5 +849,6 @@ class PreventiveOccurrenceRepository:
             "requests_closed": requests_closed,
             "tasks_optional_resynced": tasks_optional_resynced,
             "interventions_plan_fixed": interventions_plan_fixed,
+            "tasks_generated_missing": tasks_generated_missing,
             "details": details,
         }

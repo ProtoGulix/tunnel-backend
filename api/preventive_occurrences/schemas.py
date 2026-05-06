@@ -54,4 +54,6 @@ class RepairOccurrencesResult(BaseModel):
     occurrences_completed: int
     requests_closed: int
     interventions_plan_fixed: int = 0
+    tasks_optional_resynced: int = 0
+    tasks_generated_missing: int = 0
     details: list[str] = []
