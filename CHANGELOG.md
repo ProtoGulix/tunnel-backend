@@ -2,6 +2,35 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [3.4.0] - 6 mai 2026
+
+### Améliorations
+
+#### Actions d'intervention : tâches liées enrichies
+
+- `GET /intervention-actions/{id}` expose désormais les champs complets de la tâche liée : `id`, `label`, `status`, `assigned_to`, `due_date`, `sort_order`, `origin`
+- Validation ajoutée dans `intervention_actions/validators.py` : `task_id` doit référencer une tâche existante et appartenir à la même intervention
+
+#### Validation `request_id` à la création/mise à jour d'une intervention
+
+- `POST /interventions` et `PATCH /interventions/{id}` : `request_id` est désormais validé — la demande doit exister et correspondre au même équipement
+- Lève une `ValidationError` (400) si la demande n'existe pas ou appartient à un autre équipement
+
+### Corrections de bugs
+
+#### [BUG] Tâches de gamme absentes quand les étapes sont ajoutées après la génération de l'occurrence
+
+- **Cause** : si des étapes sont ajoutées à un plan préventif après la génération de l'occurrence, la boucle `trigger_occurrence()` trouve 0 steps → 0 `intervention_task` créées. La gamme est donc invisible dans le frontend.
+- **Fix** : nouveau **Bug 7** dans `repair_orphaned_data` (`api/preventive_occurrences/repo.py`) : détecte les occurrences liées à une intervention sans aucune tâche et injecte les étapes manquantes depuis `preventive_plan_gamme_step`.
+- Nouveau champ `tasks_generated_missing` dans la réponse de `POST /preventive-occurrences/repair`.
+
+#### [BUG] `PATCH /preventive-plans/{id}/steps` retournait 400 si des tâches référençaient les étapes
+
+- **Cause** : `_replace_steps_in_tx` faisait un `DELETE` en masse suivi d'un `INSERT`. La contrainte `FK RESTRICT` sur `intervention_task.gamme_step_id` bloquait le DELETE dès qu'une tâche référençait un step existant.
+- **Fix** : remplacement par un UPSERT par `sort_order` — UPDATE les steps existants (ID préservé, FK toujours valide), INSERT les nouveaux `sort_order`, DELETE uniquement les `sort_order` retirés sans tâches liées (warning sinon).
+
+---
+
 ## [3.3.0] - 5 mai 2026
 
 ### Améliorations
