@@ -121,11 +121,30 @@ class StockItemRepository:
                     s.name               AS pref_supplier_name,
                     pref.supplier_ref    AS pref_supplier_ref,
                     pref.unit_price      AS pref_unit_price,
-                    pref.delivery_time_days AS pref_delivery_time_days
+                    pref.delivery_time_days AS pref_delivery_time_days,
+                    mref.manufacturer_refs
                 FROM stock_item si
                 LEFT JOIN stock_item_supplier pref
                     ON pref.stock_item_id = si.id AND pref.is_preferred = true
                 LEFT JOIN supplier s ON s.id = pref.supplier_id
+                LEFT JOIN LATERAL (
+                    SELECT COALESCE(
+                        json_agg(
+                            json_build_object(
+                                'name', mi.manufacturer_name,
+                                'ref',  mi.manufacturer_ref
+                            )
+                            ORDER BY mi.manufacturer_name
+                        ) FILTER (WHERE mi.id IS NOT NULL),
+                        '[]'
+                    ) AS manufacturer_refs
+                    FROM (
+                        SELECT DISTINCT mi.id, mi.manufacturer_name, mi.manufacturer_ref
+                        FROM stock_item_supplier sis
+                        JOIN manufacturer_item mi ON mi.id = sis.manufacturer_item_id
+                        WHERE sis.stock_item_id = si.id
+                    ) mi
+                ) mref ON true
                 {where_sql}
                 ORDER BY si.{sort_col} ASC
                 LIMIT %s OFFSET %s
@@ -150,6 +169,7 @@ class StockItemRepository:
                 for k in ('pref_id', 'pref_supplier_id', 'pref_supplier_name',
                           'pref_supplier_ref', 'pref_unit_price', 'pref_delivery_time_days'):
                     d.pop(k, None)
+                d['manufacturer_refs'] = d.get('manufacturer_refs') or []
                 results.append(d)
             return results
         except HTTPException:

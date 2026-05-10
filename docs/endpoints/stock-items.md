@@ -52,7 +52,11 @@ Liste les articles avec filtres, pagination et facettes.
         "supplier_ref": "P1115070",
         "unit_price": 12.5,
         "delivery_time_days": 3
-      }
+      },
+      "manufacturer_refs": [
+        { "name": "SKF", "ref": "6205-2RS" },
+        { "name": "FAG", "ref": "6205-2RS" }
+      ]
     }
   ],
   "pagination": {
@@ -80,6 +84,8 @@ Liste les articles avec filtres, pagination et facettes.
 ```
 
 > `preferred_supplier` est `null` si aucun fournisseur n'est marqué `is_preferred` pour cet article.
+>
+> `manufacturer_refs` : liste des références fabricants distinctes liées à cet article (toutes entrées `stock_item_supplier` confondues). Tableau vide si aucun fabricant référencé. Chaque entrée contient `name` (fabricant) et `ref` (référence produit), triés par nom fabricant.
 >
 > Les `facets` sont calculées **en une seule requête SQL** (`GROUP BY`) indépendamment de la pagination — elles reflètent toujours le catalogue complet (sans filtre actif ou avec filtre `search` appliqué).
 

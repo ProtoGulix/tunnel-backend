@@ -116,6 +116,15 @@ class StockItemOut(BaseModel):
         from_attributes = True
 
 
+class ManufacturerRef(BaseModel):
+    """Référence fabricant légère pour la liste des articles"""
+    name: Optional[str] = Field(default=None)
+    ref: Optional[str] = Field(default=None)
+
+    class Config:
+        from_attributes = True
+
+
 class StockItemListItem(BaseModel):
     """Schéma léger pour la liste des articles"""
     id: UUID
@@ -132,6 +141,10 @@ class StockItemListItem(BaseModel):
     preferred_supplier: Optional[PreferredSupplierInfo] = Field(
         default=None,
         description="Fournisseur préféré (null si aucun)"
+    )
+    manufacturer_refs: List[ManufacturerRef] = Field(
+        default_factory=list,
+        description="Références fabricants distinctes liées à cet article"
     )
 
     class Config:
