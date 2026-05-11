@@ -2,6 +2,19 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [3.5.0] - 11 mai 2026
+
+### Améliorations
+
+#### Refonte de `GET /tasks/workspace`
+
+- **Nouvelle structure de réponse** : les tâches sont désormais regroupées par intervention (`InterventionGroup`), chaque groupe exposant le code, l'équipement, le statut et la liste de ses tâches
+- **Pagination offset** (`skip` / `limit`) en remplacement de la pagination curseur — plus simple à consommer côté frontend
+- **Paramètres allégés** : suppression des champs superflus, valeurs par défaut ajustées
+- **`GET /stock-items`** : enrichissement mineur du schéma de réponse (nouveaux champs exposés)
+
+---
+
 ## [3.4.0] - 6 mai 2026
 
 ### Améliorations
