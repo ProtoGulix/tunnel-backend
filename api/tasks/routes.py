@@ -1,8 +1,8 @@
 """Endpoints pour le workspace unifié de tâches."""
 from fastapi import APIRouter, Query, Depends
-from typing import Optional, List
+from typing import Optional
 from api.tasks.repo import TasksRepository
-from api.tasks.schemas import TasksWorkspaceResponse, TaskDetail
+from api.tasks.schemas import TasksWorkspaceResponse
 from api.auth.permissions import require_authenticated
 
 router = APIRouter(
@@ -19,23 +19,17 @@ def get_tasks_workspace(
         None, description="Filtres origine (CSV: plan,resp,tech)"),
     assignee_id: Optional[str] = Query(
         None, description="UUID d'utilisateur ou 'unassigned'"),
-    grouping: Optional[str] = Query(
-        None, description="Groupage optionnel (intervention,machine,status,technician)"),
-    cursor: Optional[str] = Query(None, description="Curseur pagination"),
-    limit: int = Query(
-        50, ge=1, le=200, description="Nombre de tâches par page"),
-    include_closed: bool = Query(
-        False, description="Inclure tâches done/skipped"),
-    include_actions: bool = Query(False, description="Inclure actions liées"),
-    include_options: bool = Query(
-        False, description="Inclure listes de filtres"),
-    include_counters: bool = Query(
-        False, description="Inclure compteurs globaux"),
+    skip: int = Query(0, ge=0, description="Offset (nombre d'interventions à sauter)"),
+    limit: int = Query(20, ge=1, le=200, description="Nombre d'interventions par page"),
+    include_closed: bool = Query(False, description="Inclure tâches done/skipped"),
+    include_actions: bool = Query(False, description="Inclure actions liées aux tâches"),
+    include_options: bool = Query(False, description="Inclure listes de filtres"),
+    include_counters: bool = Query(False, description="Inclure compteurs globaux"),
 ):
-    """Endpoint unifié pour page Tasks avec tous les filtres, pagination et options.
+    """Interventions avec leurs tâches agrégées. Pagination offset sur les interventions.
 
-    Réponse incluant tâches enrichies, compteurs, listes de filtres et métadonnées.
-    Conçu pour minimiser les appels frontend (1 appel = tous les détails préchargés).
+    Chaque item de la réponse est une intervention contenant toutes ses tâches
+    correspondant aux filtres actifs.
     """
     status_list = [s.strip() for s in status.split(",")] if status else None
     origin_list = [o.strip() for o in origin.split(",")] if origin else None
@@ -46,8 +40,7 @@ def get_tasks_workspace(
         status=status_list,
         origin=origin_list,
         assignee_id=assignee_id,
-        grouping=grouping,
-        cursor=cursor,
+        skip=skip,
         limit=limit,
         include_closed=include_closed,
         include_actions=include_actions,

@@ -16,7 +16,7 @@ class UserRef(BaseModel):
 
 
 class InterventionRef(BaseModel):
-    """Intervention légère embarquée dans une tâche."""
+    """Intervention légère pour les options de filtrage."""
     id: UUID
     code: Optional[str] = None
     title: Optional[str] = None
@@ -26,7 +26,7 @@ class InterventionRef(BaseModel):
 
 
 class EquipementRef(BaseModel):
-    """Équipement léger embarqué dans une tâche."""
+    """Équipement léger embarqué dans une intervention."""
     id: UUID
     name: Optional[str] = None
     code: Optional[str] = None
@@ -58,9 +58,19 @@ class TaskDetail(BaseModel):
     created_at: Optional[datetime] = None
     created_by: Optional[UserRef] = None
     assigned_to: Optional[UserRef] = None
-    intervention: Optional[InterventionRef] = None
-    equipement: Optional[EquipementRef] = None
     actions: List[ActionRef] = Field(default_factory=list)
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class InterventionGroup(BaseModel):
+    """Intervention avec ses tâches agrégées — unité de premier niveau dans la réponse."""
+    id: UUID
+    code: Optional[str] = None
+    title: Optional[str] = None
+    status: Optional[str] = None
+    equipement: Optional[EquipementRef] = None
+    tasks: List[TaskDetail] = Field(default_factory=list)
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -82,9 +92,13 @@ class TasksOptions(BaseModel):
 
 
 class TasksPagination(BaseModel):
-    """Info pagination cursor."""
-    next_cursor: Optional[str] = None
-    has_more: bool = False
+    """Pagination offset standard."""
+    total: int
+    page: int
+    page_size: int
+    total_pages: int
+    offset: int
+    count: int
 
 
 class TasksMetadata(BaseModel):
@@ -95,10 +109,10 @@ class TasksMetadata(BaseModel):
 
 class TasksWorkspaceResponse(BaseModel):
     """Réponse unifiée pour /tasks/workspace."""
-    tasks: List[TaskDetail]
+    items: List[InterventionGroup]
+    pagination: TasksPagination
     counters: Optional[TasksCounter] = None
     options: Optional[TasksOptions] = None
-    pagination: TasksPagination
     meta: TasksMetadata
     errors: Optional[List[Dict[str, Any]]] = None
 
