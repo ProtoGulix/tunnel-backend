@@ -6,6 +6,8 @@ Lors de l'acceptation, une **intervention est automatiquement créée** et liée
 
 > Voir aussi : [Interventions](interventions.md) | [Équipements](equipements.md) | [Services](services.md)
 
+> **Audit log** : tout `POST`, `PATCH` et `DELETE` sur cette ressource exige un champ `reason_code` dans le body. Voir [Audit Log — règle commune](audit-log.md#règle-commune--reason_code-obligatoire).
+
 ---
 
 ## Cycle de vie et logique métier

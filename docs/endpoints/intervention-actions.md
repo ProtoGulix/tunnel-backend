@@ -4,6 +4,8 @@ Actions réalisées sur une intervention (réparation, diagnostic, etc.). Chaque
 
 > Voir aussi : [Interventions](interventions.md) | [Action Categories](action-categories.md) | [Complexity Factors](complexity-factors.md) | [Purchase Requests](purchase-requests.md)
 
+> **Audit log** : tout `POST`, `PATCH` et `DELETE` sur cette ressource exige un champ `reason_code` dans le body. Voir [Audit Log — règle commune](audit-log.md#règle-commune--reason_code-obligatoire).
+
 ---
 
 ## `GET /intervention-actions`

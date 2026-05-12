@@ -6,6 +6,8 @@ Deux modes de création :
 - **Liée à une action** (`intervention_action_id`) — l'intervention est déduite via la table de jonction `intervention_action_purchase_request`
 - **Autonome** — DA spontanée sans aucune relation (réappro consommable atelier, etc.)
 
+> **Audit log** : tout `POST`, `PATCH` et `DELETE` sur cette ressource exige un champ `reason_code` dans le body. Voir [Audit Log — règle commune](audit-log.md#règle-commune--reason_code-obligatoire).
+
 > Voir aussi : [Interventions](interventions.md) | [Stock Items](stock-items.md) | [Supplier Orders](supplier-orders.md) | [Supplier Order Lines](supplier-order-lines.md)
 
 ---

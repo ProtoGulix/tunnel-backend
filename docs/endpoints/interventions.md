@@ -8,6 +8,8 @@ Une intervention peut aussi être liée à un **plan de maintenance préventive*
 
 > Voir aussi : [Actions](intervention-actions.md) | [Status Logs](intervention-status-log.md) | [Purchase Requests](purchase-requests.md) | [Intervention Requests](intervention-requests.md) | [Preventive Plans](preventive-plans.md) | [Intervention Tasks](intervention-tasks.md)
 
+> **Audit log** : tout `POST`, `PUT` et `DELETE` sur cette ressource exige un champ `reason_code` dans le body. Voir [Audit Log — règle commune](audit-log.md#règle-commune--reason_code-obligatoire).
+
 ---
 
 ## `GET /interventions`
@@ -405,7 +407,9 @@ Crée une nouvelle intervention.
   "reported_by": "Jean Dupont",
   "status_actual": "ouvert",
   "printed_fiche": false,
-  "reported_date": "2026-01-13"
+  "reported_date": "2026-01-13",
+  "reason_code": "EQUIPMENT_FAILURE",
+  "reason_text": null
 }
 ```
 
@@ -433,6 +437,8 @@ Intervention complète avec equipement, `request` (objet demande si liée), stat
 ## `PUT /interventions/{id}`
 
 Met à jour une intervention. Même body que POST, tous les champs sont optionnels.
+
+> **`reason_code` obligatoire** — voir [Audit Log](audit-log.md#règle-commune--reason_code-obligatoire).
 
 > **Clôture automatique de la demande liée** : si `status_actual` est mis à jour vers le code `ferme` et qu'une demande d'intervention est liée (`request` non null), cette demande passe automatiquement à `cloturee`. En cas d'échec de la cascade (demande restée en `acceptee`), utiliser `POST /interventions/{id}/force-close-request`.
 
@@ -470,6 +476,8 @@ Intervention complète mise à jour. La demande liée (`request`) est désormais
 ## `DELETE /interventions/{id}`
 
 Supprime une intervention. La suppression est **interdite** si l'intervention possède des actions ou des demandes d'achat liées.
+
+> **`reason_code` obligatoire** — voir [Audit Log](audit-log.md#règle-commune--reason_code-obligatoire).
 
 ### Réponse `200`
 

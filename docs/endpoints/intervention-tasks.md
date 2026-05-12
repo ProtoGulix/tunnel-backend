@@ -4,6 +4,8 @@ Tâches attachées à une intervention. Une tâche représente **quoi faire** �
 
 > Voir aussi : [Preventive Plans](preventive-plans.md) | [Preventive Occurrences](preventive-occurrences.md) | [Interventions](interventions.md) | [Intervention Actions](intervention-actions.md)
 
+> **Audit log** : tout `POST`, `PATCH` et `DELETE` sur cette ressource exige un champ `reason_code` dans le body. Voir [Audit Log — règle commune](audit-log.md#règle-commune--reason_code-obligatoire).
+
 ---
 
 ## Modèle sémantique
