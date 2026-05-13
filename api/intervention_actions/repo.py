@@ -1,6 +1,9 @@
+import json
+import logging
+
 from fastapi import HTTPException
 from typing import Dict, Any, List, Optional
-from uuid import uuid4
+from uuid import UUID, uuid4
 from datetime import datetime, date
 
 from api.settings import settings
@@ -9,6 +12,29 @@ from api.constants import CLOSED_STATUS_CODE
 from api.errors.exceptions import DatabaseError, raise_db_error, NotFoundError, ValidationError
 from api.utils.sanitizer import strip_html
 from api.intervention_actions.validators import InterventionActionValidator
+
+logger = logging.getLogger(__name__)
+
+
+def _audit_task_from_action(cur, task_id: str, old_status: str, new_status: str, action_id: str) -> None:
+    """Audite une transition de statut de tâche déclenchée par une action."""
+    try:
+        cur.execute(
+            "SELECT public.fn_audit_log_decision(%s, %s, %s, %s, %s, %s, %s, %s, %s)",
+            (
+                "task",
+                UUID(task_id),
+                "updated",
+                json.dumps({"status": old_status, "triggered_by_action": action_id}),
+                json.dumps({"status": new_status, "triggered_by_action": action_id}),
+                "TASK_STATUS",
+                None,
+                None,
+                True,
+            ),
+        )
+    except Exception as exc:
+        logger.error("_audit_task_from_action(%s) : %s", task_id, exc)
 
 
 class InterventionActionRepository:
@@ -669,6 +695,7 @@ class InterventionActionRepository:
                         """,
                         (task_req_data.get('skip_reason'), tid),
                     )
+                    _audit_task_from_action(cur, tid, task_status, 'skipped', action_id)
                 else:
                     if task_status in ('done', 'skipped'):
                         raise ValidationError(
@@ -679,8 +706,9 @@ class InterventionActionRepository:
                             "UPDATE intervention_task SET status = 'done', updated_at = NOW() WHERE id = %s",
                             (tid,),
                         )
+                        _audit_task_from_action(cur, tid, task_status, 'done', action_id)
                     else:
-                        # Transition todo→in_progress si c'est la première action sur cette tâche
+                        new_status = 'in_progress' if task_status == 'todo' else task_status
                         cur.execute(
                             """
                             UPDATE intervention_task
@@ -690,6 +718,8 @@ class InterventionActionRepository:
                             """,
                             (tid,),
                         )
+                        if new_status != task_status:
+                            _audit_task_from_action(cur, tid, task_status, new_status, action_id)
 
             conn.commit()
             return self.get_by_id(action_id)
@@ -841,6 +871,7 @@ class InterventionActionRepository:
                         """,
                         (task_req_data.get('skip_reason'), tid),
                     )
+                    _audit_task_from_action(cur, tid, task_status, 'skipped', action_id)
                 else:
                     if task_status in ('done', 'skipped'):
                         raise ValidationError(
@@ -851,7 +882,9 @@ class InterventionActionRepository:
                             "UPDATE intervention_task SET status = 'done', updated_at = NOW() WHERE id = %s",
                             (tid,),
                         )
+                        _audit_task_from_action(cur, tid, task_status, 'done', action_id)
                     else:
+                        new_status = 'in_progress' if task_status == 'todo' else task_status
                         cur.execute(
                             """
                             UPDATE intervention_task
@@ -861,6 +894,8 @@ class InterventionActionRepository:
                             """,
                             (tid,),
                         )
+                        if new_status != task_status:
+                            _audit_task_from_action(cur, tid, task_status, new_status, action_id)
 
             conn.commit()
         except (ValidationError, NotFoundError):

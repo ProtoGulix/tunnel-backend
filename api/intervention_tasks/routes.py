@@ -1,6 +1,6 @@
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query, Response
+from fastapi import APIRouter, Depends, Query, Request, Response
 
 from api.auth.permissions import require_authenticated
 from api.errors.exceptions import ValidationError
@@ -62,22 +62,25 @@ def get_task(task_id: str):
 
 
 @router.post("", response_model=InterventionTaskOut, status_code=201)
-def create_task(data: InterventionTaskIn):
+def create_task(request: Request, data: InterventionTaskIn):
     """Crée une tâche manuelle (origin resp ou tech uniquement)."""
+    user_id = str(getattr(request.state, "user_id", None) or "")
     repo = InterventionTaskRepository()
-    return repo.create(data)
+    return repo.create(data, created_by=user_id or None)
 
 
 @router.patch("/{task_id}", response_model=InterventionTaskOut)
-def patch_task(task_id: str, data: InterventionTaskPatch):
+def patch_task(request: Request, task_id: str, data: InterventionTaskPatch):
     """Met à jour partiellement une tâche."""
+    user_id = str(getattr(request.state, "user_id", None) or "")
     repo = InterventionTaskRepository()
-    return repo.patch(task_id, data)
+    return repo.patch(task_id, data, closed_by=user_id or None)
 
 
 @router.delete("/{task_id}", status_code=204)
-def delete_task(task_id: str):
+def delete_task(request: Request, task_id: str):
     """Supprime une tâche (status=todo et aucune action liée)."""
+    user_id = str(getattr(request.state, "user_id", None) or "")
     repo = InterventionTaskRepository()
-    repo.delete(task_id)
+    repo.delete(task_id, deleted_by=user_id or None)
     return Response(status_code=204)

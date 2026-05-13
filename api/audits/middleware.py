@@ -28,11 +28,12 @@ from api.audits.repo import AuditRepository
 logger = logging.getLogger(__name__)
 
 # Entités tracées : préfixe URL → entity_type
+# intervention-tasks est exclu : l'audit est géré directement dans le repo
+# (créations, PATCH, suppressions, transitions de statut via action)
 _ENTITY_MAP: Dict[str, str] = {
     "interventions": "intervention",
     "intervention-requests": "request",
     "purchase-requests": "purchase_request",
-    "intervention-tasks": "task",
     "intervention-actions": "action",
 }
 

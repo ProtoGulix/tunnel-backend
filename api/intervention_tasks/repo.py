@@ -1,7 +1,8 @@
+import json
 import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from fastapi import HTTPException
 
@@ -11,6 +12,33 @@ from api.errors.exceptions import NotFoundError, ValidationError, raise_db_error
 from api.intervention_tasks.schemas import InterventionTaskIn, InterventionTaskPatch
 
 logger = logging.getLogger(__name__)
+
+
+def _audit_task(cur, task_id: str, decision_type: str,
+                old_value: Optional[Dict], new_value: Optional[Dict],
+                reason_code: str, changed_by: Optional[str] = None) -> None:
+    """Insère une entrée d'audit pour une tâche via fn_audit_log_decision().
+    Les erreurs sont loggées mais n'interrompent jamais la mutation métier.
+    """
+    try:
+        cur.execute(
+            """
+            SELECT public.fn_audit_log_decision(%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """,
+            (
+                "task",
+                UUID(task_id),
+                decision_type,
+                json.dumps(old_value) if old_value is not None else None,
+                json.dumps(new_value) if new_value is not None else None,
+                reason_code,
+                None,
+                UUID(changed_by) if changed_by else None,
+                True,
+            ),
+        )
+    except Exception as exc:
+        logger.error("audit_task(%s, %s) : %s", task_id, decision_type, exc)
 
 _TASK_SELECT = """
     SELECT
@@ -311,6 +339,15 @@ class InterventionTaskRepository:
                     created_by,
                 ),
             )
+            _audit_task(cur, task_id, "created", None, {
+                "intervention_id": str(data.intervention_id),
+                "label": data.label,
+                "origin": data.origin,
+                "status": "todo",
+                "optional": data.optional,
+                "assigned_to": assigned_to,
+                "due_date": str(data.due_date) if data.due_date else None,
+            }, "TASK_CREATED", created_by)
             conn.commit()
         except (NotFoundError, ValidationError):
             conn.rollback()
@@ -331,37 +368,58 @@ class InterventionTaskRepository:
         try:
             cur = conn.cursor()
             cur.execute(
-                "SELECT status, intervention_id FROM intervention_task WHERE id = %s", (task_id,))
+                """
+                SELECT status, intervention_id, label, assigned_to, due_date, sort_order, skip_reason
+                FROM intervention_task WHERE id = %s
+                """,
+                (task_id,),
+            )
             row = cur.fetchone()
             if not row:
                 raise NotFoundError(f"Tâche {task_id} non trouvée")
 
-            self._ensure_intervention_editable(cur, str(row[1]))
+            old_status, intervention_id, old_label, old_assigned, old_due_date, old_sort, old_skip = row
+            self._ensure_intervention_editable(cur, str(intervention_id))
 
             set_parts: List[str] = []
             params: List[Any] = []
+            # Suivi des champs modifiés pour l'audit
+            old_vals: Dict[str, Any] = {}
+            new_vals: Dict[str, Any] = {}
 
-            if data.label is not None:
+            if data.label is not None and data.label != old_label:
                 set_parts.append("label = %s")
                 params.append(data.label)
-            if data.status is not None:
+                old_vals["label"] = old_label
+                new_vals["label"] = data.label
+            if data.status is not None and data.status != old_status:
                 set_parts.append("status = %s")
                 params.append(data.status)
+                old_vals["status"] = old_status
+                new_vals["status"] = data.status
                 if data.status in ("done", "skipped"):
                     set_parts.append("closed_by = %s")
                     params.append(closed_by)
-            if data.skip_reason is not None:
+            if data.skip_reason is not None and data.skip_reason != old_skip:
                 set_parts.append("skip_reason = %s")
                 params.append(data.skip_reason)
-            if data.assigned_to is not None:
+                old_vals["skip_reason"] = old_skip
+                new_vals["skip_reason"] = data.skip_reason
+            if data.assigned_to is not None and str(data.assigned_to) != str(old_assigned or ""):
                 set_parts.append("assigned_to = %s")
                 params.append(str(data.assigned_to))
-            if data.due_date is not None:
+                old_vals["assigned_to"] = str(old_assigned) if old_assigned else None
+                new_vals["assigned_to"] = str(data.assigned_to)
+            if data.due_date is not None and data.due_date != old_due_date:
                 set_parts.append("due_date = %s")
                 params.append(data.due_date)
-            if data.sort_order is not None:
+                old_vals["due_date"] = str(old_due_date) if old_due_date else None
+                new_vals["due_date"] = str(data.due_date)
+            if data.sort_order is not None and data.sort_order != old_sort:
                 set_parts.append("sort_order = %s")
                 params.append(data.sort_order)
+                old_vals["sort_order"] = old_sort
+                new_vals["sort_order"] = data.sort_order
 
             if not set_parts:
                 return self.get_by_id(task_id)
@@ -373,6 +431,14 @@ class InterventionTaskRepository:
                 f"UPDATE intervention_task SET {', '.join(set_parts)} WHERE id = %s",
                 params,
             )
+
+            # Choisir le reason_code selon la nature de la modification
+            if "status" in new_vals:
+                reason = "TASK_STATUS"
+            else:
+                reason = "TASK_UPDATED"
+            _audit_task(cur, task_id, "updated", old_vals, new_vals, reason, closed_by)
+
             conn.commit()
         except (NotFoundError, ValidationError):
             conn.rollback()
@@ -390,21 +456,21 @@ class InterventionTaskRepository:
 
     # ── Suppression ───────────────────────────────────────────────
 
-    def delete(self, task_id: str) -> None:
+    def delete(self, task_id: str, deleted_by: Optional[str] = None) -> None:
         """Supprime une tâche (status=todo et aucune action liée)."""
         conn = self._get_connection()
         try:
             cur = conn.cursor()
             cur.execute(
-                "SELECT status, intervention_id FROM intervention_task WHERE id = %s",
+                "SELECT status, intervention_id, label FROM intervention_task WHERE id = %s",
                 (task_id,),
             )
             row = cur.fetchone()
             if not row:
                 raise NotFoundError(f"Tâche {task_id} non trouvée")
 
-            status = row[0]
-            self._ensure_intervention_editable(cur, str(row[1]))
+            status, intervention_id, label = row
+            self._ensure_intervention_editable(cur, str(intervention_id))
 
             if status != "todo":
                 raise ValidationError(
@@ -418,6 +484,9 @@ class InterventionTaskRepository:
                 raise ValidationError(
                     "Impossible de supprimer une tâche liée à une action")
 
+            _audit_task(cur, task_id, "deleted",
+                        {"label": label, "status": status}, None,
+                        "TASK_DELETED", deleted_by)
             cur.execute(
                 "DELETE FROM intervention_task WHERE id = %s", (task_id,))
             conn.commit()
