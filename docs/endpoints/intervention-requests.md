@@ -303,18 +303,21 @@ Crée une nouvelle demande d'intervention. Le code (`DI-YYYY-NNNN`) et le statut
   "machine_id": "uuid",
   "demandeur_nom": "Jean Dupont",
   "service_id": "uuid-du-service",
-  "description": "Bruit anormal au démarrage, vibrations sur le moteur"
+  "description": "Bruit anormal au démarrage, vibrations sur le moteur",
+  "reason_code": "EQUIPMENT_FAILURE"
 }
 ```
 
-| Champ                  | Type    | Requis  | Description                                                            |
-| ---------------------- | ------- | ------- | ---------------------------------------------------------------------- |
-| `machine_id`           | uuid    | **oui** | Équipement concerné                                                    |
-| `demandeur_nom`        | string  | **oui** | Nom du demandeur                                                       |
-| `description`          | string  | **oui** | Description de l'intervention souhaitée                                |
-| `service_id`           | uuid    | non     | UUID du service/département du demandeur                               |
-| `is_system`            | boolean | non     | `true` si DI générée par le système. Défaut : `false`                  |
-| `suggested_type_inter` | string  | non     | Type suggéré parmi `CUR`, `PRE`, `REA`, `BAT`, `PRO`, `COF`, `PIL`, `MES`. `null` par défaut |
+| Champ                  | Type    | Requis       | Description                                                            |
+| ---------------------- | ------- | ------------ | ---------------------------------------------------------------------- |
+| `machine_id`           | uuid    | **oui**      | Équipement concerné                                                    |
+| `demandeur_nom`        | string  | **oui**      | Nom du demandeur                                                       |
+| `description`          | string  | **oui**      | Description de l'intervention souhaitée                                |
+| `service_id`           | uuid    | non          | UUID du service/département du demandeur                               |
+| `is_system`            | boolean | non          | `true` si DI générée par le système. Défaut : `false`                  |
+| `suggested_type_inter` | string  | non          | Type suggéré parmi `CUR`, `PRE`, `REA`, `BAT`, `PRO`, `COF`, `PIL`, `MES`. `null` par défaut |
+| `reason_code`          | string  | **oui**      | Code raison obligatoire pour l'audit. Voir `GET /audit/reasons`        |
+| `reason_text`          | string  | conditionnel | Texte libre obligatoire si `reason_code = "OTHER"`                     |
 
 ### Réponse `201` — `InterventionRequestDetail`
 
@@ -344,7 +347,8 @@ Pour la transition vers `acceptee`, une intervention GMAO est automatiquement cr
   "type_inter": "CUR",
   "tech_initials": "QC",
   "priority": "urgent",
-  "reported_date": "2026-03-10"
+  "reported_date": "2026-03-10",
+  "reason_code": "CLIENT_REQUEST"
 }
 ```
 
@@ -357,6 +361,8 @@ Pour la transition vers `acceptee`, une intervention GMAO est automatiquement cr
 | `tech_initials` | string | **oui si** `acceptee` | Initiales du technicien. Intégrées dans le code de l'intervention                                                       |
 | `priority`      | string | non (si `acceptee`)   | `faible`, `normale`, `important`, `urgent`. Défaut : `normale`                                                          |
 | `reported_date` | date   | non (si `acceptee`)   | Date de signalement (`YYYY-MM-DD`). Défaut : null                                                                       |
+| `reason_code`   | string | **oui**               | Code raison obligatoire pour l'audit. Voir `GET /audit/reasons`                                                         |
+| `reason_text`   | string | conditionnel          | Texte libre obligatoire si `reason_code = "OTHER"`                                                                      |
 
 > **Résolution du `type_inter` pour les DI système** : si `is_system=true`, le type est résolu automatiquement depuis `suggested_type_inter`. Le champ `type_inter` du payload est ignoré. Si `suggested_type_inter` est aussi absent, une erreur `400` est levée.
 

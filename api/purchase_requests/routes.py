@@ -186,7 +186,12 @@ def get_purchase_request(request_id: str):
 
 @router.post("", response_model=PurchaseRequestDetail)
 def create_purchase_request(purchase_request: PurchaseRequestIn):
-    """Crée une nouvelle demande d'achat"""
+    """
+    Crée une nouvelle demande d'achat.
+
+    **Audit obligatoire** : le champ `reason_code` est requis (voir `GET /audit/reasons`).
+    `reason_text` est obligatoire si `reason_code=OTHER`.
+    """
     repo = PurchaseRequestRepository()
     return repo.add(purchase_request.model_dump())
 
@@ -195,7 +200,14 @@ EDITABLE_STATUSES = {'TO_QUALIFY', 'NO_SUPPLIER_REF', 'PENDING_DISPATCH'}
 
 @router.put("/{request_id}", response_model=PurchaseRequestDetail)
 def update_purchase_request(request_id: str, purchase_request: PurchaseRequestIn):
-    """Met à jour une demande d'achat existante"""
+    """
+    Met à jour une demande d'achat existante.
+
+    Modification autorisée uniquement pour les statuts : TO_QUALIFY, NO_SUPPLIER_REF, PENDING_DISPATCH.
+
+    **Audit obligatoire** : le champ `reason_code` est requis (voir `GET /audit/reasons`).
+    `reason_text` est obligatoire si `reason_code=OTHER`.
+    """
     repo = PurchaseRequestRepository()
     current = repo.get_detail(request_id)
     derived = current['derived_status']

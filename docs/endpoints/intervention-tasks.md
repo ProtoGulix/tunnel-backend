@@ -70,7 +70,6 @@ Liste les tâches avec filtres optionnels. Par défaut, les tâches `done` et `s
     "skip_reason": null,
     "gamme_step_id": "uuid-step",
     "occurrence_id": "uuid-occurrence",
-    "action_id": null,
     "closed_by": null,
     "created_by": null,
     "created_at": "2026-04-25T08:00:00Z",
@@ -99,7 +98,6 @@ Liste les tâches avec filtres optionnels. Par défaut, les tâches `done` et `s
     "skip_reason": null,
     "gamme_step_id": "uuid-step-2",
     "occurrence_id": "uuid-occurrence",
-    "action_id": "uuid-action",
     "closed_by": "uuid-tech",
     "created_by": null,
     "created_at": "2026-04-25T08:00:00Z",
@@ -193,19 +191,22 @@ Crée une tâche manuelle. `origin` doit être `resp` ou `tech` — `plan` est r
   "optional": false,
   "assigned_to": "uuid-tech",
   "due_date": "2026-04-30",
-  "sort_order": 10
+  "sort_order": 10,
+  "reason_code": "CLIENT_REQUEST"
 }
 ```
 
-| Champ             | Type   | Requis  | Description                                         |
-| ----------------- | ------ | ------- | --------------------------------------------------- |
-| `intervention_id` | uuid   | **oui** | Intervention parente                                |
-| `label`           | string | **oui** | Intitulé de la tâche                                |
-| `origin`          | string | non     | `resp` ou `tech`. Défaut : `tech` (`plan` interdit) |
-| `optional`        | bool   | non     | Défaut `false`                                      |
-| `assigned_to`     | uuid   | non     | Technicien assigné                                  |
-| `due_date`        | date   | non     | Échéance (format `YYYY-MM-DD`)                      |
-| `sort_order`      | int    | non     | Ordre d'affichage, défaut `0`                       |
+| Champ             | Type   | Requis       | Description                                         |
+| ----------------- | ------ | ------------ | --------------------------------------------------- |
+| `intervention_id` | uuid   | **oui**      | Intervention parente                                |
+| `label`           | string | **oui**      | Intitulé de la tâche                                |
+| `origin`          | string | non          | `resp` ou `tech`. Défaut : `tech` (`plan` interdit) |
+| `optional`        | bool   | non          | Défaut `false`                                      |
+| `assigned_to`     | uuid   | non          | Technicien assigné                                  |
+| `due_date`        | date   | non          | Échéance (format `YYYY-MM-DD`)                      |
+| `sort_order`      | int    | non          | Ordre d'affichage, défaut `0`                       |
+| `reason_code`     | string | **oui**      | Code raison pour l'audit. Voir `GET /audit/reasons` |
+| `reason_text`     | string | conditionnel | Obligatoire si `reason_code = "OTHER"`              |
 
 ### Réponse `201`
 
@@ -230,7 +231,8 @@ Met à jour partiellement une tâche. Seuls les champs fournis sont modifiés.
 {
   "status": "skipped",
   "skip_reason": "Étape non applicable sur ce modèle",
-  "assigned_to": "uuid-tech"
+  "assigned_to": "uuid-tech",
+  "reason_code": "TECHNICIAN_UNAVAILABLE"
 }
 ```
 
@@ -242,6 +244,8 @@ Met à jour partiellement une tâche. Seuls les champs fournis sont modifiés.
 | `assigned_to` | uuid   | non          | Technicien assigné                       |
 | `due_date`    | date   | non          | Échéance                                 |
 | `sort_order`  | int    | non          | Ordre d'affichage                        |
+| `reason_code` | string | **oui**      | Code raison pour l'audit. Voir `GET /audit/reasons` |
+| `reason_text` | string | conditionnel | Obligatoire si `reason_code = "OTHER"`   |
 
 ### Réponse `200`
 
@@ -262,7 +266,21 @@ Tâche mise à jour.
 Supprime une tâche. La suppression n'est autorisée que si :
 
 - `status = "todo"` (tâche pas encore commencée)
-- Aucune action liée (`action_id IS NULL`)
+- Aucune liaison dans `intervention_action_task` (aucune action n'a traité cette tâche)
+
+### Body
+
+```json
+{
+  "reason_code": "OTHER",
+  "reason_text": "Tâche créée par erreur"
+}
+```
+
+| Champ         | Type   | Requis       | Description                              |
+| ------------- | ------ | ------------ | ---------------------------------------- |
+| `reason_code` | string | **oui**      | Code raison pour l'audit                 |
+| `reason_text` | string | conditionnel | Obligatoire si `reason_code = "OTHER"`   |
 
 ### Réponse `204`
 

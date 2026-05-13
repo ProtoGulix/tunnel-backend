@@ -3,7 +3,7 @@ import logging
 
 from fastapi import HTTPException
 from typing import Dict, Any, List, Optional
-from uuid import UUID, uuid4
+from uuid import uuid4
 from datetime import datetime, date
 
 from api.settings import settings
@@ -20,10 +20,14 @@ def _audit_task_from_action(cur, task_id: str, old_status: str, new_status: str,
     """Audite une transition de statut de tâche déclenchée par une action."""
     try:
         cur.execute(
-            "SELECT public.fn_audit_log_decision(%s, %s, %s, %s, %s, %s, %s, %s, %s)",
+            """
+            SELECT public.fn_audit_log_decision(
+                %s, %s::uuid, %s, %s::jsonb, %s::jsonb, %s, %s, %s::uuid, %s
+            )
+            """,
             (
                 "task",
-                UUID(task_id),
+                task_id,
                 "updated",
                 json.dumps({"status": old_status, "triggered_by_action": action_id}),
                 json.dumps({"status": new_status, "triggered_by_action": action_id}),

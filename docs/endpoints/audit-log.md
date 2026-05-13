@@ -13,10 +13,10 @@ Système de traçabilité centralisée de toutes les mutations métier.
 | Entité | Routes concernées |
 |--------|------------------|
 | Intervention | `POST /interventions`, `PUT /interventions/{id}`, `DELETE /interventions/{id}` |
-| Demande d'intervention (DI) | `POST /intervention-requests`, `PATCH /intervention-requests/{id}/status`, `DELETE /intervention-requests/{id}` |
-| Demande d'achat (DA) | `POST /purchase-requests`, `PATCH /purchase-requests/{id}`, `DELETE /purchase-requests/{id}` |
+| Demande d'intervention (DI) | `POST /intervention-requests`, `POST /intervention-requests/{id}/transition`, `DELETE /intervention-requests/{id}` |
+| Demande d'achat (DA) | `POST /purchase-requests`, `PUT /purchase-requests/{id}`, `DELETE /purchase-requests/{id}` |
 | Tâche | `POST /intervention-tasks`, `PATCH /intervention-tasks/{id}`, `DELETE /intervention-tasks/{id}` |
-| Action | `POST /intervention-actions`, `PATCH /intervention-actions/{id}`, `DELETE /intervention-actions/{id}` |
+| Action | `POST /intervention-actions`, `PATCH /intervention-actions/{id}` |
 
 ### Champs audit dans le body
 
@@ -83,6 +83,10 @@ Liste les raisons d'audit disponibles.
 |------|-------|-----------|-------------------|
 | `PURCHASE_RECEIVED` | Demande d'achat reçue | system | intervention |
 | `HEALTH_THRESHOLD` | Seuil santé atteint | system | intervention |
+| `TASK_CREATED` | Tâche créée | system | task |
+| `TASK_UPDATED` | Tâche modifiée | system | task |
+| `TASK_STATUS` | Changement statut tâche | system | task |
+| `TASK_DELETED` | Tâche supprimée | system | task |
 | `EQUIPMENT_FAILURE` | Panne équipement | manual | intervention |
 | `CLIENT_REQUEST` | Demande client | manual | intervention, task |
 | `RECLASSIFICATION` | Reclassification | manual | intervention |
@@ -92,7 +96,7 @@ Liste les raisons d'audit disponibles.
 | `RESOURCE_CONSTRAINT` | Contrainte ressource | manual | task, intervention |
 | `OTHER` | Autre raison | user | toutes |
 
-> Les raisons de catégorie `system` sont réservées aux mutations automatiques (triggers DB). Ne pas les utiliser depuis le frontend.
+> Les raisons de catégorie `system` sont réservées aux mutations automatiques (triggers DB, repositories). Ne pas les utiliser depuis le frontend.
 
 ---
 

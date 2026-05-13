@@ -90,7 +90,12 @@ def get_intervention_actions(intervention_id: str, request: Request):
 
 @router.post("", response_model=InterventionOut)
 def create_intervention(data: InterventionCreate, request: Request):
-    """Crée une nouvelle intervention"""
+    """
+    Crée une nouvelle intervention.
+
+    **Audit obligatoire** : le champ `reason_code` est requis (voir `GET /audit/reasons`).
+    `reason_text` est obligatoire si `reason_code=OTHER`.
+    """
     payload = data.model_dump(exclude_none=True)
     InterventionValidator.validate_request_required(payload)
     repo = InterventionRepository()
@@ -99,7 +104,12 @@ def create_intervention(data: InterventionCreate, request: Request):
 
 @router.put("/{intervention_id}", response_model=InterventionOut)
 def update_intervention(intervention_id: str, data: InterventionIn, request: Request):
-    """Met à jour une intervention existante"""
+    """
+    Met à jour une intervention existante.
+
+    **Audit obligatoire** : le champ `reason_code` est requis (voir `GET /audit/reasons`).
+    `reason_text` est obligatoire si `reason_code=OTHER`.
+    """
     repo = InterventionRepository()
     return repo.update(intervention_id, data.model_dump(exclude_none=True))
 

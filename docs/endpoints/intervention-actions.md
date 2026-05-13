@@ -388,7 +388,7 @@ Détail complet d'une action avec tout le contexte de l'intervention parente. Co
 > **Champs de l'action :**
 >
 > - `purchase_requests` : demandes d'achat liées à **cette action** via `intervention_action_purchase_request` → [PurchaseRequestListItem](purchase-requests.md)
-> - `tasks` : tâches traitées par **cette action** (via `intervention_task.action_id`) → `InterventionTaskOut` complet avec `skip_reason`, `assigned_to`, `closed_by`, `action_count`, `time_spent`
+> - `tasks` : tâches traitées par **cette action** (via la table de jonction `intervention_action_task`) → `InterventionTaskOut` complet avec `skip_reason`, `assigned_to`, `closed_by`, `action_count`, `time_spent`
 >
 > **Champs de `intervention` (contexte parente) :**
 >
@@ -450,8 +450,8 @@ Fournissez `tasks` (liste) pour tagger une ou plusieurs tâches de l'interventio
 
 **Comportement** :
 
-- Chaque tâche reçoit `action_id = cette_action.id`
-- Le trigger DB gère automatiquement `todo → in_progress` au SET action_id
+- Une ligne est insérée dans `intervention_action_task(action_id, task_id)` pour chaque tâche
+- Le trigger DB gère automatiquement `todo → in_progress` à la liaison
 - `close_task=true` clôt la tâche à `done` après liaison
 - `skip=true` passe la tâche à `skipped` (mutuellement exclusif avec `close_task`)
 - Le `time_spent` est porté par l'action — non divisé entre les tâches
@@ -473,7 +473,8 @@ Fournissez `tasks` (liste) pour tagger une ou plusieurs tâches de l'interventio
   "action_subcategory": 30,
   "tech": "a1b2c3d4-...",
   "complexity_score": 7,
-  "complexity_factor": "PCE"
+  "complexity_factor": "PCE",
+  "reason_code": "RECLASSIFICATION"
 }
 ```
 
@@ -488,6 +489,7 @@ Fournissez `tasks` (liste) pour tagger une ou plusieurs tâches de l'interventio
   "complexity_score": 7,
   "complexity_factor": "PCE",
   "created_at": "2026-01-13T14:30:00",
+  "reason_code": "CLIENT_REQUEST",
   "tasks": [
     { "task_id": "550e8400-e29b-41d4-a716-446655440000", "close_task": true },
     {
@@ -510,7 +512,8 @@ Fournissez `tasks` (liste) pour tagger une ou plusieurs tâches de l'interventio
   "tech": "a1b2c3d4-...",
   "complexity_score": 7,
   "complexity_factor": "PCE",
-  "created_at": "2026-01-13T14:30:00"
+  "created_at": "2026-01-13T14:30:00",
+  "reason_code": "EQUIPMENT_FAILURE"
 }
 ```
 
@@ -527,6 +530,8 @@ Fournissez `tasks` (liste) pour tagger une ou plusieurs tâches de l'interventio
 | `complexity_factor`  | string   | conditionnel | **Requis si score > 5**. Code existant dans [complexity_factors](complexity-factors.md)                                 |
 | `created_at`         | datetime | non          | Défaut: `now()`. Permet le backdating                                                                                   |
 | `tasks`              | array    | non          | Liste de tâches à tagger (voir tableau ci-dessus). Liste vide interdite                                                 |
+| `reason_code`        | string   | **oui**      | Code raison obligatoire pour l'audit. Voir `GET /audit/reasons`                                                         |
+| `reason_text`        | string   | conditionnel | Texte libre obligatoire si `reason_code = "OTHER"`                                                                      |
 
 ### Réponse `201`
 
@@ -580,6 +585,8 @@ Met à jour partiellement une action existante. Seuls les champs fournis sont mo
 | `complexity_score`   | int      | non          | Score 1-10                                                                                                   |
 | `complexity_factor`  | string   | non          | **Obligatoire si le score résultant > 5**. Code dans [complexity_factors](complexity-factors.md)             |
 | `created_at`         | datetime | non          | Date de l'action. Modifiable pour corriger une erreur de saisie (backdating)                                 |
+| `reason_code`        | string   | **oui**      | Code raison obligatoire pour l'audit. Voir `GET /audit/reasons`                                              |
+| `reason_text`        | string   | conditionnel | Texte libre obligatoire si `reason_code = "OTHER"`                                                           |
 
 > Les règles métier s'appliquent également sur les champs partiels : si `complexity_score > 5` (valeur finale), `complexity_factor` doit être renseigné (valeur courante ou fournie).
 >

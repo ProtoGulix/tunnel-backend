@@ -2,7 +2,7 @@ import json
 import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 from fastapi import HTTPException
 
@@ -23,17 +23,19 @@ def _audit_task(cur, task_id: str, decision_type: str,
     try:
         cur.execute(
             """
-            SELECT public.fn_audit_log_decision(%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            SELECT public.fn_audit_log_decision(
+                %s, %s::uuid, %s, %s::jsonb, %s::jsonb, %s, %s, %s::uuid, %s
+            )
             """,
             (
                 "task",
-                UUID(task_id),
+                task_id,
                 decision_type,
                 json.dumps(old_value) if old_value is not None else None,
                 json.dumps(new_value) if new_value is not None else None,
                 reason_code,
                 None,
-                UUID(changed_by) if changed_by else None,
+                changed_by,
                 True,
             ),
         )
@@ -347,7 +349,7 @@ class InterventionTaskRepository:
                 "optional": data.optional,
                 "assigned_to": assigned_to,
                 "due_date": str(data.due_date) if data.due_date else None,
-            }, "TASK_CREATED", created_by)
+            }, data.reason_code, created_by)
             conn.commit()
         except (NotFoundError, ValidationError):
             conn.rollback()
@@ -432,12 +434,7 @@ class InterventionTaskRepository:
                 params,
             )
 
-            # Choisir le reason_code selon la nature de la modification
-            if "status" in new_vals:
-                reason = "TASK_STATUS"
-            else:
-                reason = "TASK_UPDATED"
-            _audit_task(cur, task_id, "updated", old_vals, new_vals, reason, closed_by)
+            _audit_task(cur, task_id, "updated", old_vals, new_vals, data.reason_code, closed_by)
 
             conn.commit()
         except (NotFoundError, ValidationError):
@@ -456,7 +453,7 @@ class InterventionTaskRepository:
 
     # ── Suppression ───────────────────────────────────────────────
 
-    def delete(self, task_id: str, deleted_by: Optional[str] = None) -> None:
+    def delete(self, task_id: str, deleted_by: Optional[str] = None, reason_code: str = "TASK_DELETED") -> None:
         """Supprime une tâche (status=todo et aucune action liée)."""
         conn = self._get_connection()
         try:
@@ -486,7 +483,7 @@ class InterventionTaskRepository:
 
             _audit_task(cur, task_id, "deleted",
                         {"label": label, "status": status}, None,
-                        "TASK_DELETED", deleted_by)
+                        reason_code, deleted_by)
             cur.execute(
                 "DELETE FROM intervention_task WHERE id = %s", (task_id,))
             conn.commit()

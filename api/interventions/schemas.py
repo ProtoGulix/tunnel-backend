@@ -2,7 +2,7 @@ from datetime import date
 from typing import List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from api.intervention_actions.schemas import InterventionActionOut
 from api.intervention_status_log.schemas import InterventionStatusLogOut
 from api.equipements.schemas import EquipementDetail
@@ -22,6 +22,14 @@ class InterventionCreate(BaseModel):
     printed_fiche: Optional[bool] = None
     reported_date: Optional[date] = None
     request_id: Optional[UUID] = None
+    reason_code: str = Field(
+        ...,
+        description="Code raison obligatoire pour l'audit (ex: CLIENT_REQUEST, OTHER). Voir GET /audit/reasons.",
+    )
+    reason_text: Optional[str] = Field(
+        default=None,
+        description="Texte libre obligatoire si reason_code=OTHER.",
+    )
 
     class Config:
         from_attributes = True
@@ -39,6 +47,14 @@ class InterventionIn(BaseModel):
     status_actual: Optional[str] = None
     printed_fiche: Optional[bool] = None
     reported_date: Optional[date] = None
+    reason_code: str = Field(
+        ...,
+        description="Code raison obligatoire pour l'audit (ex: CLIENT_REQUEST, OTHER). Voir GET /audit/reasons.",
+    )
+    reason_text: Optional[str] = Field(
+        default=None,
+        description="Texte libre obligatoire si reason_code=OTHER.",
+    )
 
     class Config:
         from_attributes = True

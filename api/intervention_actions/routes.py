@@ -39,13 +39,26 @@ def get_action(action_id: str):
 
 @router.post("", response_model=InterventionActionOut)
 def add_action(action: InterventionActionIn):
-    """Ajoute une action à une intervention"""
+    """
+    Ajoute une action à une intervention.
+
+    **Audit obligatoire** : le champ `reason_code` est requis (voir `GET /audit/reasons`).
+    `reason_text` est obligatoire si `reason_code=OTHER`.
+
+    Les tâches listées dans `tasks` sont liées à l'action via la table M2M
+    et leur statut est mis à jour (todo→in_progress, ou done/skipped selon les flags).
+    """
     repo = InterventionActionRepository()
     return repo.add(action.model_dump())
 
 
 @router.patch("/{action_id}", response_model=InterventionActionOut)
 def patch_action(action_id: str, patch: InterventionActionPatch):
-    """Met à jour partiellement une action d'intervention"""
+    """
+    Met à jour partiellement une action d'intervention.
+
+    **Audit obligatoire** : le champ `reason_code` est requis (voir `GET /audit/reasons`).
+    `reason_text` est obligatoire si `reason_code=OTHER`.
+    """
     repo = InterventionActionRepository()
     return repo.update(action_id, patch.model_dump(exclude_none=True))

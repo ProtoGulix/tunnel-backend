@@ -79,6 +79,9 @@ def create_request(data: InterventionRequestIn):
     """
     Crée une nouvelle demande d'intervention.
     Le code DI-YYYY-NNNN et le statut initial (nouvelle) sont générés automatiquement.
+
+    **Audit obligatoire** : le champ `reason_code` est requis (voir `GET /audit/reasons`).
+    `reason_text` est obligatoire si `reason_code=OTHER`.
     """
     return repo.create(data.model_dump())
 
@@ -96,9 +99,11 @@ def transition_request_status(request_id: UUID, body: StatusTransitionIn):
     - cloturee → (aucune)
 
     Le motif (notes) est obligatoire pour le statut `rejetee`.
-
     Pour le statut `acceptee`, les champs `type_inter` et `tech_initials` sont obligatoires :
     ils servent à créer automatiquement l'intervention liée.
+
+    **Audit obligatoire** : le champ `reason_code` est requis (voir `GET /audit/reasons`).
+    `reason_text` est obligatoire si `reason_code=OTHER`.
     """
     intervention_data = None
     if body.status_to == "acceptee":

@@ -28,6 +28,14 @@ class InterventionRequestIn(BaseModel):
     is_system: bool = Field(default=False, description="DI créée par le système (ex: maintenance préventive)")
     suggested_type_inter: Optional[str] = Field(
         default=None, description="Type d'intervention suggéré (pré-remplit l'acceptation)")
+    reason_code: str = Field(
+        ...,
+        description="Code raison obligatoire pour l'audit (ex: CLIENT_REQUEST, OTHER). Voir GET /audit/reasons.",
+    )
+    reason_text: Optional[str] = Field(
+        default=None,
+        description="Texte libre obligatoire si reason_code=OTHER.",
+    )
 
     @field_validator("suggested_type_inter")
     @classmethod
@@ -99,6 +107,14 @@ class StatusTransitionIn(BaseModel):
         default=None, description="Priorité de l'intervention")
     reported_date: Optional[str] = Field(
         default=None, description="Date de signalement (YYYY-MM-DD)")
+    reason_code: str = Field(
+        ...,
+        description="Code raison obligatoire pour l'audit (ex: CLIENT_REQUEST, OTHER). Voir GET /audit/reasons.",
+    )
+    reason_text: Optional[str] = Field(
+        default=None,
+        description="Texte libre obligatoire si reason_code=OTHER.",
+    )
 
     @model_validator(mode="after")
     def validate_tech(self):

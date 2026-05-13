@@ -63,6 +63,14 @@ class InterventionActionIn(BaseModel):
         default=None,
         description="Tâches à tagger/valider en même temps que cette action",
     )
+    reason_code: str = Field(
+        ...,
+        description="Code raison obligatoire pour l'audit (ex: CLIENT_REQUEST, OTHER). Voir GET /audit/reasons.",
+    )
+    reason_text: Optional[str] = Field(
+        default=None,
+        description="Texte libre obligatoire si reason_code=OTHER.",
+    )
 
     @model_validator(mode="after")
     def validate_tasks(self) -> "InterventionActionIn":
@@ -111,6 +119,14 @@ class InterventionActionPatch(BaseModel):
     tasks: Optional[List[InterventionTaskValidationRequest]] = Field(
         default=None,
         description="Tâches à tagger/valider/skipper sur cette action",
+    )
+    reason_code: str = Field(
+        ...,
+        description="Code raison obligatoire pour l'audit (ex: CLIENT_REQUEST, OTHER). Voir GET /audit/reasons.",
+    )
+    reason_text: Optional[str] = Field(
+        default=None,
+        description="Texte libre obligatoire si reason_code=OTHER.",
     )
 
     @model_validator(mode="after")
