@@ -136,8 +136,9 @@ class TasksRepository:
                 LEFT JOIN tunnel_user u_assigned ON it.assigned_to = u_assigned.id
                 LEFT JOIN LATERAL (
                     SELECT COALESCE(SUM(ia.time_spent), 0.0) AS time_spent
-                    FROM intervention_action ia
-                    WHERE ia.task_id = it.id
+                    FROM intervention_action_task iat
+                    INNER JOIN intervention_action ia ON ia.id = iat.action_id
+                    WHERE iat.task_id = it.id
                 ) agg ON TRUE
                 {task_full_where_sql}
                 ORDER BY it.created_at DESC, it.id DESC
@@ -271,10 +272,11 @@ class TasksRepository:
                 ia.id, ia.created_at, ia.description, ia.time_spent,
                 u.id AS tech_id, u.initial AS tech_initial,
                 u.first_name AS tech_first_name, u.last_name AS tech_last_name,
-                ia.task_id
-            FROM intervention_action ia
+                iat.task_id
+            FROM intervention_action_task iat
+            INNER JOIN intervention_action ia ON ia.id = iat.action_id
             LEFT JOIN tunnel_user u ON ia.tech = u.id
-            WHERE ia.task_id IN ({ph})
+            WHERE iat.task_id IN ({ph})
             ORDER BY ia.created_at DESC
         """, task_ids)
 

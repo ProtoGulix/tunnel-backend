@@ -105,13 +105,18 @@ class InterventionActionRepository:
             return []
 
     def _get_tasks_for_action(self, action_id: str, conn) -> List[Dict[str, Any]]:
-        """Récupère les tâches liées à cette action avec leur détail complet (assigned_to, skip_reason, stats)."""
+        """Récupère les tâches liées à cette action via la table de jonction M2M."""
         # Import lazy pour éviter la circularité avec intervention_tasks.repo
         from api.intervention_tasks.repo import _TASK_SELECT, _map_task
         try:
             cur = conn.cursor()
             cur.execute(
-                f"{_TASK_SELECT} WHERE it.action_id = %s ORDER BY it.sort_order ASC",
+                f"""
+                {_TASK_SELECT}
+                INNER JOIN intervention_action_task iat ON iat.task_id = it.id
+                WHERE iat.action_id = %s
+                ORDER BY it.sort_order ASC
+                """,
                 (action_id,)
             )
             rows = cur.fetchall()
@@ -219,12 +224,12 @@ class InterventionActionRepository:
                             if pid in pr_by_id
                         ]
 
-                # Batch tâches liées : it.action_id (nouveau modèle) OU ia.task_id (ancien modèle)
+                # Batch tâches liées via la table de jonction M2M
                 # Import lazy pour éviter la circularité avec intervention_tasks.repo
                 from api.intervention_tasks.repo import _map_task as _mt
                 cur.execute(
                     f"""
-                    SELECT COALESCE(it.action_id, ia_legacy.id) AS action_id,
+                    SELECT iat.action_id,
                            it.id, it.intervention_id, it.label, it.origin, it.status,
                            it.optional, it.due_date, it.sort_order, it.skip_reason,
                            it.gamme_step_id, it.occurrence_id,
@@ -238,19 +243,20 @@ class InterventionActionRepository:
                            u.initial AS assigned_initial,
                            NULL::text AS assigned_status,
                            NULL::text AS assigned_role
-                    FROM intervention_task it
+                    FROM intervention_action_task iat
+                    INNER JOIN intervention_task it ON it.id = iat.task_id
                     LEFT JOIN tunnel_user u ON u.id = it.assigned_to
                     LEFT JOIN LATERAL (
-                        SELECT COUNT(ia.id) AS action_count, COALESCE(SUM(ia.time_spent), 0) AS time_spent
-                        FROM intervention_action ia WHERE ia.id = it.action_id
+                        SELECT COUNT(DISTINCT iat2.action_id) AS action_count,
+                               COALESCE(SUM(ia2.time_spent), 0) AS time_spent
+                        FROM intervention_action_task iat2
+                        INNER JOIN intervention_action ia2 ON ia2.id = iat2.action_id
+                        WHERE iat2.task_id = it.id
                     ) agg ON TRUE
-                    LEFT JOIN intervention_action ia_legacy ON ia_legacy.task_id = it.id
-                        AND ia_legacy.id IN ({placeholders})
-                    WHERE it.action_id IN ({placeholders})
-                       OR (it.action_id IS NULL AND ia_legacy.id IS NOT NULL)
+                    WHERE iat.action_id IN ({placeholders})
                     ORDER BY it.sort_order ASC
                     """,
-                    action_ids + action_ids
+                    action_ids
                 )
                 task_rows = cur.fetchall()
                 if task_rows:
@@ -462,12 +468,12 @@ class InterventionActionRepository:
                         if pid in pr_by_id
                     ]
 
-            # Batch tâches liées : it.action_id (nouveau modèle) OU ia.task_id (ancien modèle)
+            # Batch tâches liées via la table de jonction M2M
             # Import lazy pour éviter la circularité avec intervention_tasks.repo
             from api.intervention_tasks.repo import _map_task as _mt
             cur.execute(
                 f"""
-                SELECT COALESCE(it.action_id, ia_legacy.id) AS action_id,
+                SELECT iat.action_id,
                        it.id, it.intervention_id, it.label, it.origin, it.status,
                        it.optional, it.due_date, it.sort_order, it.skip_reason,
                        it.gamme_step_id, it.occurrence_id,
@@ -481,19 +487,20 @@ class InterventionActionRepository:
                        u.initial AS assigned_initial,
                        NULL::text AS assigned_status,
                        NULL::text AS assigned_role
-                FROM intervention_task it
+                FROM intervention_action_task iat
+                INNER JOIN intervention_task it ON it.id = iat.task_id
                 LEFT JOIN tunnel_user u ON u.id = it.assigned_to
                 LEFT JOIN LATERAL (
-                    SELECT COUNT(ia.id) AS action_count, COALESCE(SUM(ia.time_spent), 0) AS time_spent
-                    FROM intervention_action ia WHERE ia.id = it.action_id
+                    SELECT COUNT(DISTINCT iat2.action_id) AS action_count,
+                           COALESCE(SUM(ia2.time_spent), 0) AS time_spent
+                    FROM intervention_action_task iat2
+                    INNER JOIN intervention_action ia2 ON ia2.id = iat2.action_id
+                    WHERE iat2.task_id = it.id
                 ) agg ON TRUE
-                LEFT JOIN intervention_action ia_legacy ON ia_legacy.task_id = it.id
-                    AND ia_legacy.id IN ({placeholders})
-                WHERE it.action_id IN ({placeholders})
-                   OR (it.action_id IS NULL AND ia_legacy.id IS NOT NULL)
+                WHERE iat.action_id IN ({placeholders})
                 ORDER BY it.sort_order ASC
                 """,
-                action_ids + action_ids
+                action_ids
             )
             task_rows = cur.fetchall()
             if task_rows:
@@ -561,9 +568,9 @@ class InterventionActionRepository:
     def add(self, action_data: Dict[str, Any]) -> Dict[str, Any]:
         """Ajoute une nouvelle action à une intervention.
 
-        Si tasks est fourni, chaque tâche du lot est vérifiée (appartenance à
-        l'intervention) puis liée à l'action via intervention_task.action_id.
-        Plusieurs tâches peuvent pointer vers la même action (many-to-one).
+        Si tasks est fourni, chaque tâche est vérifiée (appartenance à
+        l'intervention) puis liée via la table de jonction M2M intervention_action_task.
+        Une tâche peut être liée à plusieurs actions et vice-versa.
         La transition todo→in_progress est gérée en Python sur chaque tâche liée.
         """
         import uuid as _uuid
@@ -583,12 +590,7 @@ class InterventionActionRepository:
             now = datetime.now()
             created_at = validated_data.get('created_at', now)
 
-            # Si task_id fourni en champ direct, le normaliser en entrée tasks
-            if not tasks and validated_data.get('task_id'):
-                tasks = [{'task_id': str(validated_data.pop(
-                    'task_id')), 'close_task': False, 'skip': False, 'skip_reason': None}]
-            else:
-                validated_data.pop('task_id', None)
+            validated_data.pop('task_id', None)
 
             intervention_id_str = str(validated_data['intervention_id']) if isinstance(
                 validated_data['intervention_id'], _uuid.UUID) else validated_data['intervention_id']
@@ -644,6 +646,16 @@ class InterventionActionRepository:
                         f"Tâche « {task_label} » n'appartient pas à cette intervention"
                     )
 
+                # Créer la liaison M2M
+                cur.execute(
+                    """
+                    INSERT INTO intervention_action_task (action_id, task_id)
+                    VALUES (%s, %s)
+                    ON CONFLICT DO NOTHING
+                    """,
+                    (action_id, tid),
+                )
+
                 if task_req_data.get('skip', False):
                     if task_status in ('done', 'skipped'):
                         raise ValidationError(
@@ -652,10 +664,10 @@ class InterventionActionRepository:
                     cur.execute(
                         """
                         UPDATE intervention_task
-                        SET action_id = %s, status = 'skipped', skip_reason = %s, updated_at = NOW()
+                        SET status = 'skipped', skip_reason = %s, updated_at = NOW()
                         WHERE id = %s
                         """,
-                        (action_id, task_req_data.get('skip_reason'), tid),
+                        (task_req_data.get('skip_reason'), tid),
                     )
                 else:
                     if task_status in ('done', 'skipped'):
@@ -664,24 +676,19 @@ class InterventionActionRepository:
                         )
                     if task_req_data.get('close_task', False):
                         cur.execute(
-                            """
-                            UPDATE intervention_task
-                            SET action_id = %s, status = 'done', updated_at = NOW()
-                            WHERE id = %s
-                            """,
-                            (action_id, tid),
+                            "UPDATE intervention_task SET status = 'done', updated_at = NOW() WHERE id = %s",
+                            (tid,),
                         )
                     else:
-                        # Transition todo→in_progress sur la tâche si c'est sa première action
+                        # Transition todo→in_progress si c'est la première action sur cette tâche
                         cur.execute(
                             """
                             UPDATE intervention_task
-                            SET action_id = %s,
-                                status = CASE WHEN status = 'todo' THEN 'in_progress' ELSE status END,
+                            SET status = CASE WHEN status = 'todo' THEN 'in_progress' ELSE status END,
                                 updated_at = NOW()
                             WHERE id = %s
                             """,
-                            (action_id, tid),
+                            (tid,),
                         )
 
             conn.commit()
@@ -811,6 +818,16 @@ class InterventionActionRepository:
                         f"Tâche « {task_label} » n'appartient pas à cette intervention"
                     )
 
+                # Créer la liaison M2M
+                cur.execute(
+                    """
+                    INSERT INTO intervention_action_task (action_id, task_id)
+                    VALUES (%s, %s)
+                    ON CONFLICT DO NOTHING
+                    """,
+                    (action_id, tid),
+                )
+
                 if task_req_data.get('skip', False):
                     if task_status in ('done', 'skipped'):
                         raise ValidationError(
@@ -819,10 +836,10 @@ class InterventionActionRepository:
                     cur.execute(
                         """
                         UPDATE intervention_task
-                        SET action_id = %s, status = 'skipped', skip_reason = %s, updated_at = NOW()
+                        SET status = 'skipped', skip_reason = %s, updated_at = NOW()
                         WHERE id = %s
                         """,
-                        (action_id, task_req_data.get('skip_reason'), tid),
+                        (task_req_data.get('skip_reason'), tid),
                     )
                 else:
                     if task_status in ('done', 'skipped'):
@@ -831,23 +848,18 @@ class InterventionActionRepository:
                         )
                     if task_req_data.get('close_task', False):
                         cur.execute(
-                            """
-                            UPDATE intervention_task
-                            SET action_id = %s, status = 'done', updated_at = NOW()
-                            WHERE id = %s
-                            """,
-                            (action_id, tid),
+                            "UPDATE intervention_task SET status = 'done', updated_at = NOW() WHERE id = %s",
+                            (tid,),
                         )
                     else:
                         cur.execute(
                             """
                             UPDATE intervention_task
-                            SET action_id = %s,
-                                status = CASE WHEN status = 'todo' THEN 'in_progress' ELSE status END,
+                            SET status = CASE WHEN status = 'todo' THEN 'in_progress' ELSE status END,
                                 updated_at = NOW()
                             WHERE id = %s
                             """,
-                            (action_id, tid),
+                            (tid,),
                         )
 
             conn.commit()

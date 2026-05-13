@@ -31,10 +31,11 @@ _TASK_SELECT = """
     LEFT JOIN tunnel_user u ON u.id = it.assigned_to
     LEFT JOIN LATERAL (
         SELECT
-            COUNT(ia.id)                    AS action_count,
-            COALESCE(SUM(ia.time_spent), 0) AS time_spent
-        FROM intervention_action ia
-        WHERE ia.id = it.action_id
+            COUNT(DISTINCT iat.action_id)    AS action_count,
+            COALESCE(SUM(ia.time_spent), 0)  AS time_spent
+        FROM intervention_action_task iat
+        INNER JOIN intervention_action ia ON ia.id = iat.action_id
+        WHERE iat.task_id = it.id
     ) agg ON TRUE
 """
 
@@ -395,7 +396,7 @@ class InterventionTaskRepository:
         try:
             cur = conn.cursor()
             cur.execute(
-                "SELECT status, intervention_id, action_id FROM intervention_task WHERE id = %s",
+                "SELECT status, intervention_id FROM intervention_task WHERE id = %s",
                 (task_id,),
             )
             row = cur.fetchone()
@@ -409,7 +410,11 @@ class InterventionTaskRepository:
                 raise ValidationError(
                     "Seule une tâche en statut 'todo' peut être supprimée")
 
-            if row[2] is not None:
+            cur.execute(
+                "SELECT EXISTS(SELECT 1 FROM intervention_action_task WHERE task_id = %s)",
+                (task_id,),
+            )
+            if cur.fetchone()[0]:
                 raise ValidationError(
                     "Impossible de supprimer une tâche liée à une action")
 
