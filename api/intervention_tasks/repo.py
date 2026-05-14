@@ -18,7 +18,8 @@ logger = logging.getLogger(__name__)
 
 def _audit_task(cur, task_id: str, decision_type: str,
                 old_value: Optional[Dict], new_value: Optional[Dict],
-                reason_code: str, changed_by: Optional[str] = None) -> None:
+                reason_code: str, changed_by: Optional[str] = None,
+                is_system: bool = False) -> None:
     """Insère une entrée d'audit pour une tâche via fn_audit_log_decision().
     Les erreurs sont loggées mais n'interrompent jamais la mutation métier.
     """
@@ -38,7 +39,7 @@ def _audit_task(cur, task_id: str, decision_type: str,
                 reason_code,
                 None,
                 changed_by,
-                True,
+                is_system,
             ),
         )
     except Exception as exc:
@@ -343,13 +344,22 @@ class InterventionTaskRepository:
                     created_by,
                 ),
             )
+            assigned_to_info = None
+            if assigned_to:
+                cur.execute(
+                    "SELECT id, initial, first_name, last_name FROM tunnel_user WHERE id = %s::uuid",
+                    (assigned_to,),
+                )
+                u = cur.fetchone()
+                if u:
+                    assigned_to_info = {"id": str(u[0]), "initials": u[1], "first_name": u[2], "last_name": u[3]}
             _audit_task(cur, task_id, "created", None, {
                 "intervention_id": str(data.intervention_id),
                 "label": data.label,
                 "origin": data.origin,
                 "status": "todo",
                 "optional": data.optional,
-                "assigned_to": assigned_to,
+                "assigned_to": assigned_to_info,
                 "due_date": str(data.due_date) if data.due_date else None,
             }, data.reason_code, created_by)
             conn.commit()
@@ -412,8 +422,14 @@ class InterventionTaskRepository:
             if data.assigned_to is not None and str(data.assigned_to) != str(old_assigned or ""):
                 set_parts.append("assigned_to = %s")
                 params.append(str(data.assigned_to))
-                old_vals["assigned_to"] = str(old_assigned) if old_assigned else None
-                new_vals["assigned_to"] = str(data.assigned_to)
+                ids_to_resolve = [i for i in [str(old_assigned) if old_assigned else None, str(data.assigned_to)] if i]
+                cur.execute(
+                    "SELECT id, initial, first_name, last_name FROM tunnel_user WHERE id = ANY(%s::uuid[])",
+                    (ids_to_resolve,),
+                )
+                users_by_id = {str(r[0]): {"id": str(r[0]), "initials": r[1], "first_name": r[2], "last_name": r[3]} for r in cur.fetchall()}
+                old_vals["assigned_to"] = users_by_id.get(str(old_assigned)) if old_assigned else None
+                new_vals["assigned_to"] = users_by_id.get(str(data.assigned_to))
             if data.due_date is not None and data.due_date != old_due_date:
                 set_parts.append("due_date = %s")
                 params.append(data.due_date)
@@ -436,7 +452,13 @@ class InterventionTaskRepository:
                 params,
             )
 
-            _audit_task(cur, task_id, "updated", old_vals, new_vals, data.reason_code, closed_by)
+            # Un log par champ modifié pour granularité (cohérent avec AuditMiddleware)
+            for field in old_vals:
+                _audit_task(
+                    cur, task_id, f"{field}_changed",
+                    {field: old_vals[field]}, {field: new_vals[field]},
+                    data.reason_code, closed_by,
+                )
 
             conn.commit()
         except (NotFoundError, ValidationError):

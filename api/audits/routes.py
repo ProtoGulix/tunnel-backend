@@ -43,28 +43,34 @@ def get_briefing(
     return repo.get_briefing(from_dt=from_dt, to_dt=to_dt, exclude_system=exclude_system)
 
 
-@router.get("/logs", response_model=List[AuditLogOut], dependencies=[Depends(require_authenticated)])
+@router.get("/logs", dependencies=[Depends(require_authenticated)])
 def get_logs(
     from_dt: Optional[datetime] = Query(None),
     to_dt: Optional[datetime] = Query(None),
     entity_type: Optional[str] = Query(None),
     entity_id: Optional[UUID] = Query(None),
     reason_code: Optional[str] = Query(None),
+    decision_type: Optional[str] = Query(None),
+    changed_by: Optional[UUID] = Query(None),
     exclude_system: bool = Query(False),
-    limit: int = Query(200, ge=1, le=1000),
+    limit: int = Query(50, ge=1, le=1000),
     offset: int = Query(0, ge=0),
+    include_facets: bool = Query(False, description="Inclure les facettes entity_type, decision_type, reason_code"),
     repo: AuditRepository = Depends(_repo),
 ):
-    """Requête fine sur les entrées d'audit log."""
+    """Requête paginée sur les entrées d'audit log. Retourne { items, pagination, facets }."""
     return repo.get_logs(
         from_dt=from_dt,
         to_dt=to_dt,
         entity_type=entity_type,
         entity_id=entity_id,
         reason_code=reason_code,
+        decision_type=decision_type,
+        changed_by=changed_by,
         exclude_system=exclude_system,
         limit=limit,
         offset=offset,
+        include_facets=include_facets,
     )
 
 

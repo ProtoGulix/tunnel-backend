@@ -102,51 +102,84 @@ Liste les raisons d'audit disponibles.
 
 ## `GET /audit/logs`
 
-Requête fine sur les entrées d'audit.
+Requête paginée sur les entrées d'audit. Retourne `{ items, pagination, facets }`.
 
 ### Query params
 
-| Param | Type | Description |
-|-------|------|-------------|
-| `from_dt` | datetime | Début de fenêtre (ISO 8601) |
-| `to_dt` | datetime | Fin de fenêtre |
-| `entity_type` | string | `intervention`, `request`, `purchase_request`, `task`, `action` |
-| `entity_id` | uuid | UUID de l'entité spécifique |
-| `reason_code` | string | Filtrer par code raison |
-| `exclude_system` | bool | Exclure les mutations système (défaut `false`) |
-| `limit` | int | Max 1000, défaut 200 |
-| `offset` | int | Pagination |
+| Param | Type | Défaut | Description |
+|-------|------|--------|-------------|
+| `from_dt` | datetime | — | Début de fenêtre (ISO 8601) |
+| `to_dt` | datetime | — | Fin de fenêtre |
+| `entity_type` | string | — | `intervention`, `request`, `purchase_request`, `task`, `action` |
+| `entity_id` | uuid | — | UUID de l'entité spécifique |
+| `reason_code` | string | — | Filtrer par code raison |
+| `decision_type` | string | — | Ex : `assigned_to_changed`, `status_changed`, `created`, `deleted` |
+| `changed_by` | uuid | — | UUID de l'utilisateur ayant effectué la mutation |
+| `exclude_system` | bool | `false` | Exclure les mutations système |
+| `limit` | int | `50` | Max 1000 |
+| `offset` | int | `0` | Décalage pour pagination |
+| `include_facets` | bool | `false` | Inclure les compteurs par entity_type, decision_type, reason_code |
 
 ### Réponse `200`
 
 ```json
-[
-  {
-    "id": "uuid",
-    "entity_type": "intervention",
-    "entity_id": "uuid",
-    "decision_type": "status_actual_changed",
-    "old_value": { "status_actual": "ouvert" },
-    "new_value": { "status_actual": "en_cours" },
-    "reason": {
-      "id": 4,
-      "code": "CLIENT_REQUEST",
-      "label": "Demande client",
-      "category": "manual",
-      "color": "#8b5cf6",
-      "description": "Client demande priorité"
-    },
-    "reason_text": null,
-    "changed_by": {
-      "id": "uuid-utilisateur",
-      "first_name": "Jean",
-      "last_name": "DUPONT",
-      "initials": "JD"
-    },
-    "is_system": false,
-    "logged_at": "2026-05-12T10:30:00Z"
+{
+  "items": [
+    {
+      "id": "uuid",
+      "entity_type": "task",
+      "entity_id": "uuid",
+      "decision_type": "assigned_to_changed",
+      "old_value": { "assigned_to": { "id": "uuid-ancien", "initials": "JD", "first_name": "Jean", "last_name": "Dupont" } },
+      "new_value": { "assigned_to": { "id": "uuid-nouveau", "initials": "AL", "first_name": "Alice", "last_name": "Lambert" } },
+      "reason": {
+        "id": 4,
+        "code": "CLIENT_REQUEST",
+        "label": "Demande client",
+        "category": "manual",
+        "color": "#8b5cf6",
+        "description": "Client demande priorité"
+      },
+      "reason_text": null,
+      "changed_by": {
+        "id": "uuid-utilisateur",
+        "first_name": "Jean",
+        "last_name": "DUPONT",
+        "initials": "JD"
+      },
+      "is_system": false,
+      "logged_at": "2026-05-12T10:30:00Z"
+    }
+  ],
+  "pagination": {
+    "total": 142,
+    "offset": 0,
+    "limit": 50,
+    "count": 50,
+    "total_pages": 3
+  },
+  "facets": null
+}
+```
+
+> `facets` est `null` sauf si `include_facets=true`.
+
+```json
+{
+  "facets": {
+    "entity_type": [
+      { "value": "intervention", "count": 87 },
+      { "value": "task", "count": 41 }
+    ],
+    "decision_type": [
+      { "value": "assigned_to_changed", "count": 35 },
+      { "value": "status_changed", "count": 28 }
+    ],
+    "reason_code": [
+      { "value": "CLIENT_REQUEST", "label": "Demande client", "color": "#8b5cf6", "count": 55 }
+    ]
   }
-]
+}
 ```
 
 ---

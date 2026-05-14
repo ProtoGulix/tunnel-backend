@@ -183,11 +183,14 @@ class AuditRepository:
         entity_type: Optional[str] = None,
         entity_id: Optional[UUID] = None,
         reason_code: Optional[str] = None,
+        decision_type: Optional[str] = None,
+        changed_by: Optional[UUID] = None,
         exclude_system: bool = False,
-        limit: int = 200,
+        limit: int = 50,
         offset: int = 0,
-    ) -> List[Dict[str, Any]]:
-        """Requête sur audit_log avec filtres optionnels."""
+        include_facets: bool = False,
+    ) -> Dict[str, Any]:
+        """Requête paginée sur audit_log avec filtres optionnels et facettes optionnelles."""
         conn = None
         try:
             conn = self._get_connection()
@@ -210,13 +213,18 @@ class AuditRepository:
                 if reason_code:
                     where_clauses.append("arc.code = %s")
                     params.append(reason_code)
+                if decision_type:
+                    where_clauses.append("al.decision_type = %s")
+                    params.append(decision_type)
+                if changed_by:
+                    where_clauses.append("al.changed_by = %s")
+                    params.append(changed_by)
                 if exclude_system:
                     where_clauses.append("al.is_system = FALSE")
 
                 where_sql = " AND ".join(where_clauses) if where_clauses else "TRUE"
 
-                cur.execute(
-                    f"""
+                _SELECT = """
                     SELECT
                         al.id,
                         al.entity_type,
@@ -240,14 +248,85 @@ class AuditRepository:
                     FROM audit_log al
                     LEFT JOIN audit_reason_code arc ON al.reason_code_id = arc.id
                     LEFT JOIN tunnel_user tu ON tu.id = al.changed_by
-                    WHERE {where_sql}
-                    ORDER BY al.logged_at DESC
-                    LIMIT %s OFFSET %s
-                    """,
+                """
+
+                # Total pour pagination
+                cur.execute(
+                    f"SELECT COUNT(*) FROM audit_log al LEFT JOIN audit_reason_code arc ON al.reason_code_id = arc.id WHERE {where_sql}",
+                    params,
+                )
+                total = cur.fetchone()["count"]
+
+                cur.execute(
+                    f"{_SELECT} WHERE {where_sql} ORDER BY al.logged_at DESC LIMIT %s OFFSET %s",
                     [*params, min(limit, 1000), offset],
                 )
                 rows = cur.fetchall()
-                return [_shape_log_row(dict(row)) for row in rows]
+                items = [_shape_log_row(dict(row)) for row in rows]
+
+                page_size = min(limit, 1000)
+                total_pages = max(1, -(-total // page_size))  # ceil division
+
+                result: Dict[str, Any] = {
+                    "items": items,
+                    "pagination": {
+                        "total": total,
+                        "offset": offset,
+                        "limit": page_size,
+                        "count": len(items),
+                        "total_pages": total_pages,
+                    },
+                    "facets": None,
+                }
+
+                if include_facets:
+                    cur.execute(
+                        f"""
+                        SELECT al.entity_type, COUNT(*) AS count
+                        FROM audit_log al
+                        LEFT JOIN audit_reason_code arc ON al.reason_code_id = arc.id
+                        WHERE {where_sql}
+                        GROUP BY al.entity_type ORDER BY count DESC
+                        """,
+                        params,
+                    )
+                    entity_facets = [{"value": r["entity_type"], "count": r["count"]} for r in cur.fetchall()]
+
+                    cur.execute(
+                        f"""
+                        SELECT al.decision_type, COUNT(*) AS count
+                        FROM audit_log al
+                        LEFT JOIN audit_reason_code arc ON al.reason_code_id = arc.id
+                        WHERE {where_sql}
+                        GROUP BY al.decision_type ORDER BY count DESC
+                        LIMIT 30
+                        """,
+                        params,
+                    )
+                    decision_facets = [{"value": r["decision_type"], "count": r["count"]} for r in cur.fetchall()]
+
+                    cur.execute(
+                        f"""
+                        SELECT arc.code, arc.label, arc.color, COUNT(*) AS count
+                        FROM audit_log al
+                        LEFT JOIN audit_reason_code arc ON al.reason_code_id = arc.id
+                        WHERE {where_sql}
+                        GROUP BY arc.code, arc.label, arc.color ORDER BY count DESC
+                        """,
+                        params,
+                    )
+                    reason_facets = [
+                        {"value": r["code"], "label": r["label"], "color": r["color"], "count": r["count"]}
+                        for r in cur.fetchall()
+                    ]
+
+                    result["facets"] = {
+                        "entity_type": entity_facets,
+                        "decision_type": decision_facets,
+                        "reason_code": reason_facets,
+                    }
+
+                return result
         except Exception as e:
             raise_db_error(e, "lecture audit logs")
         finally:
@@ -266,7 +345,7 @@ class AuditRepository:
             to_dt=to_dt,
             exclude_system=exclude_system,
             limit=1000,
-        )
+        )["items"]
 
         decisions = []
         by_entity: Dict[str, int] = {}
