@@ -894,14 +894,6 @@ class EquipementRepository:
                     i.machine_id,
                     pr.status
                 FROM purchase_request pr
-                JOIN intervention i ON i.id = pr.intervention_id
-                JOIN target t ON t.machine_id = i.machine_id
-                UNION
-                SELECT DISTINCT
-                    pr.id AS purchase_request_id,
-                    i.machine_id,
-                    pr.status
-                FROM purchase_request pr
                 JOIN intervention_action_purchase_request iapr ON iapr.purchase_request_id = pr.id
                 JOIN intervention_action ia ON ia.id = iapr.intervention_action_id
                 JOIN intervention i ON i.id = ia.intervention_id

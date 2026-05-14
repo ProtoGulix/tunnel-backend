@@ -1,3 +1,4 @@
+from datetime import date
 from fastapi import HTTPException
 from typing import Dict, Any, List
 from uuid import uuid4
@@ -97,6 +98,10 @@ class InterventionRepository:
                     )
                     order_sql_parts.append(
                         f"{case_expr} {'ASC' if desc else 'DESC'}")
+                elif key == 'next_due_date':
+                    # NULLS LAST : interventions sans tâches avec due_date toujours en fin
+                    order_sql_parts.append(
+                        f"task_agg.next_due_date {'DESC' if desc else 'ASC'} NULLS LAST")
         if not order_sql_parts:
             order_sql_parts.append("i.reported_date DESC")
         order_sql = " ORDER BY " + ", ".join(order_sql_parts)
@@ -124,7 +129,24 @@ class InterventionRepository:
                     COALESCE(SUM(ia.time_spent), 0) as total_time,
                     COUNT(DISTINCT ia.id) as action_count,
                     ROUND(AVG(ia.complexity_score)::numeric, 2)::float as avg_complexity,
-                    COUNT(DISTINCT iapr.purchase_request_id) as purchase_count
+                    task_agg.task_total,
+                    task_agg.task_todo,
+                    task_agg.task_in_progress,
+                    task_agg.task_done,
+                    task_agg.task_skipped,
+                    task_agg.task_blocking_pending,
+                    task_agg.next_due_date,
+                    pr_agg.pr_total,
+                    pr_agg.pr_received,
+                    pr_agg.pr_to_qualify,
+                    pr_agg.pr_no_supplier_ref,
+                    pr_agg.pr_pending_dispatch,
+                    pr_agg.pr_rejected,
+                    pr_agg.pr_consultation,
+                    pr_agg.pr_partial,
+                    pr_agg.pr_ordered,
+                    pr_agg.pr_quoted,
+                    pr_agg.pr_open
                 FROM intervention i
                 LEFT JOIN intervention_request ir ON ir.intervention_id = i.id
                 LEFT JOIN request_status_ref rs2 ON rs2.code = ir.statut
@@ -132,10 +154,40 @@ class InterventionRepository:
                 LEFT JOIN machine pm ON pm.id = m.equipement_mere
                 LEFT JOIN equipement_class ec ON ec.id = m.equipement_class_id
                 LEFT JOIN intervention_action ia ON i.id = ia.intervention_id
-                LEFT JOIN intervention_action_purchase_request iapr ON ia.id = iapr.intervention_action_id
+                LEFT JOIN LATERAL (
+                    SELECT
+                        COUNT(*)                                                          AS task_total,
+                        COUNT(*) FILTER (WHERE status = 'todo')                          AS task_todo,
+                        COUNT(*) FILTER (WHERE status = 'in_progress')                   AS task_in_progress,
+                        COUNT(*) FILTER (WHERE status = 'done')                          AS task_done,
+                        COUNT(*) FILTER (WHERE status = 'skipped')                       AS task_skipped,
+                        COUNT(*) FILTER (WHERE status IN ('todo','in_progress')
+                                         AND optional = FALSE)                           AS task_blocking_pending,
+                        MIN(due_date)                                                     AS next_due_date
+                    FROM intervention_task
+                    WHERE intervention_id = i.id
+                ) task_agg ON TRUE
+                LEFT JOIN LATERAL (
+                    SELECT
+                        COUNT(DISTINCT prd.id)                                                                  AS pr_total,
+                        COUNT(DISTINCT prd.id) FILTER (WHERE prd.derived_status = 'RECEIVED')                  AS pr_received,
+                        COUNT(DISTINCT prd.id) FILTER (WHERE prd.derived_status = 'TO_QUALIFY')                AS pr_to_qualify,
+                        COUNT(DISTINCT prd.id) FILTER (WHERE prd.derived_status = 'NO_SUPPLIER_REF')           AS pr_no_supplier_ref,
+                        COUNT(DISTINCT prd.id) FILTER (WHERE prd.derived_status = 'PENDING_DISPATCH')          AS pr_pending_dispatch,
+                        COUNT(DISTINCT prd.id) FILTER (WHERE prd.derived_status = 'REJECTED')                  AS pr_rejected,
+                        COUNT(DISTINCT prd.id) FILTER (WHERE prd.derived_status = 'CONSULTATION')              AS pr_consultation,
+                        COUNT(DISTINCT prd.id) FILTER (WHERE prd.derived_status = 'PARTIAL')                   AS pr_partial,
+                        COUNT(DISTINCT prd.id) FILTER (WHERE prd.derived_status = 'ORDERED')                   AS pr_ordered,
+                        COUNT(DISTINCT prd.id) FILTER (WHERE prd.derived_status = 'QUOTED')                    AS pr_quoted,
+                        COUNT(DISTINCT prd.id) FILTER (WHERE prd.derived_status = 'OPEN')                      AS pr_open
+                    FROM intervention_action_purchase_request iapr2
+                    INNER JOIN intervention_action ia2 ON ia2.id = iapr2.intervention_action_id
+                    INNER JOIN purchase_request_derived_status prd ON prd.id = iapr2.purchase_request_id
+                    WHERE ia2.intervention_id = i.id
+                ) pr_agg ON TRUE
                 {" ".join(joins)}
                 {where_sql}
-                GROUP BY i.id, ir.id, ir.code, ir.demandeur_nom, ir.demandeur_service_legacy, ir.description, ir.statut, rs2.label, rs2.color, ir.intervention_id, ir.created_at, ir.updated_at, m.id, pm.id, pm.code, pm.name, ec.id
+                GROUP BY i.id, ir.id, ir.code, ir.demandeur_nom, ir.demandeur_service_legacy, ir.description, ir.statut, rs2.label, rs2.color, ir.intervention_id, ir.created_at, ir.updated_at, m.id, pm.id, pm.code, pm.name, ec.id, task_agg.task_total, task_agg.task_todo, task_agg.task_in_progress, task_agg.task_done, task_agg.task_skipped, task_agg.task_blocking_pending, task_agg.next_due_date, pr_agg.pr_total, pr_agg.pr_received, pr_agg.pr_to_qualify, pr_agg.pr_no_supplier_ref, pr_agg.pr_pending_dispatch, pr_agg.pr_rejected, pr_agg.pr_consultation, pr_agg.pr_partial, pr_agg.pr_ordered, pr_agg.pr_quoted, pr_agg.pr_open
                 {order_sql}
                 LIMIT %s OFFSET %s
             """
@@ -198,18 +250,51 @@ class InterventionRepository:
 
                 # Créer l'objet stats si demandé
                 if include_stats:
+                    pr_total = int(row_dict.pop('pr_total', 0) or 0)
+                    pr_received = int(row_dict.pop('pr_received', 0) or 0)
                     row_dict['stats'] = {
                         'action_count': row_dict.pop('action_count', 0),
                         'total_time': row_dict.pop('total_time', 0),
                         'avg_complexity': row_dict.pop('avg_complexity', None),
-                        'purchase_count': row_dict.pop('purchase_count', 0)
+                        'purchase_count': pr_total,
+                        'tasks': {
+                            'total': int(row_dict.pop('task_total', 0) or 0),
+                            'todo': int(row_dict.pop('task_todo', 0) or 0),
+                            'in_progress': int(row_dict.pop('task_in_progress', 0) or 0),
+                            'done': int(row_dict.pop('task_done', 0) or 0),
+                            'skipped': int(row_dict.pop('task_skipped', 0) or 0),
+                            'blocking_pending': int(row_dict.pop('task_blocking_pending', 0) or 0),
+                        },
+                        'purchase_requests': {
+                            'total': pr_total,
+                            'received': pr_received,
+                            'to_qualify': int(row_dict.pop('pr_to_qualify', 0) or 0),
+                            'no_supplier_ref': int(row_dict.pop('pr_no_supplier_ref', 0) or 0),
+                            'pending_dispatch': int(row_dict.pop('pr_pending_dispatch', 0) or 0),
+                            'rejected': int(row_dict.pop('pr_rejected', 0) or 0),
+                            'consultation': int(row_dict.pop('pr_consultation', 0) or 0),
+                            'partial': int(row_dict.pop('pr_partial', 0) or 0),
+                            'ordered': int(row_dict.pop('pr_ordered', 0) or 0),
+                            'quoted': int(row_dict.pop('pr_quoted', 0) or 0),
+                            'open': int(row_dict.pop('pr_open', 0) or 0),
+                        },
                     }
                 else:
                     # Nettoyer les colonnes stats si non demandées
-                    row_dict.pop('action_count', None)
-                    row_dict.pop('total_time', None)
-                    row_dict.pop('avg_complexity', None)
-                    row_dict.pop('purchase_count', None)
+                    for _k in ('action_count', 'total_time', 'avg_complexity',
+                               'task_total', 'task_todo', 'task_in_progress', 'task_done',
+                               'task_skipped', 'task_blocking_pending',
+                               'pr_total', 'pr_received', 'pr_to_qualify', 'pr_no_supplier_ref',
+                               'pr_pending_dispatch', 'pr_rejected', 'pr_consultation',
+                               'pr_partial', 'pr_ordered', 'pr_quoted', 'pr_open'):
+                        row_dict.pop(_k, None)
+
+                # Champs de planification — toujours présents quelle que soit include_stats
+                next_due_date = row_dict.pop('next_due_date', None)
+                row_dict['next_due_date'] = next_due_date
+                row_dict['overdue'] = (
+                    next_due_date is not None and next_due_date < date.today()
+                )
 
                 # Construire l'objet request depuis les colonnes préfixées req_
                 req_id = row_dict.pop('req_id', None)
@@ -320,16 +405,73 @@ class InterventionRepository:
                 intervention['equipements'] = None
 
             # Récupérer les actions via InterventionActionRepository
-            if include_actions:
+            # Stats tâches et demandes d'achat — toujours calculées en SQL
+            cur.execute(
+                """
+                SELECT
+                    COUNT(*)                                                          AS task_total,
+                    COUNT(*) FILTER (WHERE status = 'todo')                          AS task_todo,
+                    COUNT(*) FILTER (WHERE status = 'in_progress')                   AS task_in_progress,
+                    COUNT(*) FILTER (WHERE status = 'done')                          AS task_done,
+                    COUNT(*) FILTER (WHERE status = 'skipped')                       AS task_skipped,
+                    COUNT(*) FILTER (WHERE status IN ('todo','in_progress')
+                                     AND optional = FALSE)                           AS task_blocking_pending
+                FROM intervention_task WHERE intervention_id = %s
+                """,
+                (intervention_id,),
+            )
+            tr = cur.fetchone()
+            task_stats = {
+                'total': int(tr[0] or 0),
+                'todo': int(tr[1] or 0),
+                'in_progress': int(tr[2] or 0),
+                'done': int(tr[3] or 0),
+                'skipped': int(tr[4] or 0),
+                'blocking_pending': int(tr[5] or 0),
+            }
 
+            cur.execute(
+                """
+                SELECT
+                    COUNT(DISTINCT prd.id)                                                                 AS pr_total,
+                    COUNT(DISTINCT prd.id) FILTER (WHERE prd.derived_status = 'RECEIVED')                 AS pr_received,
+                    COUNT(DISTINCT prd.id) FILTER (WHERE prd.derived_status = 'TO_QUALIFY')               AS pr_to_qualify,
+                    COUNT(DISTINCT prd.id) FILTER (WHERE prd.derived_status = 'NO_SUPPLIER_REF')          AS pr_no_supplier_ref,
+                    COUNT(DISTINCT prd.id) FILTER (WHERE prd.derived_status = 'PENDING_DISPATCH')         AS pr_pending_dispatch,
+                    COUNT(DISTINCT prd.id) FILTER (WHERE prd.derived_status = 'REJECTED')                 AS pr_rejected,
+                    COUNT(DISTINCT prd.id) FILTER (WHERE prd.derived_status = 'CONSULTATION')             AS pr_consultation,
+                    COUNT(DISTINCT prd.id) FILTER (WHERE prd.derived_status = 'PARTIAL')                  AS pr_partial,
+                    COUNT(DISTINCT prd.id) FILTER (WHERE prd.derived_status = 'ORDERED')                  AS pr_ordered,
+                    COUNT(DISTINCT prd.id) FILTER (WHERE prd.derived_status = 'QUOTED')                   AS pr_quoted,
+                    COUNT(DISTINCT prd.id) FILTER (WHERE prd.derived_status = 'OPEN')                     AS pr_open
+                FROM intervention_action_purchase_request iapr
+                INNER JOIN intervention_action ia ON ia.id = iapr.intervention_action_id
+                INNER JOIN purchase_request_derived_status prd ON prd.id = iapr.purchase_request_id
+                WHERE ia.intervention_id = %s
+                """,
+                (intervention_id,),
+            )
+            pr_row = cur.fetchone()
+            pr_total = int(pr_row[0] or 0)
+            pr_stats = {
+                'total': pr_total,
+                'received': int(pr_row[1] or 0),
+                'to_qualify': int(pr_row[2] or 0),
+                'no_supplier_ref': int(pr_row[3] or 0),
+                'pending_dispatch': int(pr_row[4] or 0),
+                'rejected': int(pr_row[5] or 0),
+                'consultation': int(pr_row[6] or 0),
+                'partial': int(pr_row[7] or 0),
+                'ordered': int(pr_row[8] or 0),
+                'quoted': int(pr_row[9] or 0),
+                'open': int(pr_row[10] or 0),
+            }
+
+            if include_actions:
                 action_repo = InterventionActionRepository()
                 actions = action_repo.get_by_intervention(intervention_id)
                 intervention['actions'] = actions
 
-                # Calculer les stats depuis les actions récupérées
-                # purchase_count: compter les purchase_requests liées via les actions
-                purchase_count = sum(
-                    len(a.get('purchase_requests', [])) for a in actions)
                 intervention['stats'] = {
                     'action_count': len(actions),
                     'total_time': sum(a.get('time_spent', 0) or 0 for a in actions),
@@ -338,7 +480,9 @@ class InterventionRepository:
                               len([a for a in actions if a.get('complexity_score')]), 2)
                         if any(a.get('complexity_score') for a in actions) else None
                     ),
-                    'purchase_count': purchase_count
+                    'purchase_count': pr_stats['total'],
+                    'tasks': task_stats,
+                    'purchase_requests': pr_stats,
                 }
             else:
                 intervention['actions'] = []
@@ -346,7 +490,9 @@ class InterventionRepository:
                     'action_count': 0,
                     'total_time': 0,
                     'avg_complexity': None,
-                    'purchase_count': 0
+                    'purchase_count': pr_stats['total'],
+                    'tasks': task_stats,
+                    'purchase_requests': pr_stats,
                 }
 
             # Récupérer les status logs via InterventionStatusLogRepository

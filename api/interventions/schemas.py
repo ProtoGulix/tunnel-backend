@@ -87,6 +87,8 @@ class InterventionOut(BaseModel):
     printed_fiche: Optional[bool] = None
     reported_date: Optional[date] = None
     request: Optional[InterventionRequestListItem] = None
+    next_due_date: Optional[date] = None
+    overdue: bool = False
     plan_id: Optional[UUID] = None
     task_progress: Optional[TaskProgressOut] = None
     tasks: List[InterventionTaskOut] = []

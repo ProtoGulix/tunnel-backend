@@ -50,10 +50,12 @@ Liste les interventions avec filtres, tri et pagination.
 | `priority`      | csv    | —      | Filtrer par priorité (`faible,normale,important,urgent`)                |
 | `printed`       | bool   | —      | `true` : imprimées, `false` : non imprimées, omis : toutes              |
 | `tech_id`       | uuid   | —      | Filtrer par UUID du technicien pilote (`intervention.tech_id`)          |
-| `sort`          | csv    | —      | Tri avec `-` pour DESC (ex: `-priority,-reported_date`)                 |
+| `sort`          | csv    | —      | Tri avec `-` pour DESC (ex: `-priority,-reported_date,-next_due_date`)  |
 | `include`       | csv    | —      | Données optionnelles (`stats`). Stats incluses par défaut               |
 
 > Pour lister les interventions ouvertes d'un équipement (ex: sélecteur planning) : `GET /interventions?equipement_id=<uuid>&status=ouvert,en_cours`
+
+> Valeurs de `sort` supportées : `reported_date`, `priority`, `next_due_date`. Préfixer `-` pour DESC. `next_due_date` utilise `NULLS LAST` — les interventions sans tâche due apparaissent en dernier.
 
 ### Réponse `200`
 
@@ -116,11 +118,34 @@ Liste les interventions avec filtres, tri et pagination.
       "updated_at": "2026-01-13T08:00:00",
       "equipement": null
     },
+    "next_due_date": "2026-06-20",
+    "overdue": false,
     "stats": {
       "action_count": 3,
       "total_time": 4.5,
       "avg_complexity": 6.2,
-      "purchase_count": 1
+      "purchase_count": 3,
+      "tasks": {
+        "total": 5,
+        "todo": 2,
+        "in_progress": 1,
+        "done": 2,
+        "skipped": 0,
+        "blocking_pending": 3
+      },
+      "purchase_requests": {
+        "total": 3,
+        "received": 1,
+        "to_qualify": 0,
+        "no_supplier_ref": 0,
+        "pending_dispatch": 1,
+        "rejected": 0,
+        "consultation": 0,
+        "partial": 0,
+        "ordered": 1,
+        "quoted": 0,
+        "open": 0
+      }
     },
     "actions": [],
     "status_logs": []
@@ -305,7 +330,28 @@ Détail complet d'une intervention. **La structure est différente de la liste**
     "action_count": 3,
     "total_time": 4.5,
     "avg_complexity": 6.2,
-    "purchase_count": 1
+    "purchase_count": 3,
+    "tasks": {
+      "total": 5,
+      "todo": 2,
+      "in_progress": 1,
+      "done": 2,
+      "skipped": 0,
+      "blocking_pending": 3
+    },
+    "purchase_requests": {
+      "total": 3,
+      "received": 1,
+      "to_qualify": 0,
+      "no_supplier_ref": 0,
+      "pending_dispatch": 1,
+      "rejected": 0,
+      "consultation": 0,
+      "partial": 0,
+      "ordered": 1,
+      "quoted": 0,
+      "open": 0
+    }
   },
   "plan_id": null,
   "task_progress": null,
@@ -390,7 +436,11 @@ Détail complet d'une intervention. **La structure est différente de la liste**
 | `plan_id`              | Absent (non retourné en liste)                                                 | UUID du plan préventif si l'intervention provient de la maintenance préventive, `null` sinon                                                                                                                                       |
 | `task_progress`        | Absent (non retourné en liste)                                                 | Objet [TaskProgressOut](intervention-tasks.md#get-intervention-tasksprogress) (`total`, `todo`, `in_progress`, `done`, `skipped`, `is_complete`). `null` si `plan_id` est null                                                     |
 | `tasks`                | Absent (non retourné en liste)                                                 | Tableau de [InterventionTaskOut](intervention-tasks.md) — tâches de l'intervention. `[]` si `plan_id` est null                                                                                                                     |
-| `stats.purchase_count` | Calculé en SQL (agrégat)                                                       | Calculé depuis les `purchase_requests` chargées dans les actions                                                                                                                                                                   |
+| `next_due_date`        | `date\|null` — MIN des `due_date` des tâches. `null` si aucune tâche avec due_date | Idem                                                                                                                                                                                                                          |
+| `overdue`              | `bool` — `true` si `next_due_date < aujourd'hui`                               | Idem                                                                                                                                                                                                                               |
+| `stats.purchase_count` | Égal à `stats.purchase_requests.total` (même source)                          | Égal à `stats.purchase_requests.total` (même source)                                                                                                                                                                              |
+| `stats.tasks`          | Calculé en SQL (LATERAL subquery)                                              | Calculé en SQL (query dédiée). Champs : `total`, `todo`, `in_progress`, `done`, `skipped`, `blocking_pending` (non-optionnelles en todo/in_progress — bloque la clôture)                                                          |
+| `stats.purchase_requests` | Calculé en SQL (LATERAL sur la VIEW `purchase_request_derived_status`)     | Calculé en SQL (query dédiée sur la VIEW). Même structure : `total`, `received`, `to_qualify`, `no_supplier_ref`, `pending_dispatch`, `rejected`, `consultation`, `partial`, `ordered`, `quoted`, `open`                          |
 
 ### Actions avec tâche liée
 

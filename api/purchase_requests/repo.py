@@ -60,22 +60,15 @@ class PurchaseRequestRepository:
                 SELECT 1
                 FROM intervention i
                 WHERE i.status_actual = %s
-                  AND (
-                    i.id = (
-                        SELECT pr.intervention_id
-                        FROM purchase_request pr
-                        WHERE pr.id = %s
-                    )
-                    OR i.id IN (
-                        SELECT ia.intervention_id
-                        FROM intervention_action_purchase_request iapr
-                        JOIN intervention_action ia ON ia.id = iapr.intervention_action_id
-                        WHERE iapr.purchase_request_id = %s
-                    )
+                  AND i.id IN (
+                      SELECT ia.intervention_id
+                      FROM intervention_action_purchase_request iapr
+                      JOIN intervention_action ia ON ia.id = iapr.intervention_action_id
+                      WHERE iapr.purchase_request_id = %s
                   )
             )
             """,
-            (CLOSED_STATUS_CODE, request_id, request_id),
+            (CLOSED_STATUS_CODE, request_id),
         )
         if cur.fetchone()[0]:
             raise ValidationError(
@@ -88,7 +81,7 @@ class PurchaseRequestRepository:
 
         Deux modes :
         - Lié à une action (intervention_action_id fourni) : liaison insérée dans
-          intervention_action_purchase_request. intervention_id reste NULL sur la DA.
+          intervention_action_purchase_request.
         - Autonome (intervention_action_id absent) : DA spontanée sans aucune relation.
         """
         from api.errors.exceptions import NotFoundError
@@ -170,7 +163,7 @@ class PurchaseRequestRepository:
             updatable_fields = [
                 'stock_item_id', 'item_label', 'quantity', 'unit',
                 'requested_by', 'urgency', 'reason', 'notes', 'workshop',
-                'intervention_id', 'quantity_approved',
+                'quantity_approved',
                 'approver_name', 'approved_at'
             ]
 
@@ -374,78 +367,62 @@ class PurchaseRequestRepository:
             params: List[Any] = []
 
             if intervention_id:
-                # Agrège les deux modèles :
-                # - Legacy : pr.intervention_id direct (Directus)
-                # - Nouveau : via table de jonction action↔DA
-                where_clauses.append(
-                    "(pr.intervention_id = %s OR ia.intervention_id = %s)"
-                )
-                params.append(intervention_id)
+                where_clauses.append("ia.intervention_id = %s")
                 params.append(intervention_id)
 
             if urgency:
-                where_clauses.append("pr.urgency = %s")
+                where_clauses.append("prd.urgency = %s")
                 params.append(urgency)
 
             if ids:
                 placeholders = ','.join(['%s'] * len(ids))
-                where_clauses.append(f"pr.id IN ({placeholders})")
+                where_clauses.append(f"prd.id IN ({placeholders})")
                 params.extend(ids)
 
             where_sql = " AND ".join(where_clauses)
 
             query = f"""
                 SELECT
-                    pr.id,
-                    pr.item_label,
-                    pr.quantity,
-                    pr.unit,
-                    pr.stock_item_id,
-                    (SELECT COUNT(*) FROM stock_item_supplier WHERE stock_item_id = si.id) AS supplier_refs_count,
+                    prd.id,
+                    prd.item_label,
+                    prd.quantity,
+                    prd.unit,
+                    prd.stock_item_id,
+                    prd.derived_status,
+                    prd.quotes_count,
+                    prd.selected_count,
+                    prd.total_allocated,
+                    prd.total_received,
 
-                    -- Infos directes (pas d'objets imbriqués)
+                    -- Infos jointes
                     si.ref AS stock_item_ref,
                     si.name AS stock_item_name,
                     i.code AS intervention_code,
-                    pr.requested_by AS requester_name,
-                    pr.urgency,
+                    prd.requested_by AS requester_name,
+                    prd.urgency,
+                    COUNT(DISTINCT so.supplier_id) AS suppliers_count,
 
-                    -- Compteurs agrégés
-                    COALESCE(agg.quotes_count, 0) AS quotes_count,
-                    COALESCE(agg.selected_count, 0) AS selected_count,
-                    COALESCE(agg.suppliers_count, 0) AS suppliers_count,
-                    COALESCE(agg.total_allocated, 0) AS total_allocated,
-                    COALESCE(agg.total_received, 0) AS total_received,
-                    COALESCE(agg.has_locked_order, false) AS has_locked_order,
-                    COALESCE(agg.all_terminal, false) AS all_terminal,
+                    prd.created_at,
+                    prd.updated_at
 
-                    pr.created_at,
-                    pr.updated_at
-
-                FROM purchase_request pr
-                LEFT JOIN stock_item si ON pr.stock_item_id = si.id
-                -- Intervention déduite via la table de jonction action↔DA
-                LEFT JOIN intervention_action_purchase_request iapr ON iapr.purchase_request_id = pr.id
+                FROM purchase_request_derived_status prd
+                LEFT JOIN stock_item si ON si.id = prd.stock_item_id
+                LEFT JOIN intervention_action_purchase_request iapr ON iapr.purchase_request_id = prd.id
                 LEFT JOIN intervention_action ia ON ia.id = iapr.intervention_action_id
                 LEFT JOIN intervention i ON i.id = ia.intervention_id
-                LEFT JOIN LATERAL (
-                    SELECT
-                        COUNT(DISTINCT CASE WHEN sol.quote_received THEN sol.id END) AS quotes_count,
-                        COUNT(DISTINCT CASE WHEN sol.is_selected THEN sol.id END) AS selected_count,
-                        COUNT(DISTINCT so.supplier_id) AS suppliers_count,
-                        SUM(solpr.quantity) AS total_allocated,
-                        SUM(COALESCE(sol.quantity_received, 0)) AS total_received,
-                        BOOL_OR(so.status IN ('SENT', 'ACK')) AS has_locked_order,
-                        BOOL_AND(so.status IN ('CANCELLED', 'CLOSED')) AS all_terminal
-                    FROM supplier_order_line_purchase_request solpr
-                    JOIN supplier_order_line sol ON solpr.supplier_order_line_id = sol.id
-                    JOIN supplier_order so ON sol.supplier_order_id = so.id
-                    WHERE solpr.purchase_request_id = pr.id
-                ) agg ON TRUE
+                LEFT JOIN supplier_order_line_purchase_request solpr ON solpr.purchase_request_id = prd.id
+                LEFT JOIN supplier_order_line sol ON sol.id = solpr.supplier_order_line_id
+                LEFT JOIN supplier_order so ON so.id = sol.supplier_order_id
 
                 WHERE {where_sql}
 
-                ORDER BY pr.created_at DESC
+                GROUP BY prd.id, prd.item_label, prd.quantity, prd.unit, prd.stock_item_id,
+                         prd.derived_status, prd.quotes_count, prd.selected_count,
+                         prd.total_allocated, prd.total_received, prd.requested_by, prd.urgency,
+                         prd.created_at, prd.updated_at,
+                         si.ref, si.name, i.code
+
+                ORDER BY prd.created_at DESC
                 LIMIT %s OFFSET %s
             """
 
@@ -457,45 +434,7 @@ class PurchaseRequestRepository:
             results = []
             for row in rows:
                 item = dict(zip(cols, row))
-
-                # Extrait les données pour le calcul du statut
-                stock_item_id = item.get('stock_item_id')
-                supplier_refs_count = item.pop('supplier_refs_count', None)
-                quotes_count = item.get('quotes_count', 0) or 0
-                selected_count = item.get('selected_count', 0) or 0
-                total_allocated = item.pop('total_allocated', 0) or 0
-                total_received = item.pop('total_received', 0) or 0
-                suppliers_count = item.get('suppliers_count', 0) or 0
-                has_locked_order = item.pop('has_locked_order', False) or False
-                all_terminal = item.pop('all_terminal', False) or False
-                has_order_lines = (
-                    quotes_count > 0
-                    or selected_count > 0
-                    or suppliers_count > 0
-                    or total_allocated > 0
-                )
-
-                # Rejeté : toutes les lignes dans un panier terminal (CANCELLED/CLOSED), aucune sélectionnée
-                if all_terminal and selected_count == 0 and has_order_lines:
-                    status_code = 'REJECTED'
-                # Reçu : toutes les lignes en panier terminal avec au moins une sélectionnée
-                elif all_terminal and selected_count > 0 and has_order_lines:
-                    status_code = 'RECEIVED'
-                # Mode consultation : panier verrouillé (SENT/ACK), sans devis ni sélection
-                elif has_locked_order and selected_count == 0 and quotes_count == 0 and has_order_lines:
-                    status_code = 'CONSULTATION'
-                else:
-                    # Calcule le statut dérivé via la fonction centralisée
-                    status_code = self._derive_status(
-                        stock_item_id=str(
-                            stock_item_id) if stock_item_id else None,
-                        supplier_refs_count=supplier_refs_count,
-                        has_order_lines=has_order_lines,
-                        quotes_count=quotes_count,
-                        selected_count=selected_count,
-                        total_allocated=total_allocated,
-                        total_received=total_received
-                    )
+                status_code = item.pop('derived_status')
 
                 # Filtre par statut si demandé
                 if status and status_code != status:
@@ -719,14 +658,13 @@ class PurchaseRequestRepository:
                 cur = conn.cursor()
                 cur.execute(
                     """
-                    SELECT DISTINCT pr.id FROM purchase_request pr
-                    LEFT JOIN intervention_action_purchase_request iapr ON iapr.purchase_request_id = pr.id
-                    LEFT JOIN intervention_action ia ON ia.id = iapr.intervention_action_id
-                    WHERE pr.intervention_id = %s
-                       OR ia.intervention_id = %s
-                    ORDER BY pr.id
+                    SELECT DISTINCT iapr.purchase_request_id AS id
+                    FROM intervention_action_purchase_request iapr
+                    JOIN intervention_action ia ON ia.id = iapr.intervention_action_id
+                    WHERE ia.intervention_id = %s
+                    ORDER BY 1
                     """,
-                    (intervention_id, intervention_id)
+                    (intervention_id,)
                 )
                 rows = cur.fetchall()
             finally:
