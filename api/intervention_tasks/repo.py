@@ -1,5 +1,7 @@
+import hashlib
 import json
 import logging
+import math
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
@@ -496,6 +498,240 @@ class InterventionTaskRepository:
         except Exception as e:
             conn.rollback()
             raise_db_error(e, "suppression de la tâche")
+        finally:
+            release_connection(conn)
+
+    # ── Workspace (vue technicien cross-interventions) ────────────
+
+    def get_workspace(
+        self,
+        q: Optional[str] = None,
+        status: Optional[List[str]] = None,
+        origin: Optional[List[str]] = None,
+        assignee_id: Optional[str] = None,
+        intervention_id: Optional[str] = None,
+        skip: int = 0,
+        limit: int = 20,
+        include_closed: bool = False,
+        include_actions: bool = False,
+        include_options: bool = False,
+        include_counters: bool = False,
+    ) -> Dict[str, Any]:
+        """Tâches groupées par intervention avec pagination offset sur les interventions.
+        Source de vérité unique partagée avec GET /tasks/workspace.
+        """
+        conn = self._get_connection()
+        try:
+            cur = conn.cursor()
+
+            task_where: List[str] = []
+            params: List[Any] = []
+
+            if not include_closed:
+                task_where.append("it.status NOT IN ('done', 'skipped')")
+            if intervention_id:
+                task_where.append("it.intervention_id = %s")
+                params.append(intervention_id)
+            if status:
+                ph = ",".join(["%s"] * len(status))
+                task_where.append(f"it.status IN ({ph})")
+                params.extend(status)
+            if origin:
+                ph = ",".join(["%s"] * len(origin))
+                task_where.append(f"it.origin IN ({ph})")
+                params.extend(origin)
+            if assignee_id == "unassigned":
+                task_where.append("it.assigned_to IS NULL")
+            elif assignee_id:
+                task_where.append("it.assigned_to = %s")
+                params.append(assignee_id)
+            if q and q.strip():
+                like = f"%{q}%"
+                task_where.append("(it.label ILIKE %s OR i.title ILIKE %s OR i.code ILIKE %s)")
+                params.extend([like, like, like])
+
+            task_where_sql = ("WHERE " + " AND ".join(task_where)) if task_where else ""
+
+            # Compter les interventions distinctes (pagination)
+            cur.execute(
+                f"""
+                SELECT COUNT(DISTINCT it.intervention_id)
+                FROM intervention_task it
+                LEFT JOIN intervention i ON it.intervention_id = i.id
+                {task_where_sql}
+                """,
+                params,
+            )
+            total_interventions = cur.fetchone()[0] or 0
+
+            # Interventions de la page
+            cur.execute(
+                f"""
+                SELECT DISTINCT
+                    i.id        AS interv_id,
+                    i.code      AS interv_code,
+                    i.title     AS interv_title,
+                    i.status_actual AS interv_status,
+                    m.id        AS equip_id,
+                    m.name      AS equip_name,
+                    m.code      AS equip_code
+                FROM intervention_task it
+                LEFT JOIN intervention i ON it.intervention_id = i.id
+                LEFT JOIN machine m ON i.machine_id = m.id
+                {task_where_sql}
+                ORDER BY i.id
+                LIMIT %s OFFSET %s
+                """,
+                (*params, limit, skip),
+            )
+            interv_rows = cur.fetchall()
+            interv_cols = [d[0] for d in cur.description]
+            interventions_page = [dict(zip(interv_cols, r)) for r in interv_rows]
+
+            items: List[Dict[str, Any]] = []
+            if interventions_page:
+                interv_ids = [str(r["interv_id"]) for r in interventions_page]
+
+                # Tâches de ces interventions via _TASK_SELECT (source de vérité)
+                task_extra_where = list(task_where) + [
+                    f"it.intervention_id IN ({','.join(['%s'] * len(interv_ids))})"
+                ]
+                cur.execute(
+                    f"{_TASK_SELECT} WHERE {' AND '.join(task_extra_where)} ORDER BY it.sort_order ASC, it.created_at ASC",
+                    [*params, *interv_ids],
+                )
+                task_rows = cur.fetchall()
+                task_cols = [d[0] for d in cur.description]
+
+                tasks_by_interv: Dict[str, List[Dict[str, Any]]] = {iid: [] for iid in interv_ids}
+                all_task_ids: List[str] = []
+                raw_tasks: Dict[str, Dict[str, Any]] = {}
+                for row in task_rows:
+                    t = _map_task(dict(zip(task_cols, row)))
+                    iid = str(t.get("intervention_id", ""))
+                    if iid in tasks_by_interv:
+                        tasks_by_interv[iid].append(t)
+                    tid = str(t["id"])
+                    all_task_ids.append(tid)
+                    raw_tasks[tid] = t
+
+                # Actions liées (optionnel)
+                if include_actions and all_task_ids:
+                    ph = ",".join(["%s"] * len(all_task_ids))
+                    cur.execute(
+                        f"""
+                        SELECT
+                            ia.id, ia.created_at, ia.description, ia.time_spent,
+                            u.id AS tech_id, u.initial, u.first_name, u.last_name,
+                            iat.task_id
+                        FROM intervention_action_task iat
+                        INNER JOIN intervention_action ia ON ia.id = iat.action_id
+                        LEFT JOIN tunnel_user u ON ia.tech = u.id
+                        WHERE iat.task_id IN ({ph})
+                        ORDER BY ia.created_at DESC
+                        """,
+                        all_task_ids,
+                    )
+                    actions_by_task: Dict[str, List[Dict[str, Any]]] = {}
+                    for ar in cur.fetchall():
+                        tid = str(ar[8])
+                        tech = None
+                        if ar[4]:
+                            tech = {"id": ar[4], "initials": ar[5], "first_name": ar[6], "last_name": ar[7]}
+                        actions_by_task.setdefault(tid, []).append({
+                            "id": ar[0], "created_at": ar[1],
+                            "description": ar[2],
+                            "time_spent": float(ar[3]) if ar[3] is not None else None,
+                            "tech": tech,
+                        })
+                    for tid, acts in actions_by_task.items():
+                        if tid in raw_tasks:
+                            raw_tasks[tid]["actions"] = acts
+
+                for r in interventions_page:
+                    iid = str(r["interv_id"])
+                    equip = None
+                    if r.get("equip_id"):
+                        equip = {"id": r["equip_id"], "name": r.get("equip_name"), "code": r.get("equip_code")}
+                    items.append({
+                        "id": r["interv_id"],
+                        "code": r.get("interv_code"),
+                        "title": r.get("interv_title"),
+                        "status": r.get("interv_status"),
+                        "equipement": equip,
+                        "tasks": tasks_by_interv.get(iid, []),
+                    })
+
+            # Options (optionnel)
+            options = None
+            if include_options:
+                cur.execute(
+                    """
+                    SELECT DISTINCT u.id, u.initial, u.first_name, u.last_name
+                    FROM tunnel_user u WHERE u.is_active = true
+                    ORDER BY u.first_name, u.last_name LIMIT 100
+                    """
+                )
+                users = [{"id": r[0], "initials": r[1], "first_name": r[2], "last_name": r[3]} for r in cur.fetchall()]
+                cur.execute(
+                    """
+                    SELECT DISTINCT i.id, i.code, i.title, i.status_actual
+                    FROM intervention i
+                    WHERE i.status_actual != (SELECT id FROM intervention_status_ref WHERE code = 'ferme' LIMIT 1)
+                    ORDER BY i.id LIMIT 100
+                    """
+                )
+                interventions_opt = [{"id": r[0], "code": r[1], "title": r[2], "status": r[3]} for r in cur.fetchall()]
+                options = {"users": users, "interventions": interventions_opt}
+
+            # Compteurs globaux (optionnel)
+            counters = None
+            if include_counters:
+                cur.execute(
+                    """
+                    SELECT
+                        COUNT(*),
+                        COUNT(*) FILTER (WHERE status = 'todo'),
+                        COUNT(*) FILTER (WHERE status = 'in_progress'),
+                        COUNT(*) FILTER (WHERE status = 'done'),
+                        COUNT(*) FILTER (WHERE status = 'skipped'),
+                        COUNT(*) FILTER (WHERE status = 'todo' AND assigned_to IS NULL)
+                    FROM intervention_task
+                    """
+                )
+                row = cur.fetchone()
+                counters = {
+                    "total": row[0] or 0, "todo": row[1] or 0,
+                    "in_progress": row[2] or 0, "done": row[3] or 0,
+                    "skipped": row[4] or 0, "backlog_unassigned_todo": row[5] or 0,
+                }
+
+            total_pages = math.ceil(total_interventions / limit) if limit else 1
+            page = (skip // limit) + 1 if limit else 1
+            etag_payload = "".join(
+                str(g["id"]) + "".join(str(t["id"]) for t in g["tasks"])
+                for g in items
+            )
+            conn.commit()
+            return {
+                "items": items,
+                "pagination": {
+                    "total": total_interventions, "page": page,
+                    "page_size": limit, "total_pages": total_pages,
+                    "offset": skip, "count": len(items),
+                },
+                "counters": counters,
+                "options": options,
+                "meta": {
+                    "generated_at": datetime.now(),
+                    "etag": hashlib.md5(etag_payload.encode()).hexdigest(),
+                },
+                "errors": None,
+            }
+        except Exception as e:
+            if conn:
+                conn.rollback()
+            raise_db_error(e, "chargement workspace tâches")
         finally:
             release_connection(conn)
 

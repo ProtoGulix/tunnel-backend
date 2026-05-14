@@ -24,24 +24,45 @@ router = APIRouter(
 
 @router.get("")
 def list_tasks(
-    intervention_id: Optional[str] = Query(None),
-    assigned_to: Optional[str] = Query(None),
+    intervention_id: Optional[str] = Query(None, description="Filtrer par intervention"),
+    assigned_to: Optional[str] = Query(None, description="UUID technicien assigné ou 'unassigned'"),
     status: Optional[str] = Query(None, description="Valeurs CSV : todo,in_progress,done,skipped"),
     origin: Optional[str] = Query(None, description="Valeurs CSV : plan,resp,tech"),
-    include_done: bool = Query(False),
+    include_done: bool = Query(False, description="Inclure les tâches done et skipped"),
+    q: Optional[str] = Query(None, description="Recherche full-text sur label, titre et code intervention"),
+    skip: int = Query(0, ge=0, description="Offset (nombre d'interventions à sauter)"),
+    limit: int = Query(20, ge=1, le=200, description="Nombre d'interventions par page"),
+    include_actions: bool = Query(False, description="Inclure les actions liées aux tâches"),
+    include_options: bool = Query(False, description="Inclure listes de filtres (users, interventions)"),
+    include_counters: bool = Query(False, description="Inclure compteurs globaux"),
 ) -> Dict[str, Any]:
-    """Liste les tâches avec filtres optionnels."""
+    """Liste les tâches groupées par intervention.
+
+    Retourne `{ items, pagination, audit }` — chaque item est une intervention
+    contenant ses tâches. Compatible avec GET /tasks/workspace (même mécanique).
+    """
     repo = InterventionTaskRepository()
-    statuses = [s.strip() for s in status.split(",")] if status else None
-    origins = [o.strip() for o in origin.split(",")] if origin else None
-    data = repo.get_list(
+    status_list = [s.strip() for s in status.split(",")] if status else None
+    origin_list = [o.strip() for o in origin.split(",")] if origin else None
+
+    # Filtre intervention_id injecté dans assignee_id n'est pas la bonne approche —
+    # on passe intervention_id comme filtre SQL direct dans get_workspace via q
+    # Pour compatibilité : si intervention_id fourni, on l'ajoute au filtre assignee
+    result = repo.get_workspace(
+        q=q,
+        status=status_list,
+        origin=origin_list,
+        assignee_id=assigned_to,
         intervention_id=intervention_id,
-        assigned_to=assigned_to,
-        statuses=statuses,
-        origins=origins,
-        include_done=include_done,
+        skip=skip,
+        limit=limit,
+        include_closed=include_done,
+        include_actions=include_actions,
+        include_options=include_options,
+        include_counters=include_counters,
     )
-    return {"data": data, "audit": get_audit_rules("task")}
+    result["audit"] = get_audit_rules("task")
+    return result
 
 
 @router.get("/progress", response_model=TaskProgressOut)

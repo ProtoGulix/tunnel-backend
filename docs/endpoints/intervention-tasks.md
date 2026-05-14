@@ -39,13 +39,53 @@ todo → in_progress → done
 
 ---
 
-## Structure de réponse — enveloppe `audit`
+## Structure de réponse — enveloppe `{ items, pagination, audit }`
 
-Tous les endpoints `GET` de cette ressource retournent une enveloppe `{ data, audit }` :
+`GET /intervention-tasks` et `GET /tasks/workspace` partagent la **même mécanique** et la **même structure de réponse** — source de vérité unique dans `InterventionTaskRepository.get_workspace()`.
 
 ```json
 {
-  "data": [ ...tâches... ],
+  "items": [
+    {
+      "id": "uuid-intervention",
+      "code": "CN001-CUR-20260428-QC",
+      "title": "Remplacement roulement principal",
+      "status": "ouvert",
+      "equipement": { "id": "uuid", "name": "Scie principale", "code": "EQ-001" },
+      "tasks": [
+        {
+          "id": "uuid-task",
+          "label": "Contrôle tension de la lame",
+          "status": "todo",
+          "origin": "plan",
+          "optional": false,
+          "due_date": "2026-04-30",
+          "skip_reason": null,
+          "time_spent_total": 0.0,
+          "created_at": "2026-04-25T08:00:00Z",
+          "created_by": null,
+          "assigned_to": {
+            "id": "uuid-tech",
+            "initials": "JD",
+            "first_name": "Jean",
+            "last_name": "Dupont"
+          },
+          "actions": []
+        }
+      ]
+    }
+  ],
+  "pagination": {
+    "total": 12,
+    "page": 1,
+    "page_size": 20,
+    "total_pages": 1,
+    "offset": 0,
+    "count": 1
+  },
+  "counters": null,
+  "options": null,
+  "meta": { "generated_at": "2026-05-14T08:00:00", "etag": "abc123" },
   "audit": {
     "required": true,
     "reasons": [
@@ -56,9 +96,10 @@ Tous les endpoints `GET` de cette ressource retournent une enveloppe `{ data, au
 }
 ```
 
+> **Pagination sur les interventions** : `total` = nombre d'interventions distinctes contenant des tâches correspondant aux filtres. Toutes les tâches d'une même intervention sont retournées dans le même item.
+
 | Champ              | Description                                                                 |
 | ------------------ | --------------------------------------------------------------------------- |
-| `data`             | Liste ou objet de la ressource                                              |
 | `audit.required`   | `true` → le front doit afficher un sélecteur de raison avant toute mutation |
 | `audit.reasons`    | Raisons disponibles filtrées pour cette entité (catégories `manual`/`user`) |
 | `requires_text`    | `true` si la raison exige un texte libre (`reason_code = "OTHER"`)          |
@@ -67,81 +108,45 @@ Tous les endpoints `GET` de cette ressource retournent une enveloppe `{ data, au
 
 ## `GET /intervention-tasks`
 
-Liste les tâches avec filtres optionnels. Par défaut, les tâches `done` et `skipped` sont exclues.
-
 ### Query params
 
-| Param             | Type | Défaut | Description                            |
-| ----------------- | ---- | ------ | -------------------------------------- |
-| `intervention_id` | uuid | —      | Filtrer par intervention               |
-| `assigned_to`     | uuid | —      | Filtrer par technicien assigné         |
-| `status`          | csv  | —      | `todo,in_progress,done,skipped`        |
-| `origin`          | csv  | —      | `plan,resp,tech`                       |
-| `include_done`    | bool | false  | Inclure les tâches `done` et `skipped` |
+| Param              | Type   | Défaut | Description                                               |
+| ------------------ | ------ | ------ | --------------------------------------------------------- |
+| `intervention_id`  | uuid   | —      | Filtrer par intervention (fiche intervention)             |
+| `assigned_to`      | uuid   | —      | UUID technicien assigné, ou `"unassigned"`                |
+| `status`           | csv    | —      | `todo,in_progress,done,skipped`                           |
+| `origin`           | csv    | —      | `plan,resp,tech`                                          |
+| `q`                | string | —      | Recherche full-text sur label, titre et code intervention |
+| `include_done`     | bool   | false  | Inclure les tâches `done` et `skipped`                    |
+| `skip`             | int    | 0      | Offset (nombre d'interventions à sauter)                  |
+| `limit`            | int    | 20     | Nombre d'interventions par page (max : 200)               |
+| `include_actions`  | bool   | false  | Inclure les actions liées à chaque tâche                  |
+| `include_options`  | bool   | false  | Inclure les listes de filtres (users, interventions)      |
+| `include_counters` | bool   | false  | Inclure les compteurs globaux (toutes tâches, sans filtre de page) |
 
-### Réponse `200`
+### Champs d'une tâche dans `items[].tasks`
+
+| Champ              | Description                                                                    |
+| ------------------ | ------------------------------------------------------------------------------ |
+| `origin`           | `plan` (préventif), `resp` (responsable), `tech` (technicien)                  |
+| `optional`         | `true` : peut être ignorée sans bloquer la clôture                             |
+| `time_spent_total` | Temps total des actions liées (agrégat calculé via `intervention_action_task`) |
+| `actions`          | Présent uniquement si `include_actions=true`                                   |
+
+### Compteurs (`include_counters=true`)
 
 ```json
-[
-  {
-    "id": "uuid-task-1",
-    "intervention_id": "uuid-intervention",
-    "label": "Contrôle tension de la lame",
-    "origin": "plan",
-    "status": "todo",
-    "optional": false,
-    "assigned_to": null,
-    "due_date": null,
-    "sort_order": 1,
-    "skip_reason": null,
-    "gamme_step_id": "uuid-step",
-    "occurrence_id": "uuid-occurrence",
-    "closed_by": null,
-    "created_by": null,
-    "created_at": "2026-04-25T08:00:00Z",
-    "updated_at": null,
-    "action_count": 0,
-    "time_spent": 0.0
-  },
-  {
-    "id": "uuid-task-2",
-    "intervention_id": "uuid-intervention",
-    "label": "Lubrification des guides",
-    "origin": "plan",
-    "status": "done",
-    "optional": true,
-    "assigned_to": {
-      "id": "uuid-tech",
-      "first_name": "Jean",
-      "last_name": "Dupont",
-      "email": "jean.dupont@example.com",
-      "initial": "JD",
-      "status": "active",
-      "role": "uuid"
-    },
-    "due_date": null,
-    "sort_order": 2,
-    "skip_reason": null,
-    "gamme_step_id": "uuid-step-2",
-    "occurrence_id": "uuid-occurrence",
-    "closed_by": "uuid-tech",
-    "created_by": null,
-    "created_at": "2026-04-25T08:00:00Z",
-    "updated_at": "2026-04-25T10:00:00Z",
-    "action_count": 1,
-    "time_spent": 0.5
+{
+  "counters": {
+    "total": 45,
+    "todo": 20,
+    "in_progress": 8,
+    "done": 12,
+    "skipped": 5,
+    "backlog_unassigned_todo": 3
   }
-]
+}
 ```
-
-| Champ           | Description                                                          |
-| --------------- | -------------------------------------------------------------------- |
-| `origin`        | `plan` (préventif), `resp` (responsable), `tech` (technicien)        |
-| `optional`      | `true` : peut être ignorée sans bloquer la clôture                   |
-| `gamme_step_id` | UUID du step de gamme d'origine (`null` pour tâches non-préventives) |
-| `action_count`  | Nombre d'actions liées (agrégat calculé)                             |
-| `time_spent`    | Temps total des actions liées (agrégat calculé)                      |
-| `closed_by`     | UUID du technicien ayant terminé/ignoré la tâche                     |
 
 ---
 
@@ -190,11 +195,43 @@ Calcule la progression des tâches pour une intervention **ou** une occurrence.
 
 ## `GET /intervention-tasks/{id}`
 
-Détail d'une tâche avec agrégats calculés.
+Détail d'une tâche par ID avec agrégats calculés.
 
 ### Réponse `200`
 
-Même structure que la liste.
+```json
+{
+  "data": {
+    "id": "uuid-task",
+    "intervention_id": "uuid-intervention",
+    "label": "Contrôle tension de la lame",
+    "origin": "plan",
+    "status": "todo",
+    "optional": false,
+    "assigned_to": {
+      "id": "uuid-tech",
+      "first_name": "Jean",
+      "last_name": "Dupont",
+      "email": "jean.dupont@example.com",
+      "initial": "JD",
+      "status": "active",
+      "role": "uuid"
+    },
+    "due_date": null,
+    "sort_order": 1,
+    "skip_reason": null,
+    "gamme_step_id": "uuid-step",
+    "occurrence_id": "uuid-occurrence",
+    "closed_by": null,
+    "created_by": null,
+    "created_at": "2026-04-25T08:00:00Z",
+    "updated_at": null,
+    "action_count": 0,
+    "time_spent": 0.0
+  },
+  "audit": { "required": true, "reasons": [ ... ] }
+}
+```
 
 ### Erreurs
 
@@ -265,13 +302,15 @@ Met à jour partiellement une tâche. Seuls les champs fournis sont modifiés.
 | Champ         | Type   | Requis       | Description                              |
 | ------------- | ------ | ------------ | ---------------------------------------- |
 | `label`       | string | non          | Nouvel intitulé                          |
-| `status`      | string | non          | `todo`, `in_progress`, `done`, `skipped` |
+| `status`      | string | non          | `skipped` uniquement via PATCH direct    |
 | `skip_reason` | string | si `skipped` | **Obligatoire si status = "skipped"**    |
 | `assigned_to` | uuid   | non          | Technicien assigné                       |
 | `due_date`    | date   | non          | Échéance                                 |
 | `sort_order`  | int    | non          | Ordre d'affichage                        |
 | `reason_code` | string | **oui**      | Code raison pour l'audit. Voir `GET /audit/reasons` |
 | `reason_text` | string | conditionnel | Obligatoire si `reason_code = "OTHER"`   |
+
+> Les transitions vers `in_progress` et `done` passent obligatoirement par `POST /intervention-actions`.
 
 ### Réponse `200`
 
@@ -303,10 +342,10 @@ Supprime une tâche. La suppression n'est autorisée que si :
 }
 ```
 
-| Champ         | Type   | Requis       | Description                              |
-| ------------- | ------ | ------------ | ---------------------------------------- |
-| `reason_code` | string | **oui**      | Code raison pour l'audit                 |
-| `reason_text` | string | conditionnel | Obligatoire si `reason_code = "OTHER"`   |
+| Champ         | Type   | Requis       | Description                            |
+| ------------- | ------ | ------------ | -------------------------------------- |
+| `reason_code` | string | **oui**      | Code raison pour l'audit               |
+| `reason_text` | string | conditionnel | Obligatoire si `reason_code = "OTHER"` |
 
 ### Réponse `204`
 

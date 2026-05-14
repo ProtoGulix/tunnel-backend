@@ -39,7 +39,6 @@ from api.services.routes import router as service_router
 from api.preventive_plans.routes import router as preventive_plans_router
 from api.preventive_occurrences.routes import router as preventive_occurrences_router
 from api.intervention_tasks.routes import router as intervention_tasks_router
-from api.tasks.routes import router as tasks_router
 from api.dashboard.routes import router as dashboard_router
 from api.admin.routes import router as admin_router
 from api.api_keys.routes import router as api_keys_router
@@ -156,7 +155,6 @@ app.include_router(service_router)
 app.include_router(preventive_plans_router)
 app.include_router(preventive_occurrences_router)
 app.include_router(intervention_tasks_router)
-app.include_router(tasks_router)
 app.include_router(dashboard_router)
 app.include_router(auth_router)
 app.include_router(admin_router)
