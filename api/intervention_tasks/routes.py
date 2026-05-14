@@ -1,7 +1,8 @@
-from typing import Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, Query, Request, Response
 
+from api.audits.schemas import AuditRules
 from api.auth.permissions import require_authenticated
 from api.errors.exceptions import ValidationError
 from api.intervention_tasks.repo import InterventionTaskRepository
@@ -12,6 +13,7 @@ from api.intervention_tasks.schemas import (
     InterventionTaskPatch,
     TaskProgressOut,
 )
+from api.utils.audit import get_audit_rules
 
 router = APIRouter(
     prefix="/intervention-tasks",
@@ -20,25 +22,26 @@ router = APIRouter(
 )
 
 
-@router.get("", response_model=list[InterventionTaskOut])
+@router.get("")
 def list_tasks(
     intervention_id: Optional[str] = Query(None),
     assigned_to: Optional[str] = Query(None),
     status: Optional[str] = Query(None, description="Valeurs CSV : todo,in_progress,done,skipped"),
     origin: Optional[str] = Query(None, description="Valeurs CSV : plan,resp,tech"),
     include_done: bool = Query(False),
-):
+) -> Dict[str, Any]:
     """Liste les tâches avec filtres optionnels."""
     repo = InterventionTaskRepository()
     statuses = [s.strip() for s in status.split(",")] if status else None
     origins = [o.strip() for o in origin.split(",")] if origin else None
-    return repo.get_list(
+    data = repo.get_list(
         intervention_id=intervention_id,
         assigned_to=assigned_to,
         statuses=statuses,
         origins=origins,
         include_done=include_done,
     )
+    return {"data": data, "audit": get_audit_rules("task")}
 
 
 @router.get("/progress", response_model=TaskProgressOut)
@@ -55,11 +58,12 @@ def get_progress(
     raise ValidationError("intervention_id ou occurrence_id requis")
 
 
-@router.get("/{task_id}", response_model=InterventionTaskOut)
-def get_task(task_id: str):
+@router.get("/{task_id}")
+def get_task(task_id: str) -> Dict[str, Any]:
     """Récupère une tâche par ID."""
     repo = InterventionTaskRepository()
-    return repo.get_by_id(task_id)
+    data = repo.get_by_id(task_id)
+    return {"data": data, "audit": get_audit_rules("task")}
 
 
 @router.post("", response_model=InterventionTaskOut, status_code=201)

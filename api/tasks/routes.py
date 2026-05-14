@@ -4,6 +4,7 @@ from typing import Optional
 from api.tasks.repo import TasksRepository
 from api.tasks.schemas import TasksWorkspaceResponse
 from api.auth.permissions import require_authenticated
+from api.utils.audit import get_audit_rules
 
 router = APIRouter(
     prefix="/tasks", tags=["tasks"], dependencies=[Depends(require_authenticated)])
@@ -35,7 +36,7 @@ def get_tasks_workspace(
     origin_list = [o.strip() for o in origin.split(",")] if origin else None
 
     repo = TasksRepository()
-    return repo.get_workspace(
+    result = repo.get_workspace(
         q=q,
         status=status_list,
         origin=origin_list,
@@ -47,3 +48,5 @@ def get_tasks_workspace(
         include_options=include_options,
         include_counters=include_counters,
     )
+    result["audit"] = get_audit_rules("task")
+    return result

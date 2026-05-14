@@ -12,6 +12,28 @@ Une intervention peut aussi être liée à un **plan de maintenance préventive*
 
 ---
 
+## Structure de réponse — enveloppe `audit`
+
+Tous les endpoints `GET` de cette ressource retournent une enveloppe `{ data, audit }` :
+
+```json
+{
+  "data": [ ...interventions... ],
+  "audit": {
+    "required": true,
+    "reasons": [
+      { "code": "EQUIPMENT_FAILURE", "label": "Panne équipement", "color": "...", "requires_text": false },
+      { "code": "CLIENT_REQUEST", "label": "Demande client", "color": "#8b5cf6", "requires_text": false },
+      { "code": "OTHER", "label": "Autre raison", "color": "#9ca3af", "requires_text": true }
+    ]
+  }
+}
+```
+
+Le champ `audit` est identique en liste et en détail — le front le charge une seule fois au montage du composant.
+
+---
+
 ## `GET /interventions`
 
 Liste les interventions avec filtres, tri et pagination.

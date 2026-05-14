@@ -12,6 +12,27 @@ Deux modes de création :
 
 ---
 
+## Structure de réponse — enveloppe `audit`
+
+Tous les endpoints `GET` de cette ressource retournent une enveloppe `{ data, audit }` :
+
+```json
+{
+  "data": [ ...demandes d'achat... ],
+  "audit": {
+    "required": true,
+    "reasons": [
+      { "code": "SUPPLIER_DELAY", "label": "Délai fournisseur", "color": "...", "requires_text": false },
+      { "code": "OTHER", "label": "Autre raison", "color": "#9ca3af", "requires_text": true }
+    ]
+  }
+}
+```
+
+Le champ `audit` est identique en liste et en détail — le front le charge une seule fois au montage du composant.
+
+---
+
 ## `GET /purchase-requests` · `GET /purchase-requests/list`
 
 Ces deux routes sont **strictement identiques** : même logique, mêmes paramètres, même réponse. `/list` est conservé pour compatibilité ; préférer `/purchase-requests` dans les nouveaux appels.

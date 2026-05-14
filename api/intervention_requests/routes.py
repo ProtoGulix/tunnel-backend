@@ -1,6 +1,6 @@
 import logging
 from fastapi import APIRouter, Depends, Query
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from uuid import UUID
 
 from api.intervention_requests.repo import InterventionRequestRepository
@@ -14,6 +14,7 @@ from api.intervention_requests.schemas import (
 )
 from api.errors.exceptions import NotFoundError, ValidationError, DatabaseError
 from api.auth.permissions import require_authenticated
+from api.utils.audit import get_audit_rules
 from api.utils.pagination import create_pagination_meta
 
 logger = logging.getLogger(__name__)
@@ -33,7 +34,7 @@ def list_statuses():
     return repo.get_statuses()
 
 
-@router.get("", response_model=dict)
+@router.get("")
 def list_requests(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=500),
@@ -42,7 +43,7 @@ def list_requests(
     machine_id: Optional[UUID] = Query(None),
     search: Optional[str] = Query(None),
     is_system: Optional[bool] = Query(None, description="Filtrer les DI système (true) ou humaines (false)"),
-):
+) -> Dict[str, Any]:
     """
     Liste les demandes d'intervention avec filtres.
     Retourne une réponse paginée.
@@ -62,16 +63,16 @@ def list_requests(
     return {
         "items": items,
         "pagination": create_pagination_meta(total=total, offset=skip, limit=limit, count=len(items)),
-        "facets": {
-            "statut": facets,
-        },
+        "facets": {"statut": facets},
+        "audit": get_audit_rules("request"),
     }
 
 
-@router.get("/{request_id}", response_model=InterventionRequestDetail)
-def get_request(request_id: UUID):
+@router.get("/{request_id}")
+def get_request(request_id: UUID) -> Dict[str, Any]:
     """Détail d'une demande d'intervention avec son historique de statuts"""
-    return repo.get_by_id(str(request_id))
+    data = repo.get_by_id(str(request_id))
+    return {"data": data, "audit": get_audit_rules("request")}
 
 
 @router.post("", response_model=InterventionRequestDetail, status_code=201)

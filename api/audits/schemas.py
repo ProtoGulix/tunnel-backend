@@ -74,6 +74,26 @@ class BriefingReport(BaseModel):
     summary: BriefingSummary
 
 
+class AuditRuleReason(BaseModel):
+    """Raison d'audit exposée dans les règles d'un endpoint."""
+    model_config = ConfigDict(from_attributes=True)
+
+    code: str
+    label: str
+    color: Optional[str] = None
+    requires_text: bool = False
+
+
+class AuditRules(BaseModel):
+    """Règles d'audit portées par la réponse d'un endpoint GET.
+    Si required=True, le front doit collecter un reason_code avant toute mutation.
+    """
+    model_config = ConfigDict(from_attributes=True)
+
+    required: bool
+    reasons: List[AuditRuleReason]
+
+
 class AuditLogCreate(BaseModel):
     """Payload pour créer manuellement une entrée d'audit (via API directe)."""
     entity_type: str = Field(..., description="Type d'entité : intervention, request, task, action, purchase_request")

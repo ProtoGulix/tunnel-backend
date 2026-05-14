@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, Query, Depends
-from typing import List, Optional, Literal, Union
+from typing import Any, Dict, List, Optional, Literal, Union
 from datetime import date
 from api.purchase_requests.repo import PurchaseRequestRepository
 from api.purchase_requests.schemas import (
@@ -11,6 +11,7 @@ from api.purchase_requests.schemas import (
 )
 from api.errors.exceptions import ValidationError
 from api.constants import DERIVED_STATUS_CONFIG
+from api.utils.audit import get_audit_rules
 
 VALID_STATUSES = tuple(DERIVED_STATUS_CONFIG.keys())
 
@@ -51,7 +52,7 @@ def get_purchase_requests_stats(
     )
 
 
-@router.get("/list", response_model=List[PurchaseRequestListItem])
+@router.get("/list")
 def list_purchase_requests_optimized(
     skip: int = Query(0, ge=0, description="Nombre d'éléments à sauter"),
     limit: int = Query(100, ge=1, le=1000,
@@ -63,7 +64,7 @@ def list_purchase_requests_optimized(
     intervention_id: Optional[str] = Query(
         None, description="Filtrer par intervention"),
     urgency: Optional[str] = Query(None, description="Filtrer par urgence")
-):
+) -> Dict[str, Any]:
     """
     [v1.2.0] Liste optimisée légère pour tableaux.
     - Statut dérivé calculé en SQL
@@ -73,7 +74,7 @@ def list_purchase_requests_optimized(
     """
     exclude_list = [s.strip() for s in exclude_statuses.split(",") if s.strip()] if exclude_statuses else None
     repo = PurchaseRequestRepository()
-    return repo.get_list(
+    data = repo.get_list(
         limit=limit,
         offset=skip,
         status=status,
@@ -81,10 +82,11 @@ def list_purchase_requests_optimized(
         urgency=urgency,
         exclude_statuses=exclude_list
     )
+    return {"data": data, "audit": get_audit_rules("purchase_request")}
 
 
-@router.get("/detail/{request_id}", response_model=PurchaseRequestDetail)
-def get_purchase_request_detail(request_id: str):
+@router.get("/detail/{request_id}")
+def get_purchase_request_detail(request_id: str) -> Dict[str, Any]:
     """
     [v1.2.0] Détail complet avec contexte enrichi.
     - Intervention complète avec équipement
@@ -93,7 +95,8 @@ def get_purchase_request_detail(request_id: str):
     - Statut dérivé avec règles appliquées
     """
     repo = PurchaseRequestRepository()
-    return repo.get_detail(request_id)
+    data = repo.get_detail(request_id)
+    return {"data": data, "audit": get_audit_rules("purchase_request")}
 
 
 @router.get("/status/{status}", response_model=List[PurchaseRequestListItem])
@@ -147,7 +150,7 @@ def dispatch_pending_requests():
 
 # ========== Endpoints CRUD ==========
 
-@router.get("", response_model=List[PurchaseRequestListItem])
+@router.get("")
 def list_purchase_requests(
     skip: int = Query(0, ge=0, description="Nombre d'éléments à sauter"),
     limit: int = Query(100, ge=1, le=1000, description="Nombre max d'éléments"),
@@ -156,11 +159,11 @@ def list_purchase_requests(
         None, description="Statuts à exclure, séparés par virgule. Ex: RECEIVED,REJECTED"),
     intervention_id: Optional[str] = Query(None, description="Filtrer par intervention"),
     urgency: Optional[str] = Query(None, description="Filtrer par urgence")
-):
+) -> Dict[str, Any]:
     """Liste toutes les demandes d'achat. Alias de /list."""
     exclude_list = [s.strip() for s in exclude_statuses.split(",") if s.strip()] if exclude_statuses else None
     repo = PurchaseRequestRepository()
-    return repo.get_list(
+    data = repo.get_list(
         limit=limit,
         offset=skip,
         status=status,
@@ -168,6 +171,7 @@ def list_purchase_requests(
         urgency=urgency,
         exclude_statuses=exclude_list
     )
+    return {"data": data, "audit": get_audit_rules("purchase_request")}
 
 
 @router.get("/intervention/{intervention_id}", response_model=List[PurchaseRequestListItem])
@@ -177,11 +181,12 @@ def get_purchase_requests_by_intervention(intervention_id: str):
     return repo.get_list(limit=1000, offset=0, intervention_id=intervention_id)
 
 
-@router.get("/{request_id}", response_model=PurchaseRequestDetail)
-def get_purchase_request(request_id: str):
+@router.get("/{request_id}")
+def get_purchase_request(request_id: str) -> Dict[str, Any]:
     """Détail d'une demande d'achat. Alias de /detail/{id}."""
     repo = PurchaseRequestRepository()
-    return repo.get_detail(request_id)
+    data = repo.get_detail(request_id)
+    return {"data": data, "audit": get_audit_rules("purchase_request")}
 
 
 @router.post("", response_model=PurchaseRequestDetail)

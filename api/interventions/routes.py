@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Request, Query, Depends
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from api.interventions.repo import InterventionRepository
 from api.intervention_actions.repo import InterventionActionRepository
 from api.interventions.schemas import InterventionOut, InterventionIn, InterventionCreate
@@ -7,6 +7,7 @@ from api.interventions.validators import InterventionValidator
 from api.intervention_actions.schemas import InterventionActionOut
 from api.constants import INTERVENTION_TYPES
 from api.errors.exceptions import ValidationError
+from api.utils.audit import get_audit_rules
 
 from api.auth.permissions import require_authenticated
 
@@ -51,7 +52,7 @@ def list_interventions(
         False, description="Filtre par statut d'impression/archivage. false=actives (défaut), true=archivées, null=toutes"),
     tech_id: str | None = Query(
         None, description="Filtrer par UUID technicien pilote"),
-):
+) -> Dict[str, Any]:
     """Liste interventions avec filtres/sort et stats optionnelles (sans actions)"""
     intervention_repo = InterventionRepository()
 
@@ -60,7 +61,7 @@ def list_interventions(
     include_stats = (include is None) or (
         "stats" in [i.strip() for i in include.split(',')])
 
-    return intervention_repo.get_all(
+    data = intervention_repo.get_all(
         limit=limit,
         offset=skip,
         search=search,
@@ -72,13 +73,15 @@ def list_interventions(
         printed=printed,
         tech_id=tech_id,
     )
+    return {"data": data, "audit": get_audit_rules("intervention")}
 
 
-@router.get("/{intervention_id}", response_model=InterventionOut)
-def get_intervention(intervention_id: str, request: Request):
+@router.get("/{intervention_id}")
+def get_intervention(intervention_id: str, request: Request) -> Dict[str, Any]:
     """Récupère une intervention par ID avec ses actions et stats (calculées en SQL)"""
     intervention_repo = InterventionRepository()
-    return intervention_repo.get_by_id(intervention_id)
+    data = intervention_repo.get_by_id(intervention_id)
+    return {"data": data, "audit": get_audit_rules("intervention")}
 
 
 @router.get("/{intervention_id}/actions", response_model=List[InterventionActionOut])

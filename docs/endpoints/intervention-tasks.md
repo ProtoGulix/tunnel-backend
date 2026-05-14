@@ -39,6 +39,32 @@ todo → in_progress → done
 
 ---
 
+## Structure de réponse — enveloppe `audit`
+
+Tous les endpoints `GET` de cette ressource retournent une enveloppe `{ data, audit }` :
+
+```json
+{
+  "data": [ ...tâches... ],
+  "audit": {
+    "required": true,
+    "reasons": [
+      { "code": "CLIENT_REQUEST", "label": "Demande client", "color": "#8b5cf6", "requires_text": false },
+      { "code": "OTHER", "label": "Autre raison", "color": "#9ca3af", "requires_text": true }
+    ]
+  }
+}
+```
+
+| Champ              | Description                                                                 |
+| ------------------ | --------------------------------------------------------------------------- |
+| `data`             | Liste ou objet de la ressource                                              |
+| `audit.required`   | `true` → le front doit afficher un sélecteur de raison avant toute mutation |
+| `audit.reasons`    | Raisons disponibles filtrées pour cette entité (catégories `manual`/`user`) |
+| `requires_text`    | `true` si la raison exige un texte libre (`reason_code = "OTHER"`)          |
+
+---
+
 ## `GET /intervention-tasks`
 
 Liste les tâches avec filtres optionnels. Par défaut, les tâches `done` et `skipped` sont exclues.

@@ -4,6 +4,8 @@ from typing import Optional, List, Dict, Any
 from datetime import datetime, date
 from uuid import UUID
 
+from api.audits.schemas import AuditRules
+
 
 class UserRef(BaseModel):
     """Utilisateur léger (pour created_by, assigned_to, tech)."""
@@ -115,5 +117,6 @@ class TasksWorkspaceResponse(BaseModel):
     options: Optional[TasksOptions] = None
     meta: TasksMetadata
     errors: Optional[List[Dict[str, Any]]] = None
+    audit: Optional[AuditRules] = None
 
     model_config = ConfigDict(from_attributes=True)

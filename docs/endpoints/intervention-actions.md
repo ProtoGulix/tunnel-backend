@@ -8,6 +8,27 @@ Actions réalisées sur une intervention (réparation, diagnostic, etc.). Chaque
 
 ---
 
+## Structure de réponse — enveloppe `audit`
+
+Tous les endpoints `GET` de cette ressource retournent une enveloppe `{ data, audit }` :
+
+```json
+{
+  "data": [ ...actions groupées par date... ],
+  "audit": {
+    "required": true,
+    "reasons": [
+      { "code": "EQUIPMENT_FAILURE", "label": "Panne équipement", "color": "...", "requires_text": false },
+      { "code": "OTHER", "label": "Autre raison", "color": "#9ca3af", "requires_text": true }
+    ]
+  }
+}
+```
+
+Le champ `audit` est identique en liste et en détail — le front le charge une seule fois au montage du composant.
+
+---
+
 ## `GET /intervention-actions`
 
 Liste les actions groupées par date (`created_at::date`), du plus récent au plus ancien. À l'intérieur de chaque jour, les actions sont triées par heure croissante.

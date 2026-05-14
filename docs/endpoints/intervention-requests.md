@@ -10,6 +10,30 @@ Lors de l'acceptation, une **intervention est automatiquement créée** et liée
 
 ---
 
+## Structure de réponse — enveloppe `audit`
+
+Les endpoints `GET` de cette ressource retournent une enveloppe `{ data, audit }` (ou `{ items, pagination, facets, audit }` pour la liste paginée) :
+
+```json
+{
+  "items": [ ...demandes... ],
+  "pagination": { ... },
+  "facets": { "statut": [ ... ] },
+  "audit": {
+    "required": true,
+    "reasons": [
+      { "code": "EQUIPMENT_FAILURE", "label": "Panne équipement", "color": "...", "requires_text": false },
+      { "code": "CLIENT_REQUEST", "label": "Demande client", "color": "#8b5cf6", "requires_text": false },
+      { "code": "OTHER", "label": "Autre raison", "color": "#9ca3af", "requires_text": true }
+    ]
+  }
+}
+```
+
+Le détail (`GET /{id}`) retourne `{ data: {...}, audit: {...} }`.
+
+---
+
 ## Cycle de vie et logique métier
 
 ```
