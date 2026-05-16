@@ -10,8 +10,8 @@ from api.intervention_tasks.schemas import TaskProgressOut, InterventionTaskOut
 from api.equipements.schemas import EquipementDetail
 from api.constants import INTERVENTION_TYPES
 from api.errors.exceptions import ValidationError
-from api.utils.audit import get_audit_rules
 from api.auth.permissions import require_authenticated
+from api.utils.response import single, referentiel
 
 # Résolution des références circulaires : InterventionOut.request référence
 # InterventionRequestListItem (intervention_requests.schemas → interventions.schemas)
@@ -43,10 +43,10 @@ def add_stats_to_intervention(intervention: Dict[str, Any], actions: List[Dict[s
         sum(complexities) / len(complexities), 2) if complexities else None
 
 
-@router.get("/types", response_model=List[Dict[str, Any]])
+@router.get("/types")
 def list_intervention_types():
     """Liste tous les types d'intervention disponibles (id, title, color)"""
-    return INTERVENTION_TYPES
+    return referentiel(INTERVENTION_TYPES)
 
 
 @router.get("")
@@ -90,7 +90,7 @@ def list_interventions(
         printed=printed,
         tech_id=tech_id,
     )
-    return {"data": data, "audit": get_audit_rules("intervention")}
+    return single(data, audit_entity="intervention")
 
 
 @router.get("/{intervention_id}")
@@ -98,17 +98,17 @@ def get_intervention(intervention_id: str, request: Request) -> Dict[str, Any]:
     """Récupère une intervention par ID avec ses actions et stats (calculées en SQL)"""
     intervention_repo = InterventionRepository()
     data = intervention_repo.get_by_id(intervention_id)
-    return {"data": data, "audit": get_audit_rules("intervention")}
+    return single(data, audit_entity="intervention")
 
 
-@router.get("/{intervention_id}/actions", response_model=List[InterventionActionOut])
+@router.get("/{intervention_id}/actions")
 def get_intervention_actions(intervention_id: str, request: Request):
     """Récupère les actions d'une intervention"""
     repo = InterventionActionRepository()
-    return repo.get_by_intervention(intervention_id)
+    return single(repo.get_by_intervention(intervention_id))
 
 
-@router.post("", response_model=InterventionOut)
+@router.post("")
 def create_intervention(data: InterventionCreate, request: Request):
     """
     Crée une nouvelle intervention.
@@ -119,10 +119,10 @@ def create_intervention(data: InterventionCreate, request: Request):
     payload = data.model_dump(exclude_none=True)
     InterventionValidator.validate_request_required(payload)
     repo = InterventionRepository()
-    return repo.add(payload)
+    return single(repo.add(payload))
 
 
-@router.put("/{intervention_id}", response_model=InterventionOut)
+@router.put("/{intervention_id}")
 def update_intervention(intervention_id: str, data: InterventionIn, request: Request):
     """
     Met à jour une intervention existante.
@@ -131,10 +131,10 @@ def update_intervention(intervention_id: str, data: InterventionIn, request: Req
     `reason_text` est obligatoire si `reason_code=OTHER`.
     """
     repo = InterventionRepository()
-    return repo.update(intervention_id, data.model_dump(exclude_none=True))
+    return single(repo.update(intervention_id, data.model_dump(exclude_none=True)))
 
 
-@router.post("/{intervention_id}/force-close-request", response_model=InterventionOut)
+@router.post("/{intervention_id}/force-close-request")
 def force_close_linked_request(intervention_id: str, request: Request):
     """
     Force la clôture de la demande d'intervention liée quand la cascade automatique a échoué.
@@ -146,7 +146,7 @@ def force_close_linked_request(intervention_id: str, request: Request):
     Retourne l'intervention mise à jour avec la demande désormais `cloturee`.
     """
     repo = InterventionRepository()
-    return repo.force_close_request(intervention_id)
+    return single(repo.force_close_request(intervention_id))
 
 
 @router.delete("/{intervention_id}")

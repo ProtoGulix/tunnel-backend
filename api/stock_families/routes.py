@@ -7,6 +7,7 @@ from api.stock_families.schemas import StockFamilyListItem, StockFamilyDetail, S
 from api.errors.exceptions import DatabaseError, NotFoundError
 
 from api.auth.permissions import require_authenticated
+from api.utils.response import single
 
 router = APIRouter(prefix="/stock-families",
                    tags=["stock-families"], dependencies=[Depends(require_authenticated)])
@@ -24,7 +25,7 @@ def list_stock_families():
     return repo.get_all()
 
 
-@router.get("/{family_code}", response_model=StockFamilyDetail)
+@router.get("/{family_code}")
 def get_stock_family(
     family_code: str,
     search: Optional[str] = Query(
@@ -42,18 +43,18 @@ def get_stock_family(
         avec indication si elles ont un template associé
     """
     repo = StockFamilyRepository()
-    return repo.get_by_code(family_code, search=search)
+    return single(repo.get_by_code(family_code, search=search))
 
 
-@router.post("", response_model=StockFamilyDetail, status_code=201)
+@router.post("", status_code=201)
 def create_stock_family(data: StockFamilyIn):
     """Crée une nouvelle famille de stock"""
     repo = StockFamilyRepository()
-    return repo.create(data)
+    return single(repo.create(data))
 
 
-@router.patch("/{family_code}", response_model=StockFamilyDetail)
+@router.patch("/{family_code}")
 def patch_stock_family(family_code: str, data: StockFamilyPatch):
     """Renomme une famille de stock (met à jour family_code sur toutes les sous-familles)"""
     repo = StockFamilyRepository()
-    return repo.update(family_code, data.code, data.label)
+    return single(repo.update(family_code, data.code, data.label))

@@ -4,6 +4,7 @@ from api.complexity_factors.repo import ComplexityFactorRepository
 from api.complexity_factors.schemas import ComplexityFactorOut
 
 from api.auth.permissions import require_authenticated
+from api.utils.response import single
 
 router = APIRouter(prefix="/complexity-factors", tags=["complexity-factors"], dependencies=[Depends(require_authenticated)])
 
@@ -15,8 +16,8 @@ def list_factors():
     return repo.get_all()
 
 
-@router.get("/{code}", response_model=ComplexityFactorOut)
+@router.get("/{code}")
 def get_factor(code: str):
     """Récupère un facteur de complexité par code"""
     repo = ComplexityFactorRepository()
-    return repo.get_by_code(code)
+    return single(repo.get_by_code(code))

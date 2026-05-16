@@ -5,6 +5,7 @@ from .schemas import ServiceOut, ServiceCreate, ServiceUpdate
 from .repo import ServiceRepository
 
 from api.auth.permissions import require_authenticated
+from api.utils.response import single
 
 router = APIRouter(prefix="/services",
                    tags=["services"], dependencies=[Depends(require_authenticated)])
@@ -17,23 +18,23 @@ def list_services():
     return repo.get_all()
 
 
-@router.get("/{service_id}", response_model=ServiceOut)
+@router.get("/{service_id}")
 def get_service(service_id: str):
     """Récupère un service par ID"""
-    return repo.get_by_id(service_id)
+    return single(repo.get_by_id(service_id))
 
 
-@router.post("", response_model=ServiceOut, status_code=status.HTTP_201_CREATED)
+@router.post("", status_code=status.HTTP_201_CREATED)
 def create_service(data: ServiceCreate):
     """Crée un nouveau service"""
-    return repo.create(
+    return single(repo.create(
         code=data.code,
         label=data.label,
         is_active=data.is_active
-    )
+    ))
 
 
-@router.patch("/{service_id}", response_model=ServiceOut)
+@router.patch("/{service_id}")
 def update_service(service_id: str, data: ServiceUpdate):
     """
     Met à jour un service
@@ -41,8 +42,8 @@ def update_service(service_id: str, data: ServiceUpdate):
     Seuls `label` et `is_active` peuvent être modifiés.
     Le `code` est immuable et ne peut pas être changé.
     """
-    return repo.update(
+    return single(repo.update(
         service_id=service_id,
         label=data.label,
         is_active=data.is_active
-    )
+    ))

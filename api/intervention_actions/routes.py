@@ -4,9 +4,8 @@ from datetime import date
 from uuid import UUID
 from api.intervention_actions.repo import InterventionActionRepository
 from api.intervention_actions.schemas import InterventionActionOut, InterventionActionIn, InterventionActionPatch, InterventionActionsByDate, InterventionActionDetail
-from api.utils.audit import get_audit_rules
-
 from api.auth.permissions import require_authenticated
+from api.utils.response import single
 
 router = APIRouter(prefix="/intervention-actions",
                    tags=["intervention-actions"], dependencies=[Depends(require_authenticated)])
@@ -29,7 +28,7 @@ def list_actions(
         date_to=end_date,
         tech_id=str(tech_id) if tech_id else None,
     )
-    return {"data": data, "audit": get_audit_rules("action")}
+    return single(data, audit_entity="action")
 
 
 @router.get("/{action_id}")
@@ -37,10 +36,10 @@ def get_action(action_id: str) -> Dict[str, Any]:
     """Récupère une action par ID avec le contexte complet de l'intervention parente"""
     repo = InterventionActionRepository()
     data = repo.get_by_id(action_id)
-    return {"data": data, "audit": get_audit_rules("action")}
+    return single(data, audit_entity="action")
 
 
-@router.post("", response_model=InterventionActionOut)
+@router.post("")
 def add_action(action: InterventionActionIn):
     """
     Ajoute une action à une intervention.
@@ -52,10 +51,10 @@ def add_action(action: InterventionActionIn):
     et leur statut est mis à jour (todo→in_progress, ou done/skipped selon les flags).
     """
     repo = InterventionActionRepository()
-    return repo.add(action.model_dump())
+    return single(repo.add(action.model_dump()))
 
 
-@router.patch("/{action_id}", response_model=InterventionActionOut)
+@router.patch("/{action_id}")
 def patch_action(action_id: str, patch: InterventionActionPatch):
     """
     Met à jour partiellement une action d'intervention.
@@ -64,4 +63,4 @@ def patch_action(action_id: str, patch: InterventionActionPatch):
     `reason_text` est obligatoire si `reason_code=OTHER`.
     """
     repo = InterventionActionRepository()
-    return repo.update(action_id, patch.model_dump(exclude_none=True))
+    return single(repo.update(action_id, patch.model_dump(exclude_none=True)))

@@ -11,7 +11,7 @@ from api.purchase_requests.schemas import (
 )
 from api.errors.exceptions import ValidationError
 from api.constants import DERIVED_STATUS_CONFIG
-from api.utils.audit import get_audit_rules
+from api.utils.response import single, referentiel
 
 VALID_STATUSES = tuple(DERIVED_STATUS_CONFIG.keys())
 
@@ -25,13 +25,13 @@ router = APIRouter(prefix="/purchase-requests", tags=["purchase-requests"], depe
 @router.get("/statuses")
 def list_purchase_request_statuses():
     """Retourne tous les statuts dérivés possibles avec leur label et couleur."""
-    return [
+    return referentiel([
         {"code": code, "label": cfg["label"], "color": cfg["color"]}
         for code, cfg in DERIVED_STATUS_CONFIG.items()
-    ]
+    ])
 
 
-@router.get("/stats", response_model=PurchaseRequestStats)
+@router.get("/stats")
 def get_purchase_requests_stats(
     start_date: Optional[date] = Query(
         None, description="Date début (default: -3 mois)"),
@@ -45,11 +45,11 @@ def get_purchase_requests_stats(
     Retourne compteurs totaux, par statut, par urgence, top articles.
     """
     repo = PurchaseRequestRepository()
-    return repo.get_stats(
+    return single(repo.get_stats(
         start_date=start_date,
         end_date=end_date,
         group_by=group_by
-    )
+    ))
 
 
 @router.get("/list")
@@ -82,7 +82,7 @@ def list_purchase_requests_optimized(
         urgency=urgency,
         exclude_statuses=exclude_list
     )
-    return {"data": data, "audit": get_audit_rules("purchase_request")}
+    return single(data, audit_entity="purchase_request")
 
 
 @router.get("/detail/{request_id}")
@@ -96,7 +96,7 @@ def get_purchase_request_detail(request_id: str) -> Dict[str, Any]:
     """
     repo = PurchaseRequestRepository()
     data = repo.get_detail(request_id)
-    return {"data": data, "audit": get_audit_rules("purchase_request")}
+    return single(data, audit_entity="purchase_request")
 
 
 @router.get("/status/{status}", response_model=List[PurchaseRequestListItem])
@@ -132,7 +132,7 @@ def get_purchase_requests_by_intervention_optimized(
     return repo.get_by_intervention_optimized(intervention_id, view=view)
 
 
-@router.post("/dispatch", response_model=DispatchResult)
+@router.post("/dispatch")
 def dispatch_pending_requests():
     """
     [v1.2.12] Dispatch automatique des demandes PENDING_DISPATCH.
@@ -145,7 +145,7 @@ def dispatch_pending_requests():
     Les demandes passent automatiquement de PENDING_DISPATCH à OPEN.
     """
     repo = PurchaseRequestRepository()
-    return repo.dispatch_all()
+    return single(repo.dispatch_all())
 
 
 # ========== Endpoints CRUD ==========
@@ -171,7 +171,7 @@ def list_purchase_requests(
         urgency=urgency,
         exclude_statuses=exclude_list
     )
-    return {"data": data, "audit": get_audit_rules("purchase_request")}
+    return single(data, audit_entity="purchase_request")
 
 
 @router.get("/intervention/{intervention_id}", response_model=List[PurchaseRequestListItem])
@@ -186,10 +186,10 @@ def get_purchase_request(request_id: str) -> Dict[str, Any]:
     """Détail d'une demande d'achat. Alias de /detail/{id}."""
     repo = PurchaseRequestRepository()
     data = repo.get_detail(request_id)
-    return {"data": data, "audit": get_audit_rules("purchase_request")}
+    return single(data, audit_entity="purchase_request")
 
 
-@router.post("", response_model=PurchaseRequestDetail)
+@router.post("")
 def create_purchase_request(purchase_request: PurchaseRequestIn):
     """
     Crée une nouvelle demande d'achat.
@@ -198,12 +198,12 @@ def create_purchase_request(purchase_request: PurchaseRequestIn):
     `reason_text` est obligatoire si `reason_code=OTHER`.
     """
     repo = PurchaseRequestRepository()
-    return repo.add(purchase_request.model_dump())
+    return single(repo.add(purchase_request.model_dump()))
 
 
 EDITABLE_STATUSES = {'TO_QUALIFY', 'NO_SUPPLIER_REF', 'PENDING_DISPATCH'}
 
-@router.put("/{request_id}", response_model=PurchaseRequestDetail)
+@router.put("/{request_id}")
 def update_purchase_request(request_id: str, purchase_request: PurchaseRequestIn):
     """
     Met à jour une demande d'achat existante.
@@ -221,7 +221,7 @@ def update_purchase_request(request_id: str, purchase_request: PurchaseRequestIn
             status_code=422,
             detail=f"Cette demande ne peut plus être modifiée (statut : {derived['label']})"
         )
-    return repo.update(request_id, purchase_request.model_dump(exclude_unset=True))
+    return single(repo.update(request_id, purchase_request.model_dump(exclude_unset=True)))
 
 
 @router.delete("/{request_id}")

@@ -5,9 +5,8 @@ from api.stock_items.repo import StockItemRepository
 from api.stock_items.schemas import StockItemOut, StockItemIn
 from api.stock_items.stock_item_service import StockItemService
 from api.errors.exceptions import ValidationError, NotFoundError, DatabaseError
-from api.utils.pagination import create_pagination_meta
-
 from api.auth.permissions import require_authenticated
+from api.utils.response import paginated, single
 
 router = APIRouter(prefix="/stock-items", tags=["stock-items"], dependencies=[Depends(require_authenticated)])
 
@@ -54,54 +53,42 @@ def list_stock_items(
     )
 
     facets = repo.get_facets(search=search)
-
-    pagination_meta = create_pagination_meta(
-        total=total,
-        offset=skip,
-        limit=limit,
-        count=len(items)
-    )
-
-    return {
-        "items": items,
-        "pagination": pagination_meta,
-        "facets": facets
-    }
+    return paginated(items, total=total, offset=skip, limit=limit, facets=facets)
 
 
-@router.get("/ref/{ref}", response_model=StockItemOut)
+@router.get("/ref/{ref}")
 def get_stock_item_by_ref(ref: str):
     """Récupère un article par sa référence"""
     repo = StockItemRepository()
-    return repo.get_by_ref(ref)
+    return single(repo.get_by_ref(ref))
 
 
-@router.get("/{item_id}", response_model=StockItemOut)
+@router.get("/{item_id}")
 def get_stock_item(item_id: str):
     """Récupère un article par ID avec ses fournisseurs, template et caractéristiques"""
     repo = StockItemRepository()
-    return repo.get_by_id(item_id)
+    return single(repo.get_by_id(item_id))
 
 
-@router.post("", response_model=StockItemOut)
+@router.post("")
 def create_stock_item(item: StockItemIn):
     """Crée un nouvel article en stock (legacy ou template-based)"""
     service = StockItemService()
-    return service.create_stock_item(item.model_dump())
+    return single(service.create_stock_item(item.model_dump()))
 
 
-@router.put("/{item_id}", response_model=StockItemOut)
+@router.put("/{item_id}")
 def update_stock_item(item_id: str, item: StockItemIn):
     """Met à jour un article existant (respect immutabilité template)"""
     service = StockItemService()
-    return service.update_stock_item(item_id, item.model_dump(exclude_unset=True))
+    return single(service.update_stock_item(item_id, item.model_dump(exclude_unset=True)))
 
 
-@router.patch("/{item_id}/quantity", response_model=StockItemOut)
+@router.patch("/{item_id}/quantity")
 def update_stock_quantity(item_id: str, data: QuantityUpdate):
     """Met à jour uniquement la quantité d'un article"""
     repo = StockItemRepository()
-    return repo.update_quantity(item_id, data.quantity)
+    return single(repo.update_quantity(item_id, data.quantity))
 
 
 @router.delete("/{item_id}")

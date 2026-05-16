@@ -6,11 +6,12 @@ from api.users.repo import UserRepository
 from api.users.schemas import UserListItem, UserOut
 
 from api.auth.permissions import require_authenticated
+from api.utils.response import single
 
 router = APIRouter(prefix="/users", tags=["users"], dependencies=[Depends(require_authenticated)])
 
 
-@router.get("/me", response_model=UserOut)
+@router.get("/me")
 def get_current_user(request: Request):
     """Retourne l'utilisateur courant (extrait du JWT)"""
     user_id = getattr(request.state, 'user_id', None)
@@ -22,7 +23,7 @@ def get_current_user(request: Request):
         )
 
     repo = UserRepository()
-    return repo.get_by_id(str(user_id))
+    return single(repo.get_by_id(str(user_id)))
 
 
 @router.get("", response_model=List[UserListItem])
@@ -40,8 +41,8 @@ def list_users(
     return repo.get_all(limit=limit, offset=skip, status=status, search=search)
 
 
-@router.get("/{user_id}", response_model=UserOut)
+@router.get("/{user_id}")
 def get_user(user_id: str):
     """Détail d'un utilisateur par ID"""
     repo = UserRepository()
-    return repo.get_by_id(user_id)
+    return single(repo.get_by_id(user_id))

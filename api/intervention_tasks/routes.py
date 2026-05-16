@@ -1,8 +1,7 @@
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, Query, Request, Response
 
-from api.audits.schemas import AuditRules
 from api.auth.permissions import require_authenticated
 from api.errors.exceptions import ValidationError
 from api.intervention_tasks.repo import InterventionTaskRepository
@@ -13,7 +12,7 @@ from api.intervention_tasks.schemas import (
     InterventionTaskPatch,
     TaskProgressOut,
 )
-from api.utils.audit import get_audit_rules
+from api.utils.response import single
 
 router = APIRouter(
     prefix="/intervention-tasks",
@@ -61,11 +60,13 @@ def list_tasks(
         include_options=include_options,
         include_counters=include_counters,
     )
+    # Import lazy pour éviter la circularité avec audits.repo
+    from api.utils.audit import get_audit_rules
     result["audit"] = get_audit_rules("task")
     return result
 
 
-@router.get("/progress", response_model=TaskProgressOut)
+@router.get("/progress")
 def get_progress(
     intervention_id: Optional[str] = Query(None),
     occurrence_id: Optional[str] = Query(None),
@@ -73,9 +74,9 @@ def get_progress(
     """Calcule la progression des tâches pour une intervention ou une occurrence."""
     repo = InterventionTaskRepository()
     if intervention_id:
-        return repo.get_progress(intervention_id)
+        return single(repo.get_progress(intervention_id))
     if occurrence_id:
-        return repo.get_progress_by_occurrence(occurrence_id)
+        return single(repo.get_progress_by_occurrence(occurrence_id))
     raise ValidationError("intervention_id ou occurrence_id requis")
 
 
@@ -84,10 +85,10 @@ def get_task(task_id: str) -> Dict[str, Any]:
     """Récupère une tâche par ID."""
     repo = InterventionTaskRepository()
     data = repo.get_by_id(task_id)
-    return {"data": data, "audit": get_audit_rules("task")}
+    return single(data, audit_entity="task")
 
 
-@router.post("", response_model=InterventionTaskOut, status_code=201)
+@router.post("", status_code=201)
 def create_task(request: Request, data: InterventionTaskIn):
     """
     Crée une tâche manuelle (origin `resp` ou `tech` uniquement).
@@ -97,10 +98,10 @@ def create_task(request: Request, data: InterventionTaskIn):
     """
     user_id = str(getattr(request.state, "user_id", None) or "")
     repo = InterventionTaskRepository()
-    return repo.create(data, created_by=user_id or None)
+    return single(repo.create(data, created_by=user_id or None))
 
 
-@router.patch("/{task_id}", response_model=InterventionTaskOut)
+@router.patch("/{task_id}")
 def patch_task(request: Request, task_id: str, data: InterventionTaskPatch):
     """
     Met à jour partiellement une tâche.
@@ -116,7 +117,7 @@ def patch_task(request: Request, task_id: str, data: InterventionTaskPatch):
     """
     user_id = str(getattr(request.state, "user_id", None) or "")
     repo = InterventionTaskRepository()
-    return repo.patch(task_id, data, closed_by=user_id or None)
+    return single(repo.patch(task_id, data, closed_by=user_id or None))
 
 
 @router.delete("/{task_id}", status_code=204)

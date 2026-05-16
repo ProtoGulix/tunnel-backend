@@ -14,8 +14,7 @@ from api.intervention_requests.schemas import (
 )
 from api.errors.exceptions import NotFoundError, ValidationError, DatabaseError
 from api.auth.permissions import require_authenticated
-from api.utils.audit import get_audit_rules
-from api.utils.pagination import create_pagination_meta
+from api.utils.response import single, paginated, referentiel
 
 # Résolution des références circulaires : InterventionRequestListItem.intervention
 # référence InterventionRef (interventions.schemas → intervention_actions.schemas → ici)
@@ -39,7 +38,7 @@ repo = InterventionRequestRepository()
 @router.get("/statuses", response_model=List[RequestStatusRef])
 def list_statuses():
     """Référentiel des statuts de demande d'intervention"""
-    return repo.get_statuses()
+    return referentiel(repo.get_statuses())
 
 
 @router.get("")
@@ -68,22 +67,17 @@ def list_requests(
         is_system=is_system,
     )
     facets = repo.get_facets(machine_id=machine_id_str, search=search)
-    return {
-        "items": items,
-        "pagination": create_pagination_meta(total=total, offset=skip, limit=limit, count=len(items)),
-        "facets": {"statut": facets},
-        "audit": get_audit_rules("request"),
-    }
+    return paginated(items, total=total, offset=skip, limit=limit, facets={"statut": facets}, audit_entity="request")
 
 
 @router.get("/{request_id}")
 def get_request(request_id: UUID) -> Dict[str, Any]:
     """Détail d'une demande d'intervention avec son historique de statuts"""
     data = repo.get_by_id(str(request_id))
-    return {"data": data, "audit": get_audit_rules("request")}
+    return single(data, audit_entity="request")
 
 
-@router.post("", response_model=InterventionRequestDetail, status_code=201)
+@router.post("", status_code=201)
 def create_request(data: InterventionRequestIn):
     """
     Crée une nouvelle demande d'intervention.
@@ -92,10 +86,10 @@ def create_request(data: InterventionRequestIn):
     **Audit obligatoire** : le champ `reason_code` est requis (voir `GET /audit/reasons`).
     `reason_text` est obligatoire si `reason_code=OTHER`.
     """
-    return repo.create(data.model_dump())
+    return single(repo.create(data.model_dump()))
 
 
-@router.post("/{request_id}/transition", response_model=InterventionRequestDetail)
+@router.post("/{request_id}/transition")
 def transition_request_status(request_id: UUID, body: StatusTransitionIn):
     """
     Effectue une transition de statut sur une demande.
@@ -123,7 +117,7 @@ def transition_request_status(request_id: UUID, body: StatusTransitionIn):
             "reported_date": body.reported_date,
         }
 
-    return repo.transition_status(
+    return single(repo.transition_status(
         request_id=str(request_id),
         status_to=body.status_to,
         notes=body.notes,
@@ -131,10 +125,10 @@ def transition_request_status(request_id: UUID, body: StatusTransitionIn):
         intervention_data=intervention_data,
         reason_code=body.reason_code,
         reason_text=body.reason_text,
-    )
+    ))
 
 
-@router.post("/repair", response_model=RepairResult)
+@router.post("/repair")
 def repair_orphaned_requests():
     """
     Passe à `cloturee` toutes les DIs en statut `acceptee` dont l'intervention
@@ -144,4 +138,4 @@ def repair_orphaned_requests():
     automatique n'a pas été déclenchée.
     Idémpotent.
     """
-    return repo.repair_orphaned_requests()
+    return single(repo.repair_orphaned_requests())
