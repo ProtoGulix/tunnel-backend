@@ -11,7 +11,7 @@ from api.equipements.schemas import EquipementDetail
 from api.constants import INTERVENTION_TYPES
 from api.errors.exceptions import ValidationError
 from api.auth.permissions import require_authenticated
-from api.utils.response import single, referentiel
+from api.utils.response import single, referentiel, paginated
 
 # Résolution des références circulaires : InterventionOut.request référence
 # InterventionRequestListItem (intervention_requests.schemas → interventions.schemas)
@@ -78,7 +78,7 @@ def list_interventions(
     include_stats = (include is None) or (
         "stats" in [i.strip() for i in include.split(',')])
 
-    data = intervention_repo.get_all(
+    items = intervention_repo.get_all(
         limit=limit,
         offset=skip,
         search=search,
@@ -90,7 +90,15 @@ def list_interventions(
         printed=printed,
         tech_id=tech_id,
     )
-    return single(data, audit_entity="intervention")
+    total = intervention_repo.count_all(
+        search=search,
+        equipement_id=equipement_id,
+        statuses=statuses,
+        priorities=priorities,
+        printed=printed,
+        tech_id=tech_id,
+    )
+    return paginated(items, total=total, offset=skip, limit=limit, audit_entity="intervention")
 
 
 @router.get("/{intervention_id}")
@@ -108,7 +116,7 @@ def get_intervention_actions(intervention_id: str, request: Request):
     return single(repo.get_by_intervention(intervention_id))
 
 
-@router.post("")
+@router.post("", status_code=201)
 def create_intervention(data: InterventionCreate, request: Request):
     """
     Crée une nouvelle intervention.

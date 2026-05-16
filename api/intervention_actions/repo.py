@@ -160,6 +160,7 @@ class InterventionActionRepository:
         date_from: Optional[date] = None,
         date_to: Optional[date] = None,
         tech_id: Optional[str] = None,
+        task_id: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """Récupère les actions groupées par date (created_at::date), triées du plus récent au plus ancien"""
         conn = self._get_connection()
@@ -177,6 +178,11 @@ class InterventionActionRepository:
             if tech_id is not None:
                 where_clauses.append("ia.tech = %s")
                 params.append(tech_id)
+            task_join_sql = ""
+            task_join_params: List[Any] = []
+            if task_id is not None:
+                task_join_sql = "INNER JOIN intervention_action_task iat_filter ON iat_filter.action_id = ia.id AND iat_filter.task_id = %s"
+                task_join_params = [task_id]
 
             where_sql = ("WHERE " + " AND ".join(where_clauses)
                          ) if where_clauses else ""
@@ -201,9 +207,10 @@ class InterventionActionRepository:
                 LEFT JOIN tunnel_user u ON ia.tech = u.id
                 LEFT JOIN intervention i ON ia.intervention_id = i.id
                 LEFT JOIN machine m ON i.machine_id = m.id
+                {task_join_sql}
                 {where_sql}
                 ORDER BY ia.created_at::date DESC, ia.created_at ASC
-            """, params)
+            """, [*task_join_params, *params])
             rows = cur.fetchall()
             cols = [desc[0] for desc in cur.description]
 

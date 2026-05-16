@@ -332,6 +332,71 @@ class InterventionRepository:
         finally:
             release_connection(conn)
 
+    def count_all(
+        self,
+        search: str | None = None,
+        equipement_id: str | None = None,
+        statuses: List[str] | None = None,
+        priorities: List[str] | None = None,
+        printed: bool | None = None,
+        tech_id: str | None = None,
+    ) -> int:
+        """Compte le nombre total d'interventions correspondant aux filtres de get_all()"""
+        priorities_norm = None
+        if priorities:
+            allowed_ids = {p['id'] for p in PRIORITY_TYPES}
+            priorities_norm = [p for p in priorities if p in allowed_ids]
+
+        where_clauses = []
+        params: List[Any] = []
+
+        if search:
+            like = f"%{search}%"
+            where_clauses.append(
+                "(i.code ILIKE %s OR i.title ILIKE %s OR m.code ILIKE %s OR m.name ILIKE %s)")
+            params.extend([like, like, like, like])
+
+        if equipement_id:
+            where_clauses.append("i.machine_id = %s")
+            params.append(equipement_id)
+
+        if statuses and len(statuses) > 0:
+            placeholders = ",".join(["%s"] * len(statuses))
+            where_clauses.append(f"LOWER(i.status_actual) IN ({placeholders})")
+            params.extend([s.lower() for s in statuses])
+
+        if priorities_norm and len(priorities_norm) > 0:
+            placeholders = ",".join(["%s"] * len(priorities_norm))
+            where_clauses.append(f"i.priority IN ({placeholders})")
+            params.extend(priorities_norm)
+
+        if printed is not None:
+            where_clauses.append("i.printed_fiche = %s")
+            params.append(printed)
+
+        if tech_id:
+            where_clauses.append("i.tech_id = %s")
+            params.append(tech_id)
+
+        where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
+
+        conn = self._get_connection()
+        try:
+            cur = conn.cursor()
+            query = f"""
+                SELECT COUNT(DISTINCT i.id)
+                FROM intervention i
+                LEFT JOIN machine m ON i.machine_id = m.id
+                {where_sql}
+            """
+            cur.execute(query, params)
+            row = cur.fetchone()
+            return int(row[0]) if row else 0
+        except Exception as e:
+            raise_db_error(e, "comptage interventions")
+        finally:
+            release_connection(conn)
+
     def get_by_id(self, intervention_id: str, include_actions: bool = True) -> Dict[str, Any]:
         """Récupère une intervention par ID avec équipement et stats calculées depuis les actions"""
         conn = self._get_connection()

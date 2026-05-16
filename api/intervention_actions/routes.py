@@ -16,6 +16,7 @@ def list_actions(
     start_date: Optional[date] = Query(None, description="Date de début incluse (YYYY-MM-DD). Défaut : aujourd'hui"),
     end_date: Optional[date] = Query(None, description="Date de fin incluse (YYYY-MM-DD). Défaut : aujourd'hui"),
     tech_id: Optional[UUID] = Query(None, description="Filtre sur l'UUID du technicien"),
+    task_id: Optional[UUID] = Query(None, description="Filtre sur l'UUID de la tâche"),
 ) -> Dict[str, Any]:
     """Liste les actions groupées par date, du plus récent au plus ancien"""
     if not end_date:
@@ -27,6 +28,7 @@ def list_actions(
         date_from=start_date,
         date_to=end_date,
         tech_id=str(tech_id) if tech_id else None,
+        task_id=str(task_id) if task_id else None,
     )
     return single(data, audit_entity="action")
 
