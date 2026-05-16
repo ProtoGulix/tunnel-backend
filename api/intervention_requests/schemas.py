@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from pydantic import BaseModel, Field, field_validator, model_validator
 from typing import Optional, List
 from datetime import datetime
@@ -76,6 +78,7 @@ class InterventionRequestListItem(BaseModel):
     statut_label: Optional[str] = None
     statut_color: Optional[str] = None
     intervention_id: Optional[UUID] = None
+    intervention: Optional[InterventionRef] = None
     is_system: bool = False
     suggested_type_inter: Optional[str] = None
     created_at: datetime

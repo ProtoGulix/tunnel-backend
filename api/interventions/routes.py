@@ -2,14 +2,31 @@ from fastapi import APIRouter, Request, Query, Depends
 from typing import List, Dict, Any, Optional
 from api.interventions.repo import InterventionRepository
 from api.intervention_actions.repo import InterventionActionRepository
-from api.interventions.schemas import InterventionOut, InterventionIn, InterventionCreate
+from api.interventions.schemas import InterventionOut, InterventionIn, InterventionCreate, InterventionStats
 from api.interventions.validators import InterventionValidator
 from api.intervention_actions.schemas import InterventionActionOut
+from api.intervention_status_log.schemas import InterventionStatusLogOut
+from api.intervention_tasks.schemas import TaskProgressOut, InterventionTaskOut
+from api.equipements.schemas import EquipementDetail
 from api.constants import INTERVENTION_TYPES
 from api.errors.exceptions import ValidationError
 from api.utils.audit import get_audit_rules
-
 from api.auth.permissions import require_authenticated
+
+# Résolution des références circulaires : InterventionOut.request référence
+# InterventionRequestListItem (intervention_requests.schemas → interventions.schemas)
+from api.intervention_requests.schemas import InterventionRequestListItem
+InterventionOut.model_rebuild(_types_namespace={
+    "Optional": Optional,
+    "List": List,
+    "InterventionRequestListItem": InterventionRequestListItem,
+    "InterventionActionOut": InterventionActionOut,
+    "InterventionStatusLogOut": InterventionStatusLogOut,
+    "TaskProgressOut": TaskProgressOut,
+    "InterventionTaskOut": InterventionTaskOut,
+    "EquipementDetail": EquipementDetail,
+    "InterventionStats": InterventionStats,
+})
 
 router = APIRouter(prefix="/interventions",
                    tags=["interventions"], dependencies=[Depends(require_authenticated)])

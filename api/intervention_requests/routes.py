@@ -17,6 +17,14 @@ from api.auth.permissions import require_authenticated
 from api.utils.audit import get_audit_rules
 from api.utils.pagination import create_pagination_meta
 
+# Résolution des références circulaires : InterventionRequestListItem.intervention
+# référence InterventionRef (interventions.schemas → intervention_actions.schemas → ici)
+from typing import Optional
+from api.interventions.schemas import InterventionRef
+_ns = {"Optional": Optional, "InterventionRef": InterventionRef}
+InterventionRequestListItem.model_rebuild(_types_namespace=_ns)
+InterventionRequestDetail.model_rebuild(_types_namespace=_ns)
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(
@@ -121,6 +129,8 @@ def transition_request_status(request_id: UUID, body: StatusTransitionIn):
         notes=body.notes,
         changed_by=str(body.changed_by) if body.changed_by else None,
         intervention_data=intervention_data,
+        reason_code=body.reason_code,
+        reason_text=body.reason_text,
     )
 
 

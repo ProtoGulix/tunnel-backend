@@ -1,13 +1,18 @@
+from __future__ import annotations
+
 from datetime import date
-from typing import List, Optional
+from typing import List, Optional, TYPE_CHECKING
 from uuid import UUID
 
 from pydantic import BaseModel, Field
 from api.intervention_actions.schemas import InterventionActionOut
 from api.intervention_status_log.schemas import InterventionStatusLogOut
 from api.equipements.schemas import EquipementDetail
-from api.intervention_requests.schemas import InterventionRequestListItem
 from api.intervention_tasks.schemas import TaskProgressOut, InterventionTaskOut
+
+if TYPE_CHECKING:
+    # Import lazy pour éviter la circularité avec intervention_requests.schemas
+    from api.intervention_requests.schemas import InterventionRequestListItem
 
 
 class InterventionCreate(BaseModel):
@@ -71,6 +76,30 @@ class InterventionStats(BaseModel):
         from_attributes = True
 
 
+class InterventionRef(BaseModel):
+    """Premier niveau d'une intervention (sans actions/tasks/logs) — utilisé comme référence embarquée."""
+    id: UUID
+    code: Optional[str] = None
+    title: Optional[str] = None
+    type_inter: Optional[str] = None
+    priority: Optional[str] = None
+    status_actual: Optional[str] = None
+    status_label: Optional[str] = None
+    status_color: Optional[str] = None
+    tech_initials: Optional[str] = None
+    tech_id: Optional[UUID] = None
+    reported_by: Optional[str] = None
+    reported_date: Optional[date] = None
+    next_due_date: Optional[date] = None
+    overdue: bool = False
+    plan_id: Optional[UUID] = None
+    printed_fiche: Optional[bool] = None
+    stats: Optional[InterventionStats] = None
+
+    class Config:
+        from_attributes = True
+
+
 class InterventionOut(BaseModel):
     """Schéma pour une intervention avec ses actions et équipement"""
     id: UUID
@@ -86,7 +115,7 @@ class InterventionOut(BaseModel):
     updated_by: Optional[UUID] = None
     printed_fiche: Optional[bool] = None
     reported_date: Optional[date] = None
-    request: Optional[InterventionRequestListItem] = None
+    request: Optional[InterventionRequestListItem] = None  # type: ignore[name-defined]
     next_due_date: Optional[date] = None
     overdue: bool = False
     plan_id: Optional[UUID] = None
