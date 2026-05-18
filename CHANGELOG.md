@@ -2,6 +2,23 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [3.7.0] - 18 mai 2026
+
+### Nouvelles fonctionnalités
+
+#### Raisons d'audit silencieuses (mutations courantes)
+
+Les mutations "courantes" (création de tâche, saisie d'action par le tech) n'affichent plus de sélecteur de raison côté UX — la raison est envoyée automatiquement par le front.
+
+- **Nouvelle catégorie `auto`** dans `audit_reason_code` : raisons envoyées silencieusement, jamais affichées dans un picker
+- **Nouveau code `ROUTINE`** : raison par défaut pour `task` et `action`
+- **`AuditRules`** enrichi de deux champs : `silent: bool` et `default_reason_code: Optional[str]`
+  - `silent=true` → le front envoie `default_reason_code` sans interaction utilisateur
+  - `silent=false` → le front affiche le picker avec `reasons` (comportement actuel pour interventions, requests, etc.)
+- Migration Alembic `20260518_007_audit_silent_routine.py`
+
+---
+
 ## [3.6.0] - 18 mai 2026
 
 ### Nouvelles fonctionnalités
