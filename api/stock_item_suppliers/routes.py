@@ -6,6 +6,7 @@ from api.stock_item_suppliers.schemas import (
 )
 
 from api.auth.permissions import require_authenticated
+from api.utils.response import single
 
 router = APIRouter(prefix="/stock-item-suppliers",
                    tags=["stock-item-suppliers"], dependencies=[Depends(require_authenticated)])
@@ -34,46 +35,46 @@ def list_stock_item_suppliers(
     )
 
 
-@router.get("/{ref_id}", response_model=StockItemSupplierOut)
+@router.get("/{ref_id}", )
 def get_stock_item_supplier(ref_id: str):
     """Récupère une référence fournisseur par ID"""
     repo = StockItemSupplierRepository()
-    return repo.get_by_id(ref_id)
+    return single(repo.get_by_id(ref_id))
 
 
-@router.get("/stock-item/{stock_item_id}", response_model=List[StockItemSupplierOut])
+@router.get("/stock-item/{stock_item_id}", )
 def get_suppliers_by_stock_item(stock_item_id: str):
     """Récupère toutes les références fournisseurs d'un article"""
     repo = StockItemSupplierRepository()
     return repo.get_by_stock_item(stock_item_id)
 
 
-@router.get("/supplier/{supplier_id}", response_model=List[StockItemSupplierOut])
+@router.get("/supplier/{supplier_id}", )
 def get_stock_items_by_supplier(supplier_id: str):
     """Récupère toutes les références d'un fournisseur"""
     repo = StockItemSupplierRepository()
     return repo.get_by_supplier(supplier_id)
 
 
-@router.post("", response_model=StockItemSupplierOut)
+@router.post("", )
 def create_stock_item_supplier(ref: StockItemSupplierIn):
     """Crée une nouvelle référence fournisseur"""
     repo = StockItemSupplierRepository()
-    return repo.add(ref.model_dump())
+    return single(repo.add(ref.model_dump()))
 
 
-@router.put("/{ref_id}", response_model=StockItemSupplierOut)
+@router.put("/{ref_id}", )
 def update_stock_item_supplier(ref_id: str, ref: StockItemSupplierUpdate):
     """Met à jour une référence fournisseur existante"""
     repo = StockItemSupplierRepository()
-    return repo.update(ref_id, ref.model_dump(exclude_unset=True))
+    return single(repo.update(ref_id, ref.model_dump(exclude_unset=True)))
 
 
-@router.post("/{ref_id}/set-preferred", response_model=StockItemSupplierOut)
+@router.post("/{ref_id}/set-preferred", )
 def set_preferred_supplier(ref_id: str):
     """Définit cette référence comme fournisseur préféré pour l'article"""
     repo = StockItemSupplierRepository()
-    return repo.set_preferred(ref_id)
+    return single(repo.set_preferred(ref_id))
 
 
 @router.delete("/{ref_id}", status_code=204)

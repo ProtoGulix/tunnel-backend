@@ -4,6 +4,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Query
 
 from api.auth.permissions import require_authenticated
+from api.utils.response import single
 from api.preventive_occurrences.repo import PreventiveOccurrenceRepository
 from api.preventive_occurrences.schemas import (
     GenerateOccurrencesResult,
@@ -38,31 +39,31 @@ def list_occurrences(
     )
 
 
-@router.get("/{occurrence_id}", response_model=PreventiveOccurrenceOut)
+@router.get("/{occurrence_id}")
 def get_occurrence(occurrence_id: str):
     """Récupère une occurrence de maintenance préventive par ID"""
     repo = PreventiveOccurrenceRepository()
-    return repo.get_by_id(occurrence_id)
+    return single(repo.get_by_id(occurrence_id))
 
 
-@router.post("/generate", response_model=GenerateOccurrencesResult)
+@router.post("/generate")
 def generate_occurrences():
     """
     Déclenche la génération des occurrences préventives pour tous les plans actifs.
     Chaque machine est traitée indépendamment — un échec n'annule pas les autres.
     """
     repo = PreventiveOccurrenceRepository()
-    return repo.generate_occurrences()
+    return single(repo.generate_occurrences())
 
 
-@router.patch("/{occurrence_id}/skip", response_model=PreventiveOccurrenceOut)
+@router.patch("/{occurrence_id}/skip")
 def skip_occurrence(occurrence_id: str, data: OccurrenceSkipIn):
     """Ignore une occurrence en statut 'pending'"""
     repo = PreventiveOccurrenceRepository()
-    return repo.skip_occurrence(occurrence_id, data.skip_reason)
+    return single(repo.skip_occurrence(occurrence_id, data.skip_reason))
 
 
-@router.post("/repair", response_model=RepairOccurrencesResult)
+@router.post("/repair")
 def repair_occurrences():
     """
     Répare les données corrompues par deux bugs désormais corrigés (fix 2026-04-15).
@@ -79,4 +80,4 @@ def repair_occurrences():
     Cette procédure est **idempotente** : elle peut être appelée plusieurs fois sans effet secondaire.
     """
     repo = PreventiveOccurrenceRepository()
-    return repo.repair_orphaned_data()
+    return single(repo.repair_orphaned_data())

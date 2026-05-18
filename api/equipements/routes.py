@@ -10,9 +10,8 @@ from api.equipements.schemas import (
     EquipementUpdate,
     EquipementPatch
 )
-from api.utils.pagination import create_pagination_meta
-
 from api.auth.permissions import require_authenticated
+from api.utils.response import paginated, single
 
 router = APIRouter(prefix="/equipements",
                    tags=["equipements"], dependencies=[Depends(require_authenticated)])
@@ -42,16 +41,10 @@ def list_equipements(
     total = repo.count_all(
         search=search, exclude_class=exclude_list, select_class=select_list, select_mere=select_mere)
     facets = repo.get_facets(search=search)
-    return {
-        "items": items,
-        "pagination": create_pagination_meta(total=total, offset=skip, limit=limit, count=len(items)),
-        "facets": {
-            "equipement_class": facets,
-        },
-    }
+    return paginated(items, total=total, offset=skip, limit=limit, facets={"equipement_class": facets})
 
 
-@router.get("/{equipement_id}", response_model=EquipementDetail)
+@router.get("/{equipement_id}")
 def get_equipement(
     equipement_id: str,
     interventions_page: int = Query(
@@ -61,32 +54,32 @@ def get_equipement(
 ):
     """Récupère un équipement par ID avec tous les champs, children_count et interventions paginées"""
     repo = EquipementRepository()
-    return repo.get_by_id(
+    return single(repo.get_by_id(
         equipement_id,
         interventions_page=interventions_page,
         interventions_limit=interventions_limit
-    )
+    ))
 
 
-@router.post("", response_model=EquipementDetail, status_code=status.HTTP_201_CREATED)
+@router.post("", status_code=status.HTTP_201_CREATED)
 def create_equipement(data: EquipementCreate):
     """Crée un nouvel équipement"""
     repo = EquipementRepository()
-    return repo.add(data.model_dump(exclude_unset=True))
+    return single(repo.add(data.model_dump(exclude_unset=True)))
 
 
-@router.put("/{equipement_id}", response_model=EquipementDetail)
+@router.put("/{equipement_id}")
 def update_equipement(equipement_id: str, data: EquipementUpdate):
     """Remplace complètement un équipement (tous les champs non envoyés passent à null)"""
     repo = EquipementRepository()
-    return repo.update(equipement_id, data.model_dump())
+    return single(repo.update(equipement_id, data.model_dump()))
 
 
-@router.patch("/{equipement_id}", response_model=EquipementDetail)
+@router.patch("/{equipement_id}")
 def patch_equipement(equipement_id: str, data: EquipementPatch):
     """Met à jour partiellement un équipement (seuls les champs envoyés sont modifiés)"""
     repo = EquipementRepository()
-    return repo.update(equipement_id, data.model_dump(exclude_unset=True))
+    return single(repo.update(equipement_id, data.model_dump(exclude_unset=True)))
 
 
 @router.delete("/{equipement_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -97,7 +90,7 @@ def delete_equipement(equipement_id: str):
     return None
 
 
-@router.get("/{equipement_id}/stats", response_model=EquipementStatsDetailed)
+@router.get("/{equipement_id}/stats")
 def get_equipement_stats(
     equipement_id: str,
     start_date: str | None = Query(
@@ -107,11 +100,11 @@ def get_equipement_stats(
 ):
     """Récupère les statistiques détaillées d'un équipement"""
     repo = EquipementRepository()
-    return repo.get_stats_by_id(equipement_id, start_date=start_date, end_date=end_date)
+    return single(repo.get_stats_by_id(equipement_id, start_date=start_date, end_date=end_date))
 
 
-@router.get("/{equipement_id}/health", response_model=EquipementHealthOnly)
+@router.get("/{equipement_id}/health")
 def get_equipement_health(equipement_id: str):
     """Récupère uniquement le health d'un équipement (ultra-léger)"""
     repo = EquipementRepository()
-    return repo.get_health_by_id(equipement_id)
+    return single(repo.get_health_by_id(equipement_id))

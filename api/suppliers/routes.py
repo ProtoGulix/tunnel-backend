@@ -4,6 +4,7 @@ from api.suppliers.repo import SupplierRepository
 from api.suppliers.schemas import SupplierOut, SupplierIn, SupplierListItem
 
 from api.auth.permissions import require_authenticated
+from api.utils.response import single
 
 router = APIRouter(prefix="/suppliers", tags=["suppliers"], dependencies=[Depends(require_authenticated)])
 
@@ -25,32 +26,32 @@ def list_suppliers(
     )
 
 
-@router.get("/{supplier_id}", response_model=SupplierOut)
+@router.get("/{supplier_id}")
 def get_supplier(supplier_id: str):
     """Récupère un fournisseur par ID"""
     repo = SupplierRepository()
-    return repo.get_by_id(supplier_id)
+    return single(repo.get_by_id(supplier_id))
 
 
-@router.get("/code/{code}", response_model=SupplierOut)
+@router.get("/code/{code}")
 def get_supplier_by_code(code: str):
     """Récupère un fournisseur par code"""
     repo = SupplierRepository()
-    return repo.get_by_code(code)
+    return single(repo.get_by_code(code))
 
 
-@router.post("", response_model=SupplierOut)
+@router.post("")
 def create_supplier(supplier: SupplierIn):
     """Crée un nouveau fournisseur"""
     repo = SupplierRepository()
-    return repo.add(supplier.model_dump())
+    return single(repo.add(supplier.model_dump()))
 
 
-@router.put("/{supplier_id}", response_model=SupplierOut)
+@router.put("/{supplier_id}")
 def update_supplier(supplier_id: str, supplier: SupplierIn):
     """Met à jour un fournisseur existant"""
     repo = SupplierRepository()
-    return repo.update(supplier_id, supplier.model_dump(exclude_unset=True))
+    return single(repo.update(supplier_id, supplier.model_dump(exclude_unset=True)))
 
 
 @router.delete("/{supplier_id}")

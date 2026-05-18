@@ -38,6 +38,8 @@ class InterventionTaskIn(BaseModel):
     assigned_to: Optional[UUID] = None
     due_date: Optional[date] = None
     sort_order: int = 0
+    reason_code: str = Field(..., description="Code raison obligatoire pour l'audit. Voir GET /audit/reasons.")
+    reason_text: Optional[str] = Field(default=None, description="Texte libre obligatoire si reason_code=OTHER.")
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -53,6 +55,8 @@ class InterventionTaskPatch(BaseModel):
     assigned_to: Optional[UUID] = None
     due_date: Optional[date] = None
     sort_order: Optional[int] = None
+    reason_code: str = Field(..., description="Code raison obligatoire pour l'audit. Voir GET /audit/reasons.")
+    reason_text: Optional[str] = Field(default=None, description="Texte libre obligatoire si reason_code=OTHER.")
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -61,6 +65,13 @@ class InterventionTaskPatch(BaseModel):
         if self.status == "skipped" and not (self.skip_reason or "").strip():
             raise ValueError("skip_reason obligatoire si status=skipped")
         return self
+
+
+class InterventionTaskDelete(BaseModel):
+    reason_code: str = Field(..., description="Code raison obligatoire pour l'audit. Voir GET /audit/reasons.")
+    reason_text: Optional[str] = Field(default=None, description="Texte libre obligatoire si reason_code=OTHER.")
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class TaskProgressOut(BaseModel):

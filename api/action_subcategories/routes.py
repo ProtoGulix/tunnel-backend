@@ -4,6 +4,7 @@ from api.action_subcategories.repo import ActionSubcategoryRepository
 from api.action_subcategories.schemas import ActionSubcategoryOut
 
 from api.auth.permissions import require_authenticated
+from api.utils.response import single
 
 router = APIRouter(prefix="/action-subcategories", tags=["action-subcategories"], dependencies=[Depends(require_authenticated)])
 
@@ -15,8 +16,8 @@ def list_subcategories(request: Request):
     return repo.get_all()
 
 
-@router.get("/{subcategory_id}", response_model=ActionSubcategoryOut)
+@router.get("/{subcategory_id}")
 def get_subcategory(subcategory_id: int, request: Request):
     """Récupère une sous-catégorie par ID"""
     repo = ActionSubcategoryRepository()
-    return repo.get_by_id(subcategory_id)
+    return single(repo.get_by_id(subcategory_id))

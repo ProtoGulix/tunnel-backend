@@ -2,6 +2,48 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [3.6.0] - 18 mai 2026
+
+### Nouvelles fonctionnalités
+
+#### Journalisation d'audit centralisée
+
+Mise en place d'un système d'audit complet traçant toutes les mutations métier sensibles :
+
+- **Middleware d'audit** (`api/audits/middleware.py`) : capture automatique des créations, modifications et suppressions sur les endpoints interventions, tâches, actions et demandes d'intervention
+- **Champs obligatoires** : `performed_by` et `reason` requis sur les mutations, validés en amont
+- **`GET /audits/logs`** : liste paginée avec facettes (filtre par entité, action, utilisateur, période)
+- **Audit des demandes d'intervention** : les créations et transitions de statut sont désormais tracées
+
+#### Relation M2M `intervention_action` ↔ `intervention_task`
+
+- Nouvelle table de liaison `m2m_action_task` permettant d'associer plusieurs tâches à une action
+- Migration Alembic `20260512_003_m2m_action_task.py`
+- `GET /intervention-actions/{id}` expose la liste des tâches liées
+
+### Améliorations
+
+#### Nouveaux champs sur `GET /interventions`
+
+- `next_due_date` : prochaine échéance calculée depuis les tâches ouvertes de l'intervention
+- `overdue` : booléen indiquant si l'intervention a au moins une tâche en retard
+
+#### Refonte du module `intervention_tasks`
+
+- Suppression du router `/tasks` redondant — toutes les opérations passent désormais par `/intervention-tasks`
+- Méthode `get_workspace()` refactorisée : pagination offset, filtres enrichis, structure de réponse normalisée
+
+#### Filtre `task_id` sur `GET /intervention-actions`
+
+- Nouveau paramètre de filtre `task_id` pour lister les actions liées à une tâche précise
+- Nouvelle méthode `count_all()` sur `InterventionActionRepository` pour les stats d'audit
+
+#### Utilitaires de réponse
+
+- Fonctions centralisées dans `api/utils/` pour la normalisation des réponses paginées
+
+---
+
 ## [3.5.0] - 11 mai 2026
 
 ### Améliorations

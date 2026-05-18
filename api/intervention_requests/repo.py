@@ -1,3 +1,4 @@
+import json
 import logging
 from typing import Any, Dict, List, Optional
 
@@ -32,15 +33,88 @@ _SERVICE_COLS = """
     s.is_active AS service_is_active
 """
 
+# Colonnes intervention liée (premier niveau, sans sous-listes)
+_INTERVENTION_COLS = """
+    iv.id              AS iv_id,
+    iv.code            AS iv_code,
+    iv.title           AS iv_title,
+    iv.type_inter      AS iv_type_inter,
+    iv.priority        AS iv_priority,
+    iv.status_actual   AS iv_status_actual,
+    ivs.label          AS iv_status_label,
+    ivs.color          AS iv_status_color,
+    iv.tech_initials   AS iv_tech_initials,
+    iv.tech_id         AS iv_tech_id,
+    iv.reported_by     AS iv_reported_by,
+    iv.reported_date   AS iv_reported_date,
+    iv.plan_id         AS iv_plan_id,
+    iv.printed_fiche   AS iv_printed_fiche,
+    COALESCE(iv_stats.action_count, 0)   AS iv_action_count,
+    COALESCE(iv_stats.total_time, 0)     AS iv_total_time,
+    iv_stats.avg_complexity              AS iv_avg_complexity,
+    COALESCE(iv_stats.purchase_count, 0) AS iv_purchase_count
+"""
+
 _EQUIPEMENT_JOINS = """
     LEFT JOIN machine m ON ir.machine_id = m.id
     LEFT JOIN machine pm ON pm.id = m.equipement_mere
     LEFT JOIN equipement_class ec ON ec.id = m.equipement_class_id
     LEFT JOIN intervention i_h ON i_h.machine_id = m.id
     LEFT JOIN service s ON ir.service_id = s.id
+    LEFT JOIN intervention iv ON iv.id = ir.intervention_id
+    LEFT JOIN intervention_status_ref ivs ON ivs.code = iv.status_actual
+    LEFT JOIN LATERAL (
+        SELECT
+            COUNT(*)                                                          AS action_count,
+            COALESCE(SUM(a.time_spent), 0)                                   AS total_time,
+            AVG(NULLIF(a.complexity_score, 0))                               AS avg_complexity,
+            COUNT(DISTINCT iapr.purchase_request_id)
+                FILTER (WHERE iapr.purchase_request_id IS NOT NULL)          AS purchase_count
+        FROM intervention_action a
+        LEFT JOIN intervention_action_purchase_request iapr
+               ON iapr.intervention_action_id = a.id
+        WHERE a.intervention_id = iv.id
+    ) iv_stats ON TRUE
 """
 
 logger = logging.getLogger(__name__)
+
+
+def _audit_request(
+    cur,
+    request_id: str,
+    decision_type: str,
+    old_value: Optional[Dict],
+    new_value: Optional[Dict],
+    reason_code: str,
+    reason_text: Optional[str] = None,
+    changed_by: Optional[str] = None,
+    is_system: bool = False,
+) -> None:
+    """Insère un log d'audit pour une DI via fn_audit_log_decision().
+    Les erreurs sont loggées sans jamais interrompre la mutation métier.
+    """
+    try:
+        cur.execute(
+            """
+            SELECT public.fn_audit_log_decision(
+                %s, %s::uuid, %s, %s::jsonb, %s::jsonb, %s, %s, %s::uuid, %s
+            )
+            """,
+            (
+                "request",
+                request_id,
+                decision_type,
+                json.dumps(old_value) if old_value is not None else None,
+                json.dumps(new_value) if new_value is not None else None,
+                reason_code,
+                reason_text,
+                changed_by,
+                is_system,
+            ),
+        )
+    except Exception as exc:
+        logger.error("_audit_request(%s, %s) : %s", request_id, decision_type, exc)
 
 
 class InterventionRequestRepository:
@@ -83,6 +157,42 @@ class InterventionRequestRepository:
             "health":    health,
             "parent":    {"id": p_id, "code": p_code, "name": p_name} if p_id else None,
             "equipement_class": {"id": ec_id, "code": ec_code, "label": ec_label} if ec_id else None,
+        }
+
+    @staticmethod
+    def _build_intervention(row: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Construit l'objet intervention (InterventionRef) depuis les colonnes préfixées iv_."""
+        if not row.get("iv_id"):
+            for key in list(row.keys()):
+                if key.startswith("iv_"):
+                    row.pop(key, None)
+            return None
+        stats = {
+            "action_count":   row.pop("iv_action_count", 0) or 0,
+            "total_time":     float(row.pop("iv_total_time", 0) or 0),
+            "avg_complexity": row.pop("iv_avg_complexity", None),
+            "purchase_count": row.pop("iv_purchase_count", 0) or 0,
+        }
+        return {
+            "id":            row.pop("iv_id"),
+            "code":          row.pop("iv_code",          None),
+            "title":         row.pop("iv_title",         None),
+            "type_inter":    row.pop("iv_type_inter",    None),
+            "priority":      row.pop("iv_priority",      None),
+            "status_actual": row.pop("iv_status_actual", None),
+            "status_label":  row.pop("iv_status_label",  None),
+            "status_color":  row.pop("iv_status_color",  None),
+            "tech_initials": row.pop("iv_tech_initials", None),
+            "tech_id":       row.pop("iv_tech_id",       None),
+            "reported_by":   row.pop("iv_reported_by",   None),
+            "reported_date": row.pop("iv_reported_date", None),
+            "next_due_date": None,
+            "overdue":       False,
+            "plan_id":       row.pop("iv_plan_id",       None),
+            "printed_fiche": row.pop("iv_printed_fiche", None),
+            "created_at":    None,
+            "updated_at":    None,
+            "stats":         stats,
         }
 
     @staticmethod
@@ -170,12 +280,15 @@ class InterventionRequestRepository:
                     ir.is_system, ir.suggested_type_inter,
                     ir.created_at, ir.updated_at,
                     {_EQUIPEMENT_COLS},
-                    {_SERVICE_COLS}
+                    {_SERVICE_COLS},
+                    {_INTERVENTION_COLS}
                 FROM intervention_request ir
                 LEFT JOIN request_status_ref rs ON ir.statut = rs.code
                 {_EQUIPEMENT_JOINS}
                 {where_sql}
-                GROUP BY ir.id, rs.label, rs.color, m.id, pm.id, pm.code, pm.name, ec.id, s.id
+                GROUP BY ir.id, rs.label, rs.color, m.id, pm.id, pm.code, pm.name, ec.id, s.id,
+                         iv.id, ivs.label, ivs.color,
+                         iv_stats.action_count, iv_stats.total_time, iv_stats.avg_complexity, iv_stats.purchase_count
                 ORDER BY ir.created_at DESC
                 LIMIT %s OFFSET %s
                 """,
@@ -188,6 +301,7 @@ class InterventionRequestRepository:
                 r = dict(zip(cols, row))
                 r["equipement"] = self._build_equipement(r)
                 r["service"] = self._build_service(r)
+                r["intervention"] = self._build_intervention(r)
                 result.append(r)
             return result
         except Exception as e:
@@ -298,12 +412,15 @@ class InterventionRequestRepository:
                     ir.is_system, ir.suggested_type_inter,
                     ir.created_at, ir.updated_at,
                     {_EQUIPEMENT_COLS},
-                    {_SERVICE_COLS}
+                    {_SERVICE_COLS},
+                    {_INTERVENTION_COLS}
                 FROM intervention_request ir
                 LEFT JOIN request_status_ref rs ON ir.statut = rs.code
                 {_EQUIPEMENT_JOINS}
                 WHERE ir.id = %s
-                GROUP BY ir.id, rs.label, rs.color, m.id, pm.id, pm.code, pm.name, ec.id, s.id
+                GROUP BY ir.id, rs.label, rs.color, m.id, pm.id, pm.code, pm.name, ec.id, s.id,
+                         iv.id, ivs.label, ivs.color,
+                         iv_stats.action_count, iv_stats.total_time, iv_stats.avg_complexity, iv_stats.purchase_count
                 """,
                 (CLOSED_STATUS_CODE, CLOSED_STATUS_CODE, request_id),
             )
@@ -314,6 +431,7 @@ class InterventionRequestRepository:
             result = dict(zip(cols, row))
             result["equipement"] = self._build_equipement(result)
             result["service"] = self._build_service(result)
+            result["intervention"] = self._build_intervention(result)
 
             # Log des transitions
             cur.execute(
@@ -378,6 +496,22 @@ class InterventionRequestRepository:
             )
             new_id = cur.fetchone()[0]
 
+            _audit_request(
+                cur=cur,
+                request_id=str(new_id),
+                decision_type="created",
+                old_value=None,
+                new_value={
+                    "machine_id": str(data["machine_id"]),
+                    "demandeur_nom": demandeur_nom,
+                    "description": description,
+                    "is_system": is_system,
+                },
+                reason_code=data.get("reason_code", "OTHER"),
+                reason_text=data.get("reason_text"),
+                is_system=is_system,
+            )
+
             conn.commit()
             logger.info("Demande d'intervention créée: %s", new_id)
         except ValidationError:
@@ -401,6 +535,8 @@ class InterventionRequestRepository:
         notes: Optional[str],
         changed_by: Optional[str],
         intervention_data: Optional[Dict[str, Any]] = None,
+        reason_code: str = "OTHER",
+        reason_text: Optional[str] = None,
     ) -> Dict[str, Any]:
         existing = self.get_by_id(request_id)
         current_statut = existing["statut"]
@@ -565,6 +701,17 @@ class InterventionRequestRepository:
                         "Rattachement tâches : %s tâche(s) liées à l'intervention %s",
                         cur.rowcount, intervention_id,
                     )
+
+            _audit_request(
+                cur=cur,
+                request_id=request_id,
+                decision_type="status_transitioned",
+                old_value={"statut": current_statut},
+                new_value={"statut": status_to, "notes": notes},
+                reason_code=reason_code,
+                reason_text=reason_text,
+                changed_by=changed_by,
+            )
 
             conn.commit()
             logger.info(
@@ -880,6 +1027,15 @@ class InterventionRequestRepository:
                         "cloturee",
                         "Clôture manuelle via endpoint /repair",
                     ),
+                )
+                _audit_request(
+                    cur=cur,
+                    request_id=str(request_id),
+                    decision_type="status_transitioned",
+                    old_value={"statut": "acceptee"},
+                    new_value={"statut": "cloturee", "notes": "Clôture manuelle via endpoint /repair"},
+                    reason_code="SYSTEM",
+                    is_system=True,
                 )
                 repaired.append({
                     "id": str(request_id),

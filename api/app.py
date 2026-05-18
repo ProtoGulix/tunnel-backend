@@ -39,10 +39,11 @@ from api.services.routes import router as service_router
 from api.preventive_plans.routes import router as preventive_plans_router
 from api.preventive_occurrences.routes import router as preventive_occurrences_router
 from api.intervention_tasks.routes import router as intervention_tasks_router
-from api.tasks.routes import router as tasks_router
 from api.dashboard.routes import router as dashboard_router
 from api.admin.routes import router as admin_router
 from api.api_keys.routes import router as api_keys_router
+from api.audits.routes import router as audit_router
+from api.audits.middleware import AuditMiddleware
 from api.errors.handlers import register_error_handlers
 from api.health import health_check
 
@@ -154,11 +155,11 @@ app.include_router(service_router)
 app.include_router(preventive_plans_router)
 app.include_router(preventive_occurrences_router)
 app.include_router(intervention_tasks_router)
-app.include_router(tasks_router)
 app.include_router(dashboard_router)
 app.include_router(auth_router)
 app.include_router(admin_router)
 app.include_router(api_keys_router)
+app.include_router(audit_router)
 
 
 @app.on_event("startup")
@@ -255,6 +256,9 @@ async def ping_endpoint():
 # Middleware JWT (appliqué à toutes les routes sauf exceptions publiques)
 # Vérifie que le JWT Directus est valide et extrait user_id + role
 app.add_middleware(JWTMiddleware)
+
+# Middleware Audit — s'exécute après JWT (user_id disponible dans request.state)
+app.add_middleware(AuditMiddleware)
 
 # Middleware CORS — ajouté en dernier = plus externe = enveloppe tout,
 # y compris les réponses d'erreur de JWTMiddleware

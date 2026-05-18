@@ -18,8 +18,8 @@ from config.export_templates import (
 
 from api.auth.permissions import require_authenticated
 from api.constants import SUPPLIER_ORDER_STATUS_CONFIG
-from api.utils.pagination import create_pagination_meta
 from api.supplier_orders.validators import SupplierOrderValidator
+from api.utils.response import paginated, referentiel, single
 
 router = APIRouter(prefix="/supplier-orders", tags=["supplier-orders"], dependencies=[Depends(require_authenticated)])
 
@@ -27,7 +27,7 @@ router = APIRouter(prefix="/supplier-orders", tags=["supplier-orders"], dependen
 @router.get("/statuses")
 def list_supplier_order_statuses():
     """Retourne tous les statuts possibles avec leur label et couleur."""
-    return [
+    return referentiel([
         {
             "code": code,
             "label": cfg["label"],
@@ -36,7 +36,7 @@ def list_supplier_order_statuses():
             "is_locked": cfg["is_locked"],
         }
         for code, cfg in SUPPLIER_ORDER_STATUS_CONFIG.items()
-    ]
+    ])
 
 
 @router.get("", response_model=SupplierOrderListResponse)
@@ -54,19 +54,7 @@ def list_supplier_orders(
         status=status,
         supplier_id=supplier_id
     )
-
-    pagination_meta = create_pagination_meta(
-        total=result["total"],
-        offset=skip,
-        limit=limit,
-        count=len(result["items"])
-    )
-
-    return {
-        "items": result["items"],
-        "pagination": pagination_meta,
-        "facets": result["facets"]
-    }
+    return paginated(result["items"], total=result["total"], offset=skip, limit=limit, facets=result["facets"])
 
 
 @router.get("/{order_id}/transitions")
@@ -80,32 +68,32 @@ def get_supplier_order_transitions(order_id: str):
     }
 
 
-@router.get("/{order_id}", response_model=SupplierOrderOut)
+@router.get("/{order_id}")
 def get_supplier_order(order_id: str):
     """Récupère une commande fournisseur par ID avec ses lignes"""
     repo = SupplierOrderRepository()
-    return repo.get_by_id(order_id)
+    return single(repo.get_by_id(order_id))
 
 
-@router.get("/number/{order_number}", response_model=SupplierOrderOut)
+@router.get("/number/{order_number}")
 def get_supplier_order_by_number(order_number: str):
     """Récupère une commande fournisseur par numéro"""
     repo = SupplierOrderRepository()
-    return repo.get_by_order_number(order_number)
+    return single(repo.get_by_order_number(order_number))
 
 
-@router.post("", response_model=SupplierOrderOut)
+@router.post("")
 def create_supplier_order(supplier_order: SupplierOrderIn):
     """Crée une nouvelle commande fournisseur"""
     repo = SupplierOrderRepository()
-    return repo.add(supplier_order.model_dump())
+    return single(repo.add(supplier_order.model_dump()))
 
 
-@router.put("/{order_id}", response_model=SupplierOrderOut)
+@router.put("/{order_id}")
 def update_supplier_order(order_id: str, supplier_order: SupplierOrderUpdate):
     """Met à jour une commande fournisseur existante"""
     repo = SupplierOrderRepository()
-    return repo.update(order_id, supplier_order.model_dump(exclude_unset=True))
+    return single(repo.update(order_id, supplier_order.model_dump(exclude_unset=True)))
 
 
 @router.delete("/{order_id}")

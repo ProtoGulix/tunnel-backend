@@ -6,7 +6,30 @@ Deux modes de création :
 - **Liée à une action** (`intervention_action_id`) — l'intervention est déduite via la table de jonction `intervention_action_purchase_request`
 - **Autonome** — DA spontanée sans aucune relation (réappro consommable atelier, etc.)
 
+> **Audit log** : tout `POST`, `PATCH` et `DELETE` sur cette ressource exige un champ `reason_code` dans le body. Voir [Audit Log — règle commune](audit-log.md#règle-commune--reason_code-obligatoire).
+
 > Voir aussi : [Interventions](interventions.md) | [Stock Items](stock-items.md) | [Supplier Orders](supplier-orders.md) | [Supplier Order Lines](supplier-order-lines.md)
+
+---
+
+## Structure de réponse — enveloppe `audit`
+
+Tous les endpoints `GET` de cette ressource retournent une enveloppe `{ data, audit }` :
+
+```json
+{
+  "data": [ ...demandes d'achat... ],
+  "audit": {
+    "required": true,
+    "reasons": [
+      { "code": "SUPPLIER_DELAY", "label": "Délai fournisseur", "color": "...", "requires_text": false },
+      { "code": "OTHER", "label": "Autre raison", "color": "#9ca3af", "requires_text": true }
+    ]
+  }
+}
+```
+
+Le champ `audit` est identique en liste et en détail — le front le charge une seule fois au montage du composant.
 
 ---
 
@@ -351,7 +374,8 @@ Crée une demande d’achat. Deux modes selon le contexte :
   "unit": "pcs",
   "urgency": "high",
   "reason": "Remplacement préventif",
-  "intervention_action_id": "uuid"
+  "intervention_action_id": "uuid",
+  "reason_code": "EQUIPMENT_FAILURE"
 }
 ```
 
@@ -363,24 +387,28 @@ Crée une demande d’achat. Deux modes selon le contexte :
   "stock_item_id": "uuid",
   "unit": "bidon",
   "urgency": "normal",
-  "workshop": "Atelier 1"
+  "workshop": "Atelier 1",
+  "reason_code": "OTHER",
+  "reason_text": "Réappro stock atelier"
 }
 ```
 
 ### Champs
 
-| Champ                    | Type   | Requis  | Défaut   | Description                                                                          |
-| ------------------------ | ------ | ------- | -------- | ------------------------------------------------------------------------------------ |
-| `item_label`             | string | **oui** | —        | Libellé de l’article                                                                 |
-| `quantity`               | int    | **oui** | —        | Quantité (doit être > 0)                                                             |
-| `intervention_action_id` | uuid   | non     | null     | Action parente. Si fourni : liaison créée dans `intervention_action_purchase_request` |
-| `stock_item_id`          | uuid   | non     | null     | Article stock normalisé                                                              |
-| `unit`                   | string | non     | null     | Unité (`pcs`, `m`, `kg`, etc.)                                                      |
-| `urgency`                | string | non     | `normal` | `normal`, `high`, `critical`                                                         |
-| `requester_name`         | string | non     | null     | Nom du demandeur                                                                     |
-| `reason`                 | string | non     | null     | Raison de la demande                                                                 |
-| `notes`                  | string | non     | null     | Notes complémentaires                                                                |
-| `workshop`               | string | non     | null     | Atelier concerné                                                                     |
+| Champ                    | Type   | Requis       | Défaut   | Description                                                                          |
+| ------------------------ | ------ | ------------ | -------- | ------------------------------------------------------------------------------------ |
+| `item_label`             | string | **oui**      | —        | Libellé de l’article                                                                 |
+| `quantity`               | int    | **oui**      | —        | Quantité (doit être > 0)                                                             |
+| `intervention_action_id` | uuid   | non          | null     | Action parente. Si fourni : liaison créée dans `intervention_action_purchase_request` |
+| `stock_item_id`          | uuid   | non          | null     | Article stock normalisé                                                              |
+| `unit`                   | string | non          | null     | Unité (`pcs`, `m`, `kg`, etc.)                                                      |
+| `urgency`                | string | non          | `normal` | `normal`, `high`, `critical`                                                         |
+| `requester_name`         | string | non          | null     | Nom du demandeur                                                                     |
+| `reason`                 | string | non          | null     | Raison de la demande                                                                 |
+| `notes`                  | string | non          | null     | Notes complémentaires                                                                |
+| `workshop`               | string | non          | null     | Atelier concerné                                                                     |
+| `reason_code`            | string | **oui**      | —        | Code raison obligatoire pour l’audit. Voir `GET /audit/reasons`                      |
+| `reason_text`            | string | conditionnel | null     | Texte libre obligatoire si `reason_code = "OTHER"`                                   |
 
 ### Règles métier
 

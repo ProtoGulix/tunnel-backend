@@ -91,7 +91,8 @@
       "Bash(.venv/Scripts/alembic upgrade *)",
       "Bash(echo \"EXIT:$?\")",
       "Bash(alembic stamp *)",
-      "Bash(alembic current *)"
+      "Bash(alembic current *)",
+      "Bash(alembic upgrade *)"
     ]
   }
 }

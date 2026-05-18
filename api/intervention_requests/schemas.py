@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from pydantic import BaseModel, Field, field_validator, model_validator
 from typing import Optional, List
 from datetime import datetime
@@ -28,6 +30,14 @@ class InterventionRequestIn(BaseModel):
     is_system: bool = Field(default=False, description="DI créée par le système (ex: maintenance préventive)")
     suggested_type_inter: Optional[str] = Field(
         default=None, description="Type d'intervention suggéré (pré-remplit l'acceptation)")
+    reason_code: str = Field(
+        ...,
+        description="Code raison obligatoire pour l'audit (ex: CLIENT_REQUEST, OTHER). Voir GET /audit/reasons.",
+    )
+    reason_text: Optional[str] = Field(
+        default=None,
+        description="Texte libre obligatoire si reason_code=OTHER.",
+    )
 
     @field_validator("suggested_type_inter")
     @classmethod
@@ -68,6 +78,7 @@ class InterventionRequestListItem(BaseModel):
     statut_label: Optional[str] = None
     statut_color: Optional[str] = None
     intervention_id: Optional[UUID] = None
+    intervention: Optional[InterventionRef] = None
     is_system: bool = False
     suggested_type_inter: Optional[str] = None
     created_at: datetime
@@ -99,6 +110,14 @@ class StatusTransitionIn(BaseModel):
         default=None, description="Priorité de l'intervention")
     reported_date: Optional[str] = Field(
         default=None, description="Date de signalement (YYYY-MM-DD)")
+    reason_code: str = Field(
+        ...,
+        description="Code raison obligatoire pour l'audit (ex: CLIENT_REQUEST, OTHER). Voir GET /audit/reasons.",
+    )
+    reason_text: Optional[str] = Field(
+        default=None,
+        description="Texte libre obligatoire si reason_code=OTHER.",
+    )
 
     @model_validator(mode="after")
     def validate_tech(self):

@@ -5,6 +5,7 @@ from .schemas import EquipementClass, EquipementClassCreate, EquipementClassUpda
 from .repo import EquipementClassRepository
 
 from api.auth.permissions import require_authenticated
+from api.utils.response import single
 
 router = APIRouter(prefix="/equipement-class", tags=["equipement-class"], dependencies=[Depends(require_authenticated)])
 repo = EquipementClassRepository()
@@ -16,31 +17,31 @@ def list_equipement_classes():
     return repo.get_all()
 
 
-@router.get("/{class_id}", response_model=EquipementClass)
+@router.get("/{class_id}")
 def get_equipement_class(class_id: str):
     """Récupère une classe d'équipement par ID"""
-    return repo.get_by_id(class_id)
+    return single(repo.get_by_id(class_id))
 
 
-@router.post("", response_model=EquipementClass, status_code=status.HTTP_201_CREATED)
+@router.post("", status_code=status.HTTP_201_CREATED)
 def create_equipement_class(data: EquipementClassCreate):
     """Crée une nouvelle classe d'équipement"""
-    return repo.create(
+    return single(repo.create(
         code=data.code,
         label=data.label,
         description=data.description
-    )
+    ))
 
 
-@router.patch("/{class_id}", response_model=EquipementClass)
+@router.patch("/{class_id}")
 def update_equipement_class(class_id: str, data: EquipementClassUpdate):
     """Met à jour une classe d'équipement"""
-    return repo.update(
+    return single(repo.update(
         class_id=class_id,
         code=data.code,
         label=data.label,
         description=data.description
-    )
+    ))
 
 
 @router.delete("/{class_id}", status_code=status.HTTP_204_NO_CONTENT)

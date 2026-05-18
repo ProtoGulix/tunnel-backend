@@ -6,6 +6,50 @@ Lors de l'acceptation, une **intervention est automatiquement créée** et liée
 
 > Voir aussi : [Interventions](interventions.md) | [Équipements](equipements.md) | [Services](services.md)
 
+> **Audit log** : tout `POST`, `PATCH` et `DELETE` sur cette ressource exige un champ `reason_code` dans le body. Voir [Audit Log — règle commune](audit-log.md#règle-commune--reason_code-obligatoire).
+
+---
+
+## Audit log
+
+### Couverture
+
+| Endpoint                              | Loggué par       | `decision_type`         | `is_system` |
+| ------------------------------------- | ---------------- | ----------------------- | ----------- |
+| `POST /intervention-requests`         | repo (`create`)  | `created`               | selon `is_system` du payload |
+| `POST /{id}/transition`               | repo (`transition_status`) | `status_transitioned` | `false` |
+| `POST /repair`                        | repo (`repair_orphaned_requests`) | `status_transitioned` | `true` |
+
+> Le middleware `AuditMiddleware` couvre également `POST /{id}/transition` (path avec UUID) et produit un diff `statut_changed` — il peut donc y avoir deux entrées d'audit pour une transition. Le log repo est plus sémantique (`status_transitioned` avec before/after explicites).
+
+### Validation `reason_code`
+
+Le middleware valide la présence et l'existence du `reason_code` **avant** l'exécution de la route pour tous les `POST` avec UUID dans le path. Pour `POST /intervention-requests` (création) et `POST /repair` (pas d'UUID dans le path), la validation est gérée par les validators Pydantic et la fonction DB `fn_audit_log_decision`.
+
+---
+
+## Structure de réponse — enveloppe `audit`
+
+Les endpoints `GET` de cette ressource retournent une enveloppe `{ data, audit }` (ou `{ items, pagination, facets, audit }` pour la liste paginée) :
+
+```json
+{
+  "items": [ ...demandes... ],
+  "pagination": { ... },
+  "facets": { "statut": [ ... ] },
+  "audit": {
+    "required": true,
+    "reasons": [
+      { "code": "EQUIPMENT_FAILURE", "label": "Panne équipement", "color": "...", "requires_text": false },
+      { "code": "CLIENT_REQUEST", "label": "Demande client", "color": "#8b5cf6", "requires_text": false },
+      { "code": "OTHER", "label": "Autre raison", "color": "#9ca3af", "requires_text": true }
+    ]
+  }
+}
+```
+
+Le détail (`GET /{id}`) retourne `{ data: {...}, audit: {...} }`.
+
 ---
 
 ## Cycle de vie et logique métier
@@ -135,6 +179,32 @@ Liste paginée des demandes avec filtres.
       "statut_label": "Acceptée",
       "statut_color": "#10B981",
       "intervention_id": "uuid-de-l-intervention-liee",
+      "intervention": {
+        "id": "uuid-de-l-intervention-liee",
+        "code": "INT-2026-0042-QC",
+        "title": "Bruit anormal au démarrage, vibrations sur le moteur",
+        "type_inter": "CUR",
+        "priority": "urgent",
+        "status_actual": "in_progress",
+        "status_label": "Pris en charge",
+        "status_color": "#F59E0B",
+        "tech_initials": "QC",
+        "tech_id": "uuid-du-technicien",
+        "reported_by": "Jean Dupont",
+        "reported_date": "2026-03-10",
+        "next_due_date": null,
+        "overdue": false,
+        "plan_id": null,
+        "printed_fiche": false,
+        "created_at": "2026-03-10T09:15:00",
+        "updated_at": "2026-03-10T09:15:00",
+        "stats": {
+          "action_count": 2,
+          "total_time": 3.5,
+          "avg_complexity": 2.0,
+          "purchase_count": 1
+        }
+      },
       "is_system": false,
       "suggested_type_inter": null,
       "created_at": "2026-03-10T08:00:00",
@@ -187,15 +257,21 @@ Liste paginée des demandes avec filtres.
         "count": 60
       }
     ]
+  },
+  "audit": {
+    "required": true,
+    "reasons": [ "..." ]
   }
 }
 ```
 
-| Champ                  | Description                                                                                            |
-| ---------------------- | ------------------------------------------------------------------------------------------------------ |
-| `intervention_id`      | UUID de l'intervention GMAO créée lors de l'acceptation. `null` tant que la demande n'est pas acceptée |
-| `is_system`            | `true` si la DI a été générée automatiquement (ex : occurrence préventive). `false` par défaut         |
-| `suggested_type_inter` | Type d'intervention suggéré par le système (`CUR`, `PRE`, etc.). `null` pour les DI humaines           |
+| Champ                       | Description                                                                                            |
+| --------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `intervention_id`           | UUID de l'intervention GMAO créée lors de l'acceptation. `null` tant que la demande n'est pas acceptée |
+| `intervention`              | Objet `InterventionRef` : premier niveau de l'intervention liée, avec ses stats. `null` si pas encore acceptée ou si rejetée |
+| `intervention.stats`        | Calculé en une seule requête (LATERAL JOIN) : `action_count`, `total_time` (heures), `avg_complexity`, `purchase_count` |
+| `is_system`                 | `true` si la DI a été générée automatiquement (ex : occurrence préventive). `false` par défaut         |
+| `suggested_type_inter`      | Type d'intervention suggéré par le système (`CUR`, `PRE`, etc.). `null` pour les DI humaines           |
 
 > `facets.statut` : tous les statuts avec leur compteur. Les filtres `machine_id` et `search` sont appliqués, mais pas `statut` — permet d'afficher tous les onglets même quand un est sélectionné.
 
@@ -236,6 +312,32 @@ Détail complet avec historique des transitions de statut.
   "statut_label": "Acceptée",
   "statut_color": "#10B981",
   "intervention_id": "uuid-de-l-intervention-liee",
+  "intervention": {
+    "id": "uuid-de-l-intervention-liee",
+    "code": "INT-2026-0042-QC",
+    "title": "Bruit anormal au démarrage, vibrations sur le moteur",
+    "type_inter": "CUR",
+    "priority": "urgent",
+    "status_actual": "in_progress",
+    "status_label": "Pris en charge",
+    "status_color": "#F59E0B",
+    "tech_initials": "QC",
+    "tech_id": "uuid-du-technicien",
+    "reported_by": "Jean Dupont",
+    "reported_date": "2026-03-10",
+    "next_due_date": null,
+    "overdue": false,
+    "plan_id": null,
+    "printed_fiche": false,
+    "created_at": "2026-03-10T09:15:00",
+    "updated_at": "2026-03-10T09:15:00",
+    "stats": {
+      "action_count": 2,
+      "total_time": 3.5,
+      "avg_complexity": 2.0,
+      "purchase_count": 1
+    }
+  },
   "is_system": false,
   "suggested_type_inter": null,
   "created_at": "2026-03-10T08:00:00",
@@ -267,15 +369,17 @@ Détail complet avec historique des transitions de statut.
 }
 ```
 
-| Champ                      | Description                                                                                                               |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `code`                     | Auto-généré par trigger DB (format `DI-YYYY-NNNN`)                                                                        |
-| `equipement`               | Objet `EquipementListItem` : `id`, `code`, `name`, `health`, `parent_id`, `equipement_class`. `null` si machine supprimée |
-| `equipement.health`        | Calculé depuis toutes les interventions ouvertes sur la machine                                                           |
-| `intervention_id`          | UUID de l'intervention liée (`null` si pas encore acceptée)                                                               |
-| `status_log`               | Historique complet trié par date ASC                                                                                      |
-| `status_log[].status_from` | `null` pour la création initiale                                                                                          |
-| `status_log[].changed_by`  | UUID Directus de l'utilisateur (`null` si non renseigné ou clôture auto)                                                  |
+| Champ                       | Description                                                                                                               |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `code`                      | Auto-généré par trigger DB (format `DI-YYYY-NNNN`)                                                                        |
+| `equipement`                | Objet `EquipementListItem` : `id`, `code`, `name`, `health`, `parent_id`, `equipement_class`. `null` si machine supprimée |
+| `equipement.health`         | Calculé depuis toutes les interventions ouvertes sur la machine                                                           |
+| `intervention_id`           | UUID de l'intervention liée (`null` si pas encore acceptée)                                                               |
+| `intervention`              | Objet `InterventionRef` complet. `null` si DI non encore acceptée ou rejetée                                              |
+| `intervention.stats`        | `action_count` : nombre d'actions ; `total_time` : heures cumulées ; `avg_complexity` : complexité moyenne ; `purchase_count` : commandes liées |
+| `status_log`                | Historique complet trié par date ASC                                                                                      |
+| `status_log[].status_from`  | `null` pour la création initiale                                                                                          |
+| `status_log[].changed_by`   | UUID Directus de l'utilisateur (`null` si non renseigné ou clôture auto)                                                  |
 
 ### Backward compatibility
 
@@ -301,22 +405,27 @@ Crée une nouvelle demande d'intervention. Le code (`DI-YYYY-NNNN`) et le statut
   "machine_id": "uuid",
   "demandeur_nom": "Jean Dupont",
   "service_id": "uuid-du-service",
-  "description": "Bruit anormal au démarrage, vibrations sur le moteur"
+  "description": "Bruit anormal au démarrage, vibrations sur le moteur",
+  "reason_code": "EQUIPMENT_FAILURE"
 }
 ```
 
-| Champ                  | Type    | Requis  | Description                                                            |
-| ---------------------- | ------- | ------- | ---------------------------------------------------------------------- |
-| `machine_id`           | uuid    | **oui** | Équipement concerné                                                    |
-| `demandeur_nom`        | string  | **oui** | Nom du demandeur                                                       |
-| `description`          | string  | **oui** | Description de l'intervention souhaitée                                |
-| `service_id`           | uuid    | non     | UUID du service/département du demandeur                               |
-| `is_system`            | boolean | non     | `true` si DI générée par le système. Défaut : `false`                  |
-| `suggested_type_inter` | string  | non     | Type suggéré parmi `CUR`, `PRE`, `REA`, `BAT`, `PRO`, `COF`, `PIL`, `MES`. `null` par défaut |
+| Champ                  | Type    | Requis       | Description                                                            |
+| ---------------------- | ------- | ------------ | ---------------------------------------------------------------------- |
+| `machine_id`           | uuid    | **oui**      | Équipement concerné                                                    |
+| `demandeur_nom`        | string  | **oui**      | Nom du demandeur                                                       |
+| `description`          | string  | **oui**      | Description de l'intervention souhaitée                                |
+| `service_id`           | uuid    | non          | UUID du service/département du demandeur                               |
+| `is_system`            | boolean | non          | `true` si DI générée par le système. Défaut : `false`                  |
+| `suggested_type_inter` | string  | non          | Type suggéré parmi `CUR`, `PRE`, `REA`, `BAT`, `PRO`, `COF`, `PIL`, `MES`. `null` par défaut |
+| `reason_code`          | string  | **oui**      | Code raison obligatoire pour l'audit. Voir `GET /audit/reasons`        |
+| `reason_text`          | string  | conditionnel | Texte libre obligatoire si `reason_code = "OTHER"`                     |
 
 ### Réponse `201` — `InterventionRequestDetail`
 
-Retourne la demande créée avec son code et son statut initial.
+Retourne la demande créée avec son code et son statut initial. Le champ `intervention` est `null` (statut `nouvelle`).
+
+**Audit** : log `created` inséré dans `audit_log` avec `decision_type = "created"`.
 
 ### Erreurs
 
@@ -342,7 +451,8 @@ Pour la transition vers `acceptee`, une intervention GMAO est automatiquement cr
   "type_inter": "CUR",
   "tech_initials": "QC",
   "priority": "urgent",
-  "reported_date": "2026-03-10"
+  "reported_date": "2026-03-10",
+  "reason_code": "CLIENT_REQUEST"
 }
 ```
 
@@ -355,6 +465,8 @@ Pour la transition vers `acceptee`, une intervention GMAO est automatiquement cr
 | `tech_initials` | string | **oui si** `acceptee` | Initiales du technicien. Intégrées dans le code de l'intervention                                                       |
 | `priority`      | string | non (si `acceptee`)   | `faible`, `normale`, `important`, `urgent`. Défaut : `normale`                                                          |
 | `reported_date` | date   | non (si `acceptee`)   | Date de signalement (`YYYY-MM-DD`). Défaut : null                                                                       |
+| `reason_code`   | string | **oui**               | Code raison obligatoire pour l'audit. Voir `GET /audit/reasons`                                                         |
+| `reason_text`   | string | conditionnel          | Texte libre obligatoire si `reason_code = "OTHER"`                                                                      |
 
 > **Résolution du `type_inter` pour les DI système** : si `is_system=true`, le type est résolu automatiquement depuis `suggested_type_inter`. Le champ `type_inter` du payload est ignoré. Si `suggested_type_inter` est aussi absent, une erreur `400` est levée.
 
@@ -370,7 +482,9 @@ Pour la transition vers `acceptee`, une intervention GMAO est automatiquement cr
 
 ### Réponse `200` — `InterventionRequestDetail`
 
-Retourne la demande mise à jour. Si `acceptee`, le champ `intervention_id` est désormais renseigné.
+Retourne la demande mise à jour. Si `acceptee`, les champs `intervention_id` et `intervention` sont désormais renseignés.
+
+**Audit** : log `status_transitioned` inséré dans `audit_log` avec `old_value = {"statut": "<ancien>"}` et `new_value = {"statut": "<nouveau>", "notes": "..."}`.
 
 ### Erreurs
 
@@ -392,6 +506,8 @@ Outil de maintenance : passe à `cloturee` toutes les DIs en statut `acceptee` d
 Utile pour corriger des données historiques où la cascade de clôture automatique n'a pas été déclenchée (fermeture directe en base, données importées, etc.).
 
 **Idempotent** : peut être appelé plusieurs fois sans effet secondaire.
+
+**Audit** : un log `status_transitioned` (`is_system = true`) est inséré dans `audit_log` pour chaque DI réparée.
 
 ### Réponse `200` — `RepairResult`
 

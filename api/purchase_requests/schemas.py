@@ -197,7 +197,7 @@ class DispatchResult(BaseModel):
 
 
 class PurchaseRequestIn(BaseModel):
-    """Schéma d'entrée pour créer une demande d'achat"""
+    """Schéma d'entrée pour créer ou modifier une demande d'achat"""
     stock_item_id: Optional[UUID] = Field(
         default=None, description="ID de l'item en stock (optionnel)")
     item_label: str = Field(..., description="Libellé de l'article demandé")
@@ -221,6 +221,14 @@ class PurchaseRequestIn(BaseModel):
         default=None, description="Quantité demandée (détail)")
     requester_name: Optional[str] = Field(
         default=None, description="Nom du demandeur")
+    reason_code: str = Field(
+        ...,
+        description="Code raison obligatoire pour l'audit (ex: SUPPLIER_DELAY, OTHER). Voir GET /audit/reasons.",
+    )
+    reason_text: Optional[str] = Field(
+        default=None,
+        description="Texte libre obligatoire si reason_code=OTHER.",
+    )
 
     class Config:
         from_attributes = True
