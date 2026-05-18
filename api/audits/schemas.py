@@ -86,11 +86,16 @@ class AuditRuleReason(BaseModel):
 
 class AuditRules(BaseModel):
     """Règles d'audit portées par la réponse d'un endpoint GET.
-    Si required=True, le front doit collecter un reason_code avant toute mutation.
+
+    - required=True  : toute mutation doit inclure un reason_code
+    - silent=True    : le front envoie default_reason_code sans afficher de sélecteur
+    - silent=False   : le front affiche un picker parmi reasons
     """
     model_config = ConfigDict(from_attributes=True)
 
     required: bool
+    silent: bool = False
+    default_reason_code: Optional[str] = None
     reasons: List[AuditRuleReason]
 
 
