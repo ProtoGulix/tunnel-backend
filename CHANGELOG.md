@@ -2,6 +2,20 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [3.11.0] - 19 mai 2026
+
+### Améliorations
+
+#### Références catalogue et fabricant dans les lignes de commande
+
+Les lignes de commande fournisseur (`GET /supplier-orders/{id}`) et les lignes liées aux DA (`GET /purchase-requests/{id}`) exposent désormais les références catalogue et fabricant depuis la table `catalog`.
+
+- **`supplier_order_lines`** : enrichissement de `SupplierOrderLineListItem` avec `supplier.ref` (référence interne fournisseur), `manufacturer.name` / `manufacturer.ref`, `notes`, `quote_price`, `lead_time_days`, `stock_item_spec`, `stock_item_unit`
+- **`purchase_requests`** : `LinkedOrderLineDetail` remplace les champs plats `manufacturer` / `manufacturer_ref` par un objet structuré `ManufacturerInfo` et ajoute `catalog_ref`
+- **`SupplierOrderStatusInfo`** : le champ `supplier_order_status` des DA est désormais un objet `{ code, label, color, description, is_locked }` au lieu d'une simple chaîne
+
+---
+
 ## [3.10.0] - 19 mai 2026
 
 ### Améliorations
