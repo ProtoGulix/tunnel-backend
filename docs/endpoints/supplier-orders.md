@@ -96,10 +96,34 @@ Liste les commandes avec filtres, pagination et facets.
     "count": 42
   },
   "facets": [
-    { "status": "ACK", "count": 3 },
-    { "status": "CANCELLED", "count": 1 },
-    { "status": "OPEN", "count": 28 },
-    { "status": "RECEIVED", "count": 10 }
+    {
+      "status": "OPEN",
+      "count": 28,
+      "transitions": [
+        { "to": "SENT", "description": "Envoyer le devis au fournisseur — le panier sera verrouillé." },
+        { "to": "CANCELLED", "description": "Annuler ce panier." }
+      ]
+    },
+    {
+      "status": "ACK",
+      "count": 3,
+      "transitions": [
+        { "to": "RECEIVED", "description": "Négociation terminée — passer la commande ferme." },
+        { "to": "CANCELLED", "description": "Annuler ce panier." }
+      ]
+    },
+    {
+      "status": "CANCELLED",
+      "count": 1,
+      "transitions": []
+    },
+    {
+      "status": "RECEIVED",
+      "count": 10,
+      "transitions": [
+        { "to": "CLOSED", "description": "Clôturer le panier — tous les produits ont été reçus." }
+      ]
+    }
   ],
   "items": [
     {
@@ -164,9 +188,39 @@ Liste les commandes avec filtres, pagination et facets.
 
 ## `GET /supplier-orders/{id}`
 
-Détail complet avec `lines` (tableau de `SupplierOrderLineListItem`), `add_lines`/`edit_lines`/`receive_lines` et les champs d'âge.
+Détail complet incluant les lignes, les indicateurs d'âge et les **transitions de statut autorisées**. Ce champ remplace le besoin d'appeler `GET /supplier-orders/{id}/transitions` séparément.
+
+### Champs notables
+
+| Champ           | Description                                                        |
+| --------------- | ------------------------------------------------------------------ |
+| `lines`         | Tableau de `SupplierOrderLineListItem`                             |
+| `transitions`   | Transitions autorisées depuis le statut actuel (`to` + `description`) |
+| `add_lines`     | `true` si des lignes peuvent être ajoutées                         |
+| `edit_lines`    | `true` si les lignes peuvent être éditées                          |
+| `receive_lines` | `true` si les réceptions peuvent être saisies                      |
 
 Chaque ligne du tableau `lines` contient également `is_fully_received` (`true` si `quantity_received >= quantity`).
+
+### Extrait de réponse `200`
+
+```json
+{
+  "data": {
+    "id": "uuid",
+    "order_number": "CMD-2026-0042",
+    "status": "OPEN",
+    "transitions": [
+      { "to": "SENT", "description": "Envoyer le devis au fournisseur — le panier sera verrouillé." },
+      { "to": "CANCELLED", "description": "Annuler ce panier." }
+    ],
+    "add_lines": true,
+    "edit_lines": false,
+    "receive_lines": false,
+    "lines": []
+  }
+}
+```
 
 ---
 

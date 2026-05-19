@@ -1,6 +1,6 @@
-# API Manifest — GMAO API v3.1.0
+# API Manifest — GMAO API v3.11.0
 
-> Dernière mise à jour : 2026-05-03
+> Dernière mise à jour : 2026-05-19
 
 Documentation complète de l'API. Chaque endpoint possède sa propre page avec formats JSON d'entrée/sortie, règles métier et exemples.
 
@@ -87,7 +87,7 @@ Documentation OpenAPI interactive : `http://localhost:8000/docs`
 | PATCH   | `/stock-items/{id}/quantity`                           | Modifier quantité             | [stock-items.md](docs/endpoints/stock-items.md)                         |
 | DELETE  | `/stock-items/{id}`                                    | Supprimer article             | [stock-items.md](docs/endpoints/stock-items.md)                         |
 | GET     | `/stock-families`                                      | Liste familles stock          | [stock-families.md](docs/endpoints/stock-families.md)                   |
-| GET     | `/stock-families/{code}`                               | Détail famille                | [stock-families.md](docs/endpoints/stock-families.md)                   |
+| GET     | `/stock-families/{family_code}`                        | Détail famille                | [stock-families.md](docs/endpoints/stock-families.md)                   |
 | GET     | `/stock-sub-families`                                  | Sous-familles stock           | [stock-sub-families.md](docs/endpoints/stock-sub-families.md)           |
 | GET     | `/stock-sub-families/{family}/{sub}`                   | Détail sous-famille           | [stock-sub-families.md](docs/endpoints/stock-sub-families.md)           |
 | GET     | `/part-templates`                                      | Templates de pièces           | [part-templates.md](docs/endpoints/part-templates.md)                   |

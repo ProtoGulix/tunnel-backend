@@ -47,3 +47,11 @@ class StockFamilyDetail(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class StockFamilySingleResponse(BaseModel):
+    """Réponse standard enveloppée pour un détail de famille."""
+    data: StockFamilyDetail = Field(..., description="Détail de la famille")
+
+    class Config:
+        from_attributes = True

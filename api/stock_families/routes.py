@@ -3,8 +3,12 @@ from fastapi import APIRouter, Query, Depends
 from typing import List, Optional
 
 from api.stock_families.repo import StockFamilyRepository
-from api.stock_families.schemas import StockFamilyListItem, StockFamilyDetail, StockFamilyPatch, StockFamilyIn
-from api.errors.exceptions import DatabaseError, NotFoundError
+from api.stock_families.schemas import (
+    StockFamilyListItem,
+    StockFamilyPatch,
+    StockFamilyIn,
+    StockFamilySingleResponse,
+)
 
 from api.auth.permissions import require_authenticated
 from api.utils.response import single
@@ -25,7 +29,7 @@ def list_stock_families():
     return repo.get_all()
 
 
-@router.get("/{family_code}")
+@router.get("/{family_code}", response_model=StockFamilySingleResponse)
 def get_stock_family(
     family_code: str,
     search: Optional[str] = Query(
@@ -46,14 +50,14 @@ def get_stock_family(
     return single(repo.get_by_code(family_code, search=search))
 
 
-@router.post("", status_code=201)
+@router.post("", status_code=201, response_model=StockFamilySingleResponse)
 def create_stock_family(data: StockFamilyIn):
     """Crée une nouvelle famille de stock"""
     repo = StockFamilyRepository()
     return single(repo.create(data))
 
 
-@router.patch("/{family_code}")
+@router.patch("/{family_code}", response_model=StockFamilySingleResponse)
 def patch_stock_family(family_code: str, data: StockFamilyPatch):
     """Renomme une famille de stock (met à jour family_code sur toutes les sous-familles)"""
     repo = StockFamilyRepository()

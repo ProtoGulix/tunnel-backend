@@ -2,6 +2,58 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [3.11.0] - 19 mai 2026
+
+### Améliorations
+
+#### Références catalogue et fabricant dans les lignes de commande
+
+Les lignes de commande fournisseur (`GET /supplier-orders/{id}`) et les lignes liées aux DA (`GET /purchase-requests/{id}`) exposent désormais les références catalogue et fabricant depuis la table `catalog`.
+
+- **`supplier_order_lines`** : enrichissement de `SupplierOrderLineListItem` avec `supplier.ref` (référence interne fournisseur), `manufacturer.name` / `manufacturer.ref`, `notes`, `quote_price`, `lead_time_days`, `stock_item_spec`, `stock_item_unit`
+- **`purchase_requests`** : `LinkedOrderLineDetail` remplace les champs plats `manufacturer` / `manufacturer_ref` par un objet structuré `ManufacturerInfo` et ajoute `catalog_ref`
+- **`SupplierOrderStatusInfo`** : le champ `supplier_order_status` des DA est désormais un objet `{ code, label, color, description, is_locked }` au lieu d'une simple chaîne
+
+---
+
+## [3.10.0] - 19 mai 2026
+
+### Améliorations
+
+#### Transitions incluses dans le détail d'une commande fournisseur
+
+`GET /supplier-orders/{id}` expose désormais un champ `transitions` directement dans la réponse, éliminant le besoin d'appeler `GET /supplier-orders/{id}/transitions` séparément.
+
+- Le frontend dispose en un seul appel du statut courant et des actions disponibles
+
+---
+
+## [3.9.0] - 19 mai 2026
+
+### Améliorations
+
+#### Transitions disponibles directement dans les facets des commandes fournisseur
+
+Les facets de `GET /supplier-orders` incluent désormais les transitions autorisées pour chaque statut.
+
+- **Avant** : chaque facet n'exposait que `status` et `count`
+- **Après** : chaque facet expose aussi `transitions` (liste `{ to, description }`)
+- Le frontend peut afficher les actions disponibles par groupe de commandes sans appel supplémentaire
+
+---
+
+## [3.8.0] - 19 mai 2026
+
+### Améliorations
+
+#### Détail des familles de stock plus explicite pour le frontend
+
+Le endpoint `GET /stock-families/{family_code}` expose désormais un contrat de réponse explicite et cohérent avec les réponses unitaires de l'API.
+
+- **Enveloppe `data` documentée et typée** : la réponse suit clairement le format `{ "data": { ... } }`
+- **Structure détaillée des sous-familles maintenue** : chaque sous-famille inclut son template complet quand il existe
+- **Compteurs de lecture immédiate** : `sub_family_count`, `with_template_count`, `without_template_count` pour simplifier l'affichage côté interface
+
 ## [3.7.0] - 18 mai 2026
 
 ### Nouvelles fonctionnalités
