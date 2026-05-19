@@ -7,7 +7,7 @@ import logging
 
 from api.db import get_connection, release_connection
 from api.errors.exceptions import DatabaseError, raise_db_error, NotFoundError, ValidationError
-from api.constants import DERIVED_STATUS_CONFIG, CLOSED_STATUS_CODE
+from api.constants import DERIVED_STATUS_CONFIG, CLOSED_STATUS_CODE, SUPPLIER_ORDER_STATUS_CONFIG
 
 logger = logging.getLogger(__name__)
 
@@ -578,7 +578,7 @@ class PurchaseRequestRepository:
             release_connection(conn)
 
     def _get_linked_order_lines_detail(self, purchase_request_id: str, conn) -> List[Dict[str, Any]]:
-        """Récupère les order_lines enrichis avec fournisseur pour le détail"""
+        """Récupère les order_lines enrichis avec fournisseur, ref catalogue et fabricant"""
         try:
             cur = conn.cursor()
             cur.execute(
@@ -589,15 +589,25 @@ class PurchaseRequestRepository:
                     sol.supplier_order_id, sol.unit_price, sol.total_price,
                     sol.quantity_received, sol.is_selected,
                     sol.quote_received, sol.quote_price, sol.quote_received_at,
-                    sol.manufacturer, sol.manufacturer_ref, sol.lead_time_days, sol.notes,
+                    sol.manufacturer as sol_manufacturer, sol.manufacturer_ref as sol_manufacturer_ref,
+                    sol.lead_time_days, sol.notes,
                     so.status as supplier_order_status, so.order_number as supplier_order_number,
                     -- Fournisseur enrichi
                     s.id as supplier_id, s.name as supplier_name, s.code as supplier_code,
-                    s.contact_name as supplier_contact_name, s.email as supplier_email, s.phone as supplier_phone
+                    s.contact_name as supplier_contact_name, s.email as supplier_email, s.phone as supplier_phone,
+                    -- Référence catalogue fournisseur
+                    sis.supplier_ref as catalog_ref,
+                    -- Fabricant depuis catalogue
+                    mi.manufacturer_name as catalog_manufacturer,
+                    mi.manufacturer_ref as catalog_manufacturer_ref
                 FROM supplier_order_line_purchase_request solpr
                 JOIN supplier_order_line sol ON solpr.supplier_order_line_id = sol.id
                 JOIN supplier_order so ON sol.supplier_order_id = so.id
                 LEFT JOIN supplier s ON so.supplier_id = s.id
+                LEFT JOIN stock_item_supplier sis
+                    ON sis.stock_item_id = sol.stock_item_id
+                    AND sis.supplier_id = so.supplier_id
+                LEFT JOIN manufacturer_item mi ON sis.manufacturer_item_id = mi.id
                 WHERE solpr.purchase_request_id = %s
                 ORDER BY solpr.created_at ASC
                 """,
@@ -628,9 +638,30 @@ class PurchaseRequestRepository:
                 else:
                     line['supplier'] = None
 
-                # Nettoie colonnes supplier_*
+                # Statut commande : code → objet complet
+                raw_status = line.get('supplier_order_status')
+                if raw_status and raw_status in SUPPLIER_ORDER_STATUS_CONFIG:
+                    cfg = SUPPLIER_ORDER_STATUS_CONFIG[raw_status]
+                    line['supplier_order_status'] = {
+                        'code': raw_status,
+                        'label': cfg['label'],
+                        'color': cfg['color'],
+                        'description': cfg['description'],
+                        'is_locked': cfg['is_locked'],
+                    }
+
+                # Référence catalogue (déjà dans line['catalog_ref'])
+
+                # Fabricant : priorité champ manuel de la ligne, sinon catalogue
+                sol_mfr = line.pop('sol_manufacturer', None)
+                sol_mfr_ref = line.pop('sol_manufacturer_ref', None)
+                mfr_name = sol_mfr or line.pop('catalog_manufacturer', None)
+                mfr_ref = sol_mfr_ref or line.pop('catalog_manufacturer_ref', None)
+                line['manufacturer'] = {'name': mfr_name, 'ref': mfr_ref} if (mfr_name or mfr_ref) else None
+
+                # Nettoie colonnes intermédiaires supplier_*
                 for key in list(line.keys()):
-                    if key.startswith('supplier_') and key != 'supplier_order_id' and key != 'supplier_order_line_id' and key != 'supplier_order_status' and key != 'supplier_order_number':
+                    if key.startswith('supplier_') and key not in ('supplier_order_id', 'supplier_order_line_id', 'supplier_order_status', 'supplier_order_number'):
                         del line[key]
 
                 results.append(line)

@@ -109,6 +109,23 @@ class SupplierOrderLineOut(BaseModel):
         from_attributes = True
 
 
+class SupplierCatalogRef(BaseModel):
+    """Référence de l'article dans le catalogue du fournisseur"""
+    ref: Optional[str] = Field(default=None, description="Référence interne fournisseur")
+
+    class Config:
+        from_attributes = True
+
+
+class ManufacturerInfo(BaseModel):
+    """Informations fabricant de l'article"""
+    name: Optional[str] = Field(default=None, description="Nom du fabricant")
+    ref: Optional[str] = Field(default=None, description="Référence fabricant")
+
+    class Config:
+        from_attributes = True
+
+
 class SupplierOrderLineListItem(BaseModel):
     """Schéma léger pour la liste"""
     id: UUID
@@ -116,6 +133,10 @@ class SupplierOrderLineListItem(BaseModel):
     stock_item_id: UUID
     stock_item_name: Optional[str] = Field(default=None)
     stock_item_ref: Optional[str] = Field(default=None)
+    stock_item_spec: Optional[str] = Field(default=None, description="Spécification de l'article")
+    stock_item_unit: Optional[str] = Field(default=None, description="Unité de l'article")
+    supplier: Optional[SupplierCatalogRef] = Field(default=None, description="Référence fournisseur depuis le catalogue")
+    manufacturer: Optional[ManufacturerInfo] = Field(default=None, description="Fabricant et sa référence")
     quantity: int
     unit_price: Optional[float] = Field(default=None)
     total_price: Optional[float] = Field(default=None)
@@ -124,6 +145,9 @@ class SupplierOrderLineListItem(BaseModel):
     is_consultation: bool = Field(default=False, description="Ligne issue d'un dispatch multi-fournisseurs")
     consultation_resolved: bool = Field(default=True, description="Une ligne sœur a été sélectionnée (ou pas de consultation)")
     is_selected: Optional[bool] = Field(default=None)
+    notes: Optional[str] = Field(default=None)
+    quote_price: Optional[float] = Field(default=None, description="Prix du devis reçu")
+    lead_time_days: Optional[int] = Field(default=None, description="Délai de livraison en jours")
     purchase_request_count: Optional[int] = Field(default=0)
 
     class Config:

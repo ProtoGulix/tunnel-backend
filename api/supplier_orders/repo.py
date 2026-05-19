@@ -83,7 +83,7 @@ class SupplierOrderRepository:
         return data
 
     def _get_order_lines(self, order_id: str, conn) -> List[Dict[str, Any]]:
-        """Récupère les lignes d'une commande"""
+        """Récupère les lignes d'une commande avec références fournisseur et fabricant"""
         try:
             cur = conn.cursor()
             cur.execute(
@@ -92,11 +92,23 @@ class SupplierOrderRepository:
                     sol.id, sol.supplier_order_id, sol.stock_item_id,
                     sol.quantity, sol.unit_price, sol.total_price,
                     sol.quantity_received, sol.is_selected,
+                    sol.notes, sol.quote_price, sol.lead_time_days,
+                    sol.manufacturer as sol_manufacturer,
+                    sol.manufacturer_ref as sol_manufacturer_ref,
                     si.name as stock_item_name, si.ref as stock_item_ref,
+                    si.spec as stock_item_spec, si.unit as stock_item_unit,
+                    sis.supplier_ref as catalog_supplier_ref,
+                    mi.manufacturer_name as catalog_manufacturer,
+                    mi.manufacturer_ref as catalog_manufacturer_ref,
                     (SELECT COUNT(*) FROM supplier_order_line_purchase_request
                      WHERE supplier_order_line_id = sol.id) as purchase_request_count
                 FROM supplier_order_line sol
                 LEFT JOIN stock_item si ON sol.stock_item_id = si.id
+                JOIN supplier_order so ON sol.supplier_order_id = so.id
+                LEFT JOIN stock_item_supplier sis
+                    ON sis.stock_item_id = sol.stock_item_id
+                    AND sis.supplier_id = so.supplier_id
+                LEFT JOIN manufacturer_item mi ON sis.manufacturer_item_id = mi.id
                 WHERE sol.supplier_order_id = %s
                 ORDER BY sol.created_at ASC
                 """,
@@ -104,7 +116,19 @@ class SupplierOrderRepository:
             )
             rows = cur.fetchall()
             cols = [desc[0] for desc in cur.description]
-            return [self._convert_decimals(dict(zip(cols, row))) for row in rows]
+            results = []
+            for row in rows:
+                line = self._convert_decimals(dict(zip(cols, row)))
+                supplier_ref = line.pop('catalog_supplier_ref', None)
+                sol_mfr = line.pop('sol_manufacturer', None)
+                sol_mfr_ref = line.pop('sol_manufacturer_ref', None)
+                mfr_name = sol_mfr or line.pop('catalog_manufacturer', None)
+                mfr_ref = sol_mfr_ref or line.pop('catalog_manufacturer_ref', None)
+
+                line['supplier'] = {'ref': supplier_ref} if supplier_ref else None
+                line['manufacturer'] = {'name': mfr_name, 'ref': mfr_ref} if (mfr_name or mfr_ref) else None
+                results.append(line)
+            return results
         except Exception:
             return []
 

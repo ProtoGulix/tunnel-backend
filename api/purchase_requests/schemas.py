@@ -4,6 +4,8 @@ from datetime import datetime, date
 from uuid import UUID
 
 from api.suppliers.schemas import SupplierListItem
+from api.supplier_order_lines.schemas import ManufacturerInfo
+from api.supplier_orders.schemas import SupplierOrderStatusInfo
 
 
 # ========== Schémas optimisés v1.2.0 ==========
@@ -64,10 +66,12 @@ class LinkedOrderLineDetail(BaseModel):
     # Commande fournisseur
     supplier_order_id: UUID
     supplier_order_number: Optional[str] = Field(default=None)
-    supplier_order_status: Optional[str] = Field(default=None)
+    supplier_order_status: Optional[SupplierOrderStatusInfo] = Field(default=None)
 
-    # Fournisseur enrichi
+    # Fournisseur enrichi + référence catalogue
     supplier: Optional[SupplierListItem] = Field(default=None)
+    catalog_ref: Optional[str] = Field(default=None, description="Référence de l'article dans le catalogue fournisseur")
+    manufacturer: Optional[ManufacturerInfo] = Field(default=None, description="Fabricant et sa référence")
 
     # Détails ligne
     unit_price: Optional[float] = Field(default=None)
@@ -77,8 +81,6 @@ class LinkedOrderLineDetail(BaseModel):
     quote_received_at: Optional[datetime] = Field(default=None)
     is_selected: Optional[bool] = Field(default=None)
     quantity_received: Optional[int] = Field(default=None)
-    manufacturer: Optional[str] = Field(default=None)
-    manufacturer_ref: Optional[str] = Field(default=None)
     lead_time_days: Optional[int] = Field(default=None)
     notes: Optional[str] = Field(default=None)
     created_at: Optional[datetime] = Field(default=None)

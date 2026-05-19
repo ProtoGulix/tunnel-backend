@@ -43,6 +43,18 @@ class SupplierOrderUpdate(BaseModel):
         from_attributes = True
 
 
+class SupplierOrderStatusInfo(BaseModel):
+    """Statut complet d'une commande fournisseur (code + label + couleur)"""
+    code: str
+    label: str
+    color: str
+    description: str
+    is_locked: bool
+
+    class Config:
+        from_attributes = True
+
+
 class SupplierOrderTransition(BaseModel):
     to: str
     description: str
