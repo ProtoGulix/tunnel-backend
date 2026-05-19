@@ -152,7 +152,14 @@ class SupplierOrderRepository:
                 """,
                 facet_params
             )
-            facets = [{"status": row[0], "count": row[1]} for row in cur.fetchall()]
+            facets = [
+                {
+                    "status": row[0],
+                    "count": row[1],
+                    "transitions": SupplierOrderValidator.get_allowed_transitions(row[0]),
+                }
+                for row in cur.fetchall()
+            ]
 
             # Items paginés
             query = f"""
@@ -216,6 +223,7 @@ class SupplierOrderRepository:
             result = self._compute_age_fields(result)
             result['lines'] = self._get_order_lines(order_id, conn)
             result['line_count'] = len(result['lines'])
+            result['transitions'] = SupplierOrderValidator.get_allowed_transitions(result['status'])
 
             return result
         except NotFoundError:

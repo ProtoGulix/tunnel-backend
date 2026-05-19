@@ -43,6 +43,11 @@ class SupplierOrderUpdate(BaseModel):
         from_attributes = True
 
 
+class SupplierOrderTransition(BaseModel):
+    to: str
+    description: str
+
+
 class SupplierOrderOut(BaseModel):
     """Schéma de sortie pour une commande fournisseur"""
     id: UUID
@@ -73,6 +78,7 @@ class SupplierOrderOut(BaseModel):
     add_lines: bool = Field(default=False, description="Ajout de lignes autorisé (OPEN)")
     edit_lines: bool = Field(default=False, description="Édition des lignes autorisée (SENT, ACK)")
     receive_lines: bool = Field(default=False, description="Saisie des réceptions autorisée (RECEIVED)")
+    transitions: List[SupplierOrderTransition] = Field(default_factory=list, description="Transitions de statut autorisées depuis le statut actuel")
     created_at: Optional[datetime] = Field(default=None)
     updated_at: Optional[datetime] = Field(default=None)
 
@@ -111,6 +117,7 @@ class SupplierOrderListItem(BaseModel):
 class SupplierOrderFacet(BaseModel):
     status: str
     count: int
+    transitions: List[SupplierOrderTransition] = Field(default_factory=list, description="Transitions autorisées depuis ce statut")
 
 
 class SupplierOrderListResponse(BaseModel):

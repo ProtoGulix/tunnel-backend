@@ -87,7 +87,7 @@ Documentation OpenAPI interactive : `http://localhost:8000/docs`
 | PATCH   | `/stock-items/{id}/quantity`                           | Modifier quantité             | [stock-items.md](docs/endpoints/stock-items.md)                         |
 | DELETE  | `/stock-items/{id}`                                    | Supprimer article             | [stock-items.md](docs/endpoints/stock-items.md)                         |
 | GET     | `/stock-families`                                      | Liste familles stock          | [stock-families.md](docs/endpoints/stock-families.md)                   |
-| GET     | `/stock-families/{code}`                               | Détail famille                | [stock-families.md](docs/endpoints/stock-families.md)                   |
+| GET     | `/stock-families/{family_code}`                        | Détail famille                | [stock-families.md](docs/endpoints/stock-families.md)                   |
 | GET     | `/stock-sub-families`                                  | Sous-familles stock           | [stock-sub-families.md](docs/endpoints/stock-sub-families.md)           |
 | GET     | `/stock-sub-families/{family}/{sub}`                   | Détail sous-famille           | [stock-sub-families.md](docs/endpoints/stock-sub-families.md)           |
 | GET     | `/part-templates`                                      | Templates de pièces           | [part-templates.md](docs/endpoints/part-templates.md)                   |

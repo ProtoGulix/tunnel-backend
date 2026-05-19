@@ -54,58 +54,60 @@ Récupère une famille par son code avec la liste de toutes ses sous-familles et
 - `/stock-families/OUT` : Toutes les sous-familles de la famille OUT
 - `/stock-families/OUT?search=roul` : Uniquement les sous-familles contenant "roul" dans leur code ou label
 
-### Réponse `200` — StockFamilyDetail
+### Réponse `200` — StockFamilySingleResponse
 
 ```json
 {
-  "family_code": "OUT",
-  "label": "Outillage",
-  "sub_family_count": 12,
-  "with_template_count": 5,
-  "without_template_count": 7,
-  "sub_families": [
-    {
-      "family_code": "OUT",
-      "code": "ROUL",
-      "label": "Roulements",
-      "template": {
-        "id": "123e4567-e89b-12d3-a456-426614174000",
-        "code": "ROUL_STANDARD",
-        "version": 1,
-        "label": "Roulement standard",
-        "pattern": "{DIAM_INT}x{DIAM_EXT}x{LARG}",
-        "is_active": true,
-        "fields": [
-          {
-            "id": "uuid",
-            "key": "DIAM_INT",
-            "label": "Diamètre intérieur",
-            "field_type": "number",
-            "unit": "mm",
-            "required": true,
-            "sort_order": 1,
-            "enum_values": null
-          },
-          {
-            "id": "uuid",
-            "key": "DIAM_EXT",
-            "label": "Diamètre extérieur",
-            "field_type": "number",
-            "unit": "mm",
-            "required": true,
-            "sort_order": 2,
-            "enum_values": null
-          }
-        ]
+  "data": {
+    "family_code": "OUT",
+    "label": "Outillage",
+    "sub_family_count": 12,
+    "with_template_count": 5,
+    "without_template_count": 7,
+    "sub_families": [
+      {
+        "family_code": "OUT",
+        "code": "ROUL",
+        "label": "Roulements",
+        "template": {
+          "id": "123e4567-e89b-12d3-a456-426614174000",
+          "code": "ROUL_STANDARD",
+          "version": 1,
+          "label": "Roulement standard",
+          "pattern": "{DIAM_INT}x{DIAM_EXT}x{LARG}",
+          "is_active": true,
+          "fields": [
+            {
+              "id": "uuid",
+              "key": "DIAM_INT",
+              "label": "Diamètre intérieur",
+              "field_type": "number",
+              "unit": "mm",
+              "required": true,
+              "sort_order": 1,
+              "enum_values": null
+            },
+            {
+              "id": "uuid",
+              "key": "DIAM_EXT",
+              "label": "Diamètre extérieur",
+              "field_type": "number",
+              "unit": "mm",
+              "required": true,
+              "sort_order": 2,
+              "enum_values": null
+            }
+          ]
+        }
+      },
+      {
+        "family_code": "OUT",
+        "code": "VIS",
+        "label": "Visserie",
+        "template": null
       }
-    },
-    {
-      "family_code": "OUT",
-      "code": "VIS",
-      "label": "Visserie",
-      "template": null
-    }
-  ]
+    ]
+  }
 }
 ```
 
@@ -169,6 +171,14 @@ Famille inexistante.
 }
 ```
 
+### StockFamilySingleResponse
+
+```json
+{
+  "data": "StockFamilyDetail"
+}
+```
+
 ### StockSubFamily
 
 Voir [Stock Sub-Families](stock-sub-families.md) pour le schéma complet incluant le template.
@@ -193,7 +203,7 @@ Crée une nouvelle famille de stock.
 | `code`  | string | oui    | Code famille (max 20 car.) |
 | `label` | string | non    | Libellé de la famille      |
 
-### Réponse `201` — StockFamilyDetail
+### Réponse `201` — StockFamilySingleResponse
 
 La famille créée sans sous-familles.
 
@@ -223,7 +233,7 @@ Met à jour le code et/ou le label d'une famille. Si le code change, `family_cod
 | `code`  | string | oui    | Nouveau code (max 20 car.) |
 | `label` | string | non    | Nouveau libellé            |
 
-### Réponse `200` — StockFamilyDetail
+### Réponse `200` — StockFamilySingleResponse
 
 La famille avec le nouveau code et toutes ses sous-familles.
 
