@@ -33,7 +33,7 @@ _SERVICE_COLS = """
     s.is_active AS service_is_active
 """
 
-# Colonnes intervention liée (premier niveau, sans sous-listes)
+# Colonnes intervention liée (premier niveau, avec tâches agrégées en JSON)
 _INTERVENTION_COLS = """
     iv.id              AS iv_id,
     iv.code            AS iv_code,
@@ -52,7 +52,8 @@ _INTERVENTION_COLS = """
     COALESCE(iv_stats.action_count, 0)   AS iv_action_count,
     COALESCE(iv_stats.total_time, 0)     AS iv_total_time,
     iv_stats.avg_complexity              AS iv_avg_complexity,
-    COALESCE(iv_stats.purchase_count, 0) AS iv_purchase_count
+    COALESCE(iv_stats.purchase_count, 0) AS iv_purchase_count,
+    iv_tasks.tasks_json::text            AS iv_tasks
 """
 
 _EQUIPEMENT_JOINS = """
@@ -75,6 +76,50 @@ _EQUIPEMENT_JOINS = """
                ON iapr.intervention_action_id = a.id
         WHERE a.intervention_id = iv.id
     ) iv_stats ON TRUE
+    LEFT JOIN LATERAL (
+        SELECT COALESCE(
+            json_agg(
+                json_build_object(
+                    'id',            it.id,
+                    'intervention_id', it.intervention_id,
+                    'label',         it.label,
+                    'origin',        it.origin,
+                    'status',        it.status,
+                    'optional',      it.optional,
+                    'due_date',      it.due_date,
+                    'sort_order',    it.sort_order,
+                    'skip_reason',   it.skip_reason,
+                    'gamme_step_id', it.gamme_step_id,
+                    'occurrence_id', it.occurrence_id,
+                    'closed_by',     it.closed_by,
+                    'created_by',    it.created_by,
+                    'created_at',    it.created_at,
+                    'updated_at',    it.updated_at,
+                    'action_count',  COALESCE(tagg.action_count, 0),
+                    'time_spent',    COALESCE(tagg.time_spent, 0.0),
+                    'assigned_to',   CASE WHEN u.id IS NOT NULL THEN json_build_object(
+                        'id',         u.id,
+                        'first_name', u.first_name,
+                        'last_name',  u.last_name,
+                        'email',      u.email,
+                        'initial',    u.initial
+                    ) END
+                ) ORDER BY it.sort_order, it.created_at
+            ),
+            '[]'::json
+        ) AS tasks_json
+        FROM intervention_task it
+        LEFT JOIN tunnel_user u ON u.id = it.assigned_to
+        LEFT JOIN LATERAL (
+            SELECT
+                COUNT(DISTINCT iat.action_id) AS action_count,
+                COALESCE(SUM(ia.time_spent), 0) AS time_spent
+            FROM intervention_action_task iat
+            INNER JOIN intervention_action ia ON ia.id = iat.action_id
+            WHERE iat.task_id = it.id
+        ) tagg ON TRUE
+        WHERE it.intervention_id = iv.id
+    ) iv_tasks ON TRUE
 """
 
 logger = logging.getLogger(__name__)
@@ -173,6 +218,13 @@ class InterventionRequestRepository:
             "avg_complexity": row.pop("iv_avg_complexity", None),
             "purchase_count": row.pop("iv_purchase_count", 0) or 0,
         }
+        raw_tasks = row.pop("iv_tasks", None)
+        if isinstance(raw_tasks, str):
+            tasks = json.loads(raw_tasks)
+        elif isinstance(raw_tasks, list):
+            tasks = raw_tasks
+        else:
+            tasks = []
         return {
             "id":            row.pop("iv_id"),
             "code":          row.pop("iv_code",          None),
@@ -193,6 +245,7 @@ class InterventionRequestRepository:
             "created_at":    None,
             "updated_at":    None,
             "stats":         stats,
+            "tasks":         tasks,
         }
 
     @staticmethod
@@ -288,7 +341,8 @@ class InterventionRequestRepository:
                 {where_sql}
                 GROUP BY ir.id, rs.label, rs.color, m.id, pm.id, pm.code, pm.name, ec.id, s.id,
                          iv.id, ivs.label, ivs.color,
-                         iv_stats.action_count, iv_stats.total_time, iv_stats.avg_complexity, iv_stats.purchase_count
+                         iv_stats.action_count, iv_stats.total_time, iv_stats.avg_complexity, iv_stats.purchase_count,
+                         iv_tasks.tasks_json::text
                 ORDER BY ir.created_at DESC
                 LIMIT %s OFFSET %s
                 """,
@@ -420,7 +474,8 @@ class InterventionRequestRepository:
                 WHERE ir.id = %s
                 GROUP BY ir.id, rs.label, rs.color, m.id, pm.id, pm.code, pm.name, ec.id, s.id,
                          iv.id, ivs.label, ivs.color,
-                         iv_stats.action_count, iv_stats.total_time, iv_stats.avg_complexity, iv_stats.purchase_count
+                         iv_stats.action_count, iv_stats.total_time, iv_stats.avg_complexity, iv_stats.purchase_count,
+                         iv_tasks.tasks_json::text
                 """,
                 (CLOSED_STATUS_CODE, CLOSED_STATUS_CODE, request_id),
             )
