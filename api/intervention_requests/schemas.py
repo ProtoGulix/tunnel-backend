@@ -8,6 +8,7 @@ from uuid import UUID
 from api.equipements.schemas import EquipementListItem
 from api.services.schemas import ServiceOut
 from api.constants import INTERVENTION_TYPE_IDS
+from api.intervention_tasks.schemas import InterventionTaskOut
 
 
 class RequestStatusRef(BaseModel):
@@ -79,6 +80,7 @@ class InterventionRequestListItem(BaseModel):
     statut_color: Optional[str] = None
     intervention_id: Optional[UUID] = None
     intervention: Optional[InterventionRef] = None
+    tasks: List[InterventionTaskOut] = []
     is_system: bool = False
     suggested_type_inter: Optional[str] = None
     created_at: datetime

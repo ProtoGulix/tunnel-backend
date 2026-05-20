@@ -95,7 +95,6 @@ class InterventionRef(BaseModel):
     plan_id: Optional[UUID] = None
     printed_fiche: Optional[bool] = None
     stats: Optional[InterventionStats] = None
-    tasks: List[InterventionTaskOut] = []
 
     class Config:
         from_attributes = True
