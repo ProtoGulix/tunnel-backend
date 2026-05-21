@@ -204,6 +204,7 @@ class PreventiveOccurrenceRepository:
 
         generated = 0
         skipped_conflicts = 0
+        skipped_active = 0
         errors: List[str] = []
 
         for plan in plans:
@@ -225,13 +226,20 @@ class PreventiveOccurrenceRepository:
                         generated += 1
                     elif result == "conflict":
                         skipped_conflicts += 1
+                    elif result == "skipped_active_exists":
+                        skipped_active += 1
                     # "skipped_not_due" et "skipped_no_hours" : pas comptés
                 except Exception as e:
                     errors.append(
                         f"Plan {plan['label']} / Machine {machine_label}: {e}"
                     )
 
-        return {"generated": generated, "skipped_conflicts": skipped_conflicts, "errors": errors}
+        return {
+            "generated": generated,
+            "skipped_conflicts": skipped_conflicts,
+            "skipped_active": skipped_active,
+            "errors": errors,
+        }
 
     def _load_active_plans(self) -> List[Dict[str, Any]]:
         """Charge tous les plans actifs depuis la DB"""
@@ -276,7 +284,8 @@ class PreventiveOccurrenceRepository:
     ) -> str:
         """
         Génère une occurrence pour une machine donnée.
-        Retourne : 'generated', 'conflict', 'skipped_not_due', 'skipped_no_hours'
+        Retourne : 'generated', 'conflict', 'skipped_not_due', 'skipped_no_hours',
+                   'skipped_active_exists'
         """
         plan_id = str(plan["id"])
         current_hours = None
@@ -285,12 +294,30 @@ class PreventiveOccurrenceRepository:
         try:
             cur = conn.cursor()
 
+            # Ne pas générer si une occurrence non terminée existe déjà pour ce plan/machine.
+            # Sans ce garde, une occurrence en 'generated' ou 'in_progress' dont la DI est
+            # clôturée (mais l'occurrence pas encore 'completed') ferait repartir le compteur
+            # et produirait une deuxième occurrence dès que la période est écoulée.
+            cur.execute(
+                """
+                SELECT 1 FROM preventive_occurrence
+                WHERE plan_id = %s AND machine_id = %s
+                  AND status IN ('pending', 'generated', 'in_progress')
+                LIMIT 1
+                """,
+                (plan_id, machine_id),
+            )
+            if cur.fetchone():
+                return "skipped_active_exists"
+
             if plan["trigger_type"] == "periodicity":
+                # Référence : dernière occurrence terminée (completed ou skipped)
                 cur.execute(
                     """
                     SELECT MAX(scheduled_date)
                     FROM preventive_occurrence
                     WHERE plan_id = %s AND machine_id = %s
+                      AND status IN ('completed', 'skipped')
                     """,
                     (plan_id, machine_id),
                 )
@@ -305,11 +332,13 @@ class PreventiveOccurrenceRepository:
                     scheduled_date = today
 
             else:  # hours
+                # Référence : dernière occurrence terminée (completed ou skipped)
                 cur.execute(
                     """
                     SELECT hours_at_trigger
                     FROM preventive_occurrence
                     WHERE plan_id = %s AND machine_id = %s
+                      AND status IN ('completed', 'skipped')
                     ORDER BY created_at DESC
                     LIMIT 1
                     """,

@@ -43,6 +43,7 @@ class OccurrenceSkipIn(BaseModel):
 class GenerateOccurrencesResult(BaseModel):
     generated: int
     skipped_conflicts: int
+    skipped_active: int = 0
     errors: list[str] = []
 
 
