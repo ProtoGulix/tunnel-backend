@@ -2,6 +2,24 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [3.12.0] - 21 mai 2026
+
+### Correctifs
+
+#### Génération d'occurrences préventives — respect du délai anniversaire
+
+La génération d'occurrences ne respectait pas la périodicité du plan lorsqu'une occurrence précédente existait mais n'était pas encore passée au statut `completed` (DI clôturée sans que le passage automatique ne se soit déclenché).
+
+**Problème** : `MAX(scheduled_date)` était calculé toutes statuts confondus. Si une occurrence restait en `generated` ou `in_progress` au-delà de la période, une nouvelle occurrence était créée en parallèle.
+
+**Corrections** :
+
+- **Garde active** : si une occurrence `pending`, `generated` ou `in_progress` existe déjà pour ce couple plan/machine, la génération est bloquée (`skipped_active_exists`) — plus aucune occurrence dupliquée tant que la précédente n'est pas terminée
+- **Référence anniversaire** : le calcul de `last_date` (périodicité) et de `last_hours` (heures machine) ne porte plus que sur les occurrences `completed` ou `skipped`, ce qui ancre le prochain cycle sur la dernière maintenance réellement effectuée
+- **Nouveau compteur** : `skipped_active` dans la réponse de `POST /preventive-occurrences/generate` indique le nombre de machines sautées pour cause d'occurrence active
+
+---
+
 ## [3.11.0] - 19 mai 2026
 
 ### Améliorations
