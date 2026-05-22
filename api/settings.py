@@ -50,15 +50,15 @@ class Settings(BaseSettings):
     )
     EXPORT_TEMPLATE_FILE: str = os.getenv(
         "EXPORT_TEMPLATE_FILE",
-        "fiche_intervention_v8.html"
+        "fiche_intervention_v9.html"
     )
     EXPORT_TEMPLATE_VERSION: str = os.getenv(
         "EXPORT_TEMPLATE_VERSION",
-        "8.1"
+        "9.0"
     )
     EXPORT_TEMPLATE_DATE: str = os.getenv(
         "EXPORT_TEMPLATE_DATE",
-        "2026-02-16"
+        "2026-05-22"
     )
     EXPORT_QR_BASE_URL: str = os.getenv(
         "EXPORT_QR_BASE_URL",
