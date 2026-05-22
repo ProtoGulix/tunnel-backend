@@ -11,6 +11,55 @@ from api.constants import PRIORITY_TYPES, CLOSED_STATUS_CODE
 from api.intervention_actions.repo import InterventionActionRepository
 from api.intervention_status_log.repo import InterventionStatusLogRepository
 
+# LATERAL join pour récupérer la liste complète des tâches d'une intervention
+_TASKS_JSON_LATERAL = """
+    LEFT JOIN LATERAL (
+        SELECT COALESCE(
+            json_agg(
+                json_build_object(
+                    'id',            it.id,
+                    'intervention_id', it.intervention_id,
+                    'label',         it.label,
+                    'origin',        it.origin,
+                    'status',        it.status,
+                    'optional',      it.optional,
+                    'due_date',      it.due_date,
+                    'sort_order',    it.sort_order,
+                    'skip_reason',   it.skip_reason,
+                    'gamme_step_id', it.gamme_step_id,
+                    'occurrence_id', it.occurrence_id,
+                    'closed_by',     it.closed_by,
+                    'created_by',    it.created_by,
+                    'created_at',    it.created_at,
+                    'updated_at',    it.updated_at,
+                    'action_count',  COALESCE(tagg.action_count, 0),
+                    'time_spent',    COALESCE(tagg.time_spent, 0.0),
+                    'assigned_to',   CASE WHEN u.id IS NOT NULL THEN json_build_object(
+                        'id',         u.id,
+                        'first_name', u.first_name,
+                        'last_name',  u.last_name,
+                        'email',      u.email,
+                        'initial',    u.initial
+                    ) END
+                )
+                ORDER BY it.sort_order, it.created_at
+            ),
+            '[]'::json
+        ) AS tasks_json
+        FROM intervention_task it
+        LEFT JOIN tunnel_user u ON u.id = it.assigned_to
+        LEFT JOIN LATERAL (
+            SELECT
+                COUNT(DISTINCT iat.action_id) AS action_count,
+                COALESCE(SUM(ia.time_spent), 0) AS time_spent
+            FROM intervention_action_task iat
+            INNER JOIN intervention_action ia ON ia.id = iat.action_id
+            WHERE iat.task_id = it.id
+        ) tagg ON TRUE
+        WHERE it.intervention_id = i.id
+    ) it_agg ON TRUE
+"""
+
 
 class InterventionRepository:
     """Requêtes pour le domaine interventions"""
@@ -28,6 +77,7 @@ class InterventionRepository:
         priorities: List[str] | None = None,
         sort: str | None = None,
         include_stats: bool = True,
+        include_tasks: bool = False,
         printed: bool | None = None,
         tech_id: str | None = None,
     ) -> List[Dict[str, Any]]:
@@ -147,6 +197,7 @@ class InterventionRepository:
                     pr_agg.pr_ordered,
                     pr_agg.pr_quoted,
                     pr_agg.pr_open
+                    {', it_agg.tasks_json::text AS tasks_json' if include_tasks else ''}
                 FROM intervention i
                 LEFT JOIN intervention_request ir ON ir.intervention_id = i.id
                 LEFT JOIN request_status_ref rs2 ON rs2.code = ir.statut
@@ -185,9 +236,11 @@ class InterventionRepository:
                     INNER JOIN purchase_request_derived_status prd ON prd.id = iapr2.purchase_request_id
                     WHERE ia2.intervention_id = i.id
                 ) pr_agg ON TRUE
+                {_TASKS_JSON_LATERAL if include_tasks else ''}
                 {" ".join(joins)}
                 {where_sql}
                 GROUP BY i.id, ir.id, ir.code, ir.demandeur_nom, ir.demandeur_service_legacy, ir.description, ir.statut, rs2.label, rs2.color, ir.intervention_id, ir.created_at, ir.updated_at, m.id, pm.id, pm.code, pm.name, ec.id, task_agg.task_total, task_agg.task_todo, task_agg.task_in_progress, task_agg.task_done, task_agg.task_skipped, task_agg.task_blocking_pending, task_agg.next_due_date, pr_agg.pr_total, pr_agg.pr_received, pr_agg.pr_to_qualify, pr_agg.pr_no_supplier_ref, pr_agg.pr_pending_dispatch, pr_agg.pr_rejected, pr_agg.pr_consultation, pr_agg.pr_partial, pr_agg.pr_ordered, pr_agg.pr_quoted, pr_agg.pr_open
+                {',' + 'it_agg.tasks_json::text' if include_tasks else ''}
                 {order_sql}
                 LIMIT %s OFFSET %s
             """
@@ -322,6 +375,17 @@ class InterventionRepository:
 
                 row_dict['actions'] = []  # Vide pour get_all
                 row_dict['status_logs'] = []  # Vide pour get_all
+
+                # Tâches détaillées — uniquement si include_tasks=True
+                if include_tasks:
+                    raw_tasks = row_dict.pop('tasks_json', None)
+                    if isinstance(raw_tasks, str):
+                        import json as _json
+                        raw_tasks = _json.loads(raw_tasks)
+                    row_dict['tasks'] = raw_tasks or []
+                else:
+                    row_dict.pop('tasks_json', None)
+
                 result.append(row_dict)
 
             return result
@@ -378,7 +442,8 @@ class InterventionRepository:
             where_clauses.append("i.tech_id = %s")
             params.append(tech_id)
 
-        where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
+        where_sql = ("WHERE " + " AND ".join(where_clauses)
+                     ) if where_clauses else ""
 
         conn = self._get_connection()
         try:

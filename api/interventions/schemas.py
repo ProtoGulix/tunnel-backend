@@ -77,7 +77,7 @@ class InterventionStats(BaseModel):
 
 
 class InterventionRef(BaseModel):
-    """Premier niveau d'une intervention (sans actions/tasks/logs) — utilisé comme référence embarquée."""
+    """Référence embarquée d'une intervention — sans actions/logs mais avec ses tâches."""
     id: UUID
     code: Optional[str] = None
     title: Optional[str] = None

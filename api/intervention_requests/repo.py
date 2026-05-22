@@ -33,7 +33,7 @@ _SERVICE_COLS = """
     s.is_active AS service_is_active
 """
 
-# Colonnes intervention liée (premier niveau, sans sous-listes)
+# Colonnes intervention liée (premier niveau, sans tâches — celles-ci sont portées par di_tasks)
 _INTERVENTION_COLS = """
     iv.id              AS iv_id,
     iv.code            AS iv_code,
@@ -53,6 +53,11 @@ _INTERVENTION_COLS = """
     COALESCE(iv_stats.total_time, 0)     AS iv_total_time,
     iv_stats.avg_complexity              AS iv_avg_complexity,
     COALESCE(iv_stats.purchase_count, 0) AS iv_purchase_count
+"""
+
+# Agrégat JSON des tâches liées à la DI — via intervention OU via occurrence préventive
+_DI_TASKS_COLS = """
+    di_tasks.tasks_json::text AS di_tasks
 """
 
 _EQUIPEMENT_JOINS = """
@@ -75,6 +80,55 @@ _EQUIPEMENT_JOINS = """
                ON iapr.intervention_action_id = a.id
         WHERE a.intervention_id = iv.id
     ) iv_stats ON TRUE
+    LEFT JOIN LATERAL (
+        SELECT COALESCE(
+            json_agg(
+                json_build_object(
+                    'id',            it.id,
+                    'intervention_id', it.intervention_id,
+                    'label',         it.label,
+                    'origin',        it.origin,
+                    'status',        it.status,
+                    'optional',      it.optional,
+                    'due_date',      it.due_date,
+                    'sort_order',    it.sort_order,
+                    'skip_reason',   it.skip_reason,
+                    'gamme_step_id', it.gamme_step_id,
+                    'occurrence_id', it.occurrence_id,
+                    'closed_by',     it.closed_by,
+                    'created_by',    it.created_by,
+                    'created_at',    it.created_at,
+                    'updated_at',    it.updated_at,
+                    'action_count',  COALESCE(tagg.action_count, 0),
+                    'time_spent',    COALESCE(tagg.time_spent, 0.0),
+                    'assigned_to',   CASE WHEN u.id IS NOT NULL THEN json_build_object(
+                        'id',         u.id,
+                        'first_name', u.first_name,
+                        'last_name',  u.last_name,
+                        'email',      u.email,
+                        'initial',    u.initial
+                    ) END
+                )
+                ORDER BY it.sort_order, it.created_at
+            ),
+            '[]'::json
+        ) AS tasks_json
+        FROM intervention_task it
+        LEFT JOIN tunnel_user u ON u.id = it.assigned_to
+        LEFT JOIN LATERAL (
+            SELECT
+                COUNT(DISTINCT iat.action_id) AS action_count,
+                COALESCE(SUM(ia.time_spent), 0) AS time_spent
+            FROM intervention_action_task iat
+            INNER JOIN intervention_action ia ON ia.id = iat.action_id
+            WHERE iat.task_id = it.id
+        ) tagg ON TRUE
+        WHERE
+            it.intervention_id = iv.id
+            OR it.occurrence_id IN (
+                SELECT po.id FROM preventive_occurrence po WHERE po.di_id = ir.id
+            )
+    ) di_tasks ON TRUE
 """
 
 logger = logging.getLogger(__name__)
@@ -196,6 +250,16 @@ class InterventionRequestRepository:
         }
 
     @staticmethod
+    def _build_tasks(row: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Désérialise la colonne di_tasks (json agrégé) en liste de tâches."""
+        raw = row.pop("di_tasks", None)
+        if isinstance(raw, str):
+            return json.loads(raw)
+        if isinstance(raw, list):
+            return raw
+        return []
+
+    @staticmethod
     def _build_service(row: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Construit l'objet service (ServiceOut) depuis les colonnes préfixées service_."""
         if not row.get("service_id"):
@@ -281,14 +345,16 @@ class InterventionRequestRepository:
                     ir.created_at, ir.updated_at,
                     {_EQUIPEMENT_COLS},
                     {_SERVICE_COLS},
-                    {_INTERVENTION_COLS}
+                    {_INTERVENTION_COLS},
+                    {_DI_TASKS_COLS}
                 FROM intervention_request ir
                 LEFT JOIN request_status_ref rs ON ir.statut = rs.code
                 {_EQUIPEMENT_JOINS}
                 {where_sql}
                 GROUP BY ir.id, rs.label, rs.color, m.id, pm.id, pm.code, pm.name, ec.id, s.id,
                          iv.id, ivs.label, ivs.color,
-                         iv_stats.action_count, iv_stats.total_time, iv_stats.avg_complexity, iv_stats.purchase_count
+                         iv_stats.action_count, iv_stats.total_time, iv_stats.avg_complexity, iv_stats.purchase_count,
+                         di_tasks.tasks_json::text
                 ORDER BY ir.created_at DESC
                 LIMIT %s OFFSET %s
                 """,
@@ -302,6 +368,7 @@ class InterventionRequestRepository:
                 r["equipement"] = self._build_equipement(r)
                 r["service"] = self._build_service(r)
                 r["intervention"] = self._build_intervention(r)
+                r["tasks"] = self._build_tasks(r)
                 result.append(r)
             return result
         except Exception as e:
@@ -413,14 +480,16 @@ class InterventionRequestRepository:
                     ir.created_at, ir.updated_at,
                     {_EQUIPEMENT_COLS},
                     {_SERVICE_COLS},
-                    {_INTERVENTION_COLS}
+                    {_INTERVENTION_COLS},
+                    {_DI_TASKS_COLS}
                 FROM intervention_request ir
                 LEFT JOIN request_status_ref rs ON ir.statut = rs.code
                 {_EQUIPEMENT_JOINS}
                 WHERE ir.id = %s
                 GROUP BY ir.id, rs.label, rs.color, m.id, pm.id, pm.code, pm.name, ec.id, s.id,
                          iv.id, ivs.label, ivs.color,
-                         iv_stats.action_count, iv_stats.total_time, iv_stats.avg_complexity, iv_stats.purchase_count
+                         iv_stats.action_count, iv_stats.total_time, iv_stats.avg_complexity, iv_stats.purchase_count,
+                         di_tasks.tasks_json::text
                 """,
                 (CLOSED_STATUS_CODE, CLOSED_STATUS_CODE, request_id),
             )
@@ -432,6 +501,7 @@ class InterventionRequestRepository:
             result["equipement"] = self._build_equipement(result)
             result["service"] = self._build_service(result)
             result["intervention"] = self._build_intervention(result)
+            result["tasks"] = self._build_tasks(result)
 
             # Log des transitions
             cur.execute(

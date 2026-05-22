@@ -2,25 +2,21 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
-## [3.12.0] - 21 mai 2026
+## [3.13.0] - 22 mai 2026
 
-### Correctifs
+### Nouvelles fonctionnalités
 
-#### Génération d'occurrences préventives — respect du délai anniversaire
+#### Tâches détaillées dans les réponses interventions et demandes d'intervention
 
-La génération d'occurrences ne respectait pas la périodicité du plan lorsqu'une occurrence précédente existait mais n'était pas encore passée au statut `completed` (DI clôturée sans que le passage automatique ne se soit déclenché).
+Les endpoints `/interventions` et `/intervention-requests` exposent désormais la liste complète des tâches associées, avec technicien assigné, compteurs d'actions et temps passé.
 
-**Problème** : `MAX(scheduled_date)` était calculé toutes statuts confondus. Si une occurrence restait en `generated` ou `in_progress` au-delà de la période, une nouvelle occurrence était créée en parallèle.
-
-**Corrections** :
-
-- **Garde active** : si une occurrence `pending`, `generated` ou `in_progress` existe déjà pour ce couple plan/machine, la génération est bloquée (`skipped_active_exists`) — plus aucune occurrence dupliquée tant que la précédente n'est pas terminée
-- **Référence anniversaire** : le calcul de `last_date` (périodicité) et de `last_hours` (heures machine) ne porte plus que sur les occurrences `completed` ou `skipped`, ce qui ancre le prochain cycle sur la dernière maintenance réellement effectuée
-- **Nouveau compteur** : `skipped_active` dans la réponse de `POST /preventive-occurrences/generate` indique le nombre de machines sautées pour cause d'occurrence active
+- **`GET /interventions?include=tasks`** (ou `include=stats,tasks`) : retourne un champ `tasks[]` contenant chaque tâche avec `label`, `status`, `origin`, `optional`, `due_date`, `sort_order`, `assigned_to` (objet utilisateur), `action_count`, `time_spent` — via un `LATERAL` JSON agrégé en SQL
+- **`GET /intervention-requests`** et **`GET /intervention-requests/{id}`** : le champ `tasks[]` est désormais inclus par défaut. Chaque tâche est enrichie du technicien assigné (`tunnel_user`) et des métriques d'actions associées (via le lien M2M `intervention_action_task`)
+- Sans `include=tasks`, l'endpoint `/interventions` ne retourne que les compteurs dans `stats.tasks` (comportement inchangé)
 
 ---
 
-## [3.11.0] - 19 mai 2026
+## [3.12.0] - 21 mai 2026
 
 ### Améliorations
 
