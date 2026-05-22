@@ -75,8 +75,9 @@ def list_interventions(
 
     statuses = [s.strip() for s in status.split(',')] if status else None
     priorities = [p.strip() for p in priority.split(',')] if priority else None
-    include_stats = (include is None) or (
-        "stats" in [i.strip() for i in include.split(',')])
+    include_list = [i.strip() for i in include.split(',')] if include else []
+    include_stats = (include is None) or ("stats" in include_list)
+    include_tasks = "tasks" in include_list
 
     items = intervention_repo.get_all(
         limit=limit,
@@ -87,6 +88,7 @@ def list_interventions(
         priorities=priorities,
         sort=sort,
         include_stats=include_stats,
+        include_tasks=include_tasks,
         printed=printed,
         tech_id=tech_id,
     )
