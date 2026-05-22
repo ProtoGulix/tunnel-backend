@@ -2,6 +2,20 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [3.12.0] - 22 mai 2026
+
+### Nouvelles fonctionnalités
+
+#### Tâches détaillées dans les réponses interventions et demandes d'intervention
+
+Les endpoints `/interventions` et `/intervention-requests` exposent désormais la liste complète des tâches associées, avec technicien assigné, compteurs d'actions et temps passé.
+
+- **`GET /interventions?include=tasks`** (ou `include=stats,tasks`) : retourne un champ `tasks[]` contenant chaque tâche avec `label`, `status`, `origin`, `optional`, `due_date`, `sort_order`, `assigned_to` (objet utilisateur), `action_count`, `time_spent` — via un `LATERAL` JSON agrégé en SQL
+- **`GET /intervention-requests`** et **`GET /intervention-requests/{id}`** : le champ `tasks[]` est désormais inclus par défaut. Chaque tâche est enrichie du technicien assigné (`tunnel_user`) et des métriques d'actions associées (via le lien M2M `intervention_action_task`)
+- Sans `include=tasks`, l'endpoint `/interventions` ne retourne que les compteurs dans `stats.tasks` (comportement inchangé)
+
+---
+
 ## [3.11.0] - 19 mai 2026
 
 ### Améliorations
