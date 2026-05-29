@@ -169,6 +169,7 @@ class InterventionRepository:
                     rs2.label    AS req_statut_label,
                     rs2.color    AS req_statut_color,
                     ir.intervention_id AS req_intervention_id,
+                    ir.is_system AS req_is_system,
                     ir.created_at AS req_created_at,
                     ir.updated_at AS req_updated_at,
                     m.code as m_code, m.name as m_name,
@@ -362,6 +363,7 @@ class InterventionRepository:
                         'statut_label': row_dict.pop('req_statut_label', None),
                         'statut_color': row_dict.pop('req_statut_color', None),
                         'intervention_id': row_dict.pop('req_intervention_id', None),
+                        'is_system': row_dict.pop('req_is_system', False),
                         'created_at': row_dict.pop('req_created_at', None),
                         'updated_at': row_dict.pop('req_updated_at', None),
                         'equipement': None,
@@ -370,7 +372,7 @@ class InterventionRepository:
                     row_dict['request'] = None
                     for key in ['req_code', 'demandeur_nom', 'demandeur_service', 'req_description',
                                 'req_statut', 'req_statut_label', 'req_statut_color',
-                                'req_intervention_id', 'req_created_at', 'req_updated_at']:
+                                'req_intervention_id', 'req_is_system', 'req_created_at', 'req_updated_at']:
                         row_dict.pop(key, None)
 
                 row_dict['actions'] = []  # Vide pour get_all
@@ -480,6 +482,7 @@ class InterventionRepository:
                     rs2.label       AS req_statut_label,
                     rs2.color       AS req_statut_color,
                     ir.intervention_id AS req_intervention_id,
+                    ir.is_system    AS req_is_system,
                     ir.created_at   AS req_created_at,
                     ir.updated_at   AS req_updated_at
                 FROM intervention i
@@ -511,6 +514,7 @@ class InterventionRepository:
                     'statut_label': intervention.pop('req_statut_label', None),
                     'statut_color': intervention.pop('req_statut_color', None),
                     'intervention_id': intervention.pop('req_intervention_id', None),
+                    'is_system': intervention.pop('req_is_system', False),
                     'created_at': intervention.pop('req_created_at', None),
                     'updated_at': intervention.pop('req_updated_at', None),
                     'equipement': None,
@@ -519,7 +523,7 @@ class InterventionRepository:
                 intervention['request'] = None
                 for key in ['req_code', 'demandeur_nom', 'demandeur_service', 'req_description',
                             'req_statut', 'req_statut_label', 'req_statut_color',
-                            'req_intervention_id', 'req_created_at', 'req_updated_at']:
+                            'req_intervention_id', 'req_is_system', 'req_created_at', 'req_updated_at']:
                     intervention.pop(key, None)
 
             # Récupérer l'équipement via EquipementRepository pour garantir la cohérence

@@ -16,9 +16,16 @@ _ENTITIES_WITH_REQUIRED_AUDIT = {
 
 # Entités dont les mutations courantes sont silencieuses côté UX :
 # le front envoie _AUTO_REASON_CODE sans afficher de sélecteur.
-_SILENT_ENTITY_TYPES = {"task", "action", "request", "intervention", "purchase_request"}
+_SILENT_ENTITY_TYPES = {"task", "action",
+                        "request", "intervention", "purchase_request"}
 
 _AUTO_REASON_CODE = "ROUTINE"
+
+# Champs dont la modification est toujours silencieuse (pas de dialog raison)
+# Les autres champs modifiables déclencheront le dialog côté front.
+_SILENT_FIELDS_BY_ENTITY: Dict[str, List[str]] = {
+    "intervention": ["printed_fiche", "title"],
+}
 
 
 def get_audit_rules(entity_type: str) -> AuditRules:
@@ -55,5 +62,8 @@ def get_audit_rules(entity_type: str) -> AuditRules:
         required=required,
         silent=silent,
         default_reason_code=_AUTO_REASON_CODE if silent else None,
-        reasons=reasons,
+        silent_fields=_SILENT_FIELDS_BY_ENTITY.get(entity_type),
+        # Les entités silencieuses n'exposent aucune raison au front :
+        # il doit envoyer default_reason_code automatiquement sans afficher de sélecteur.
+        reasons=[] if silent else reasons,
     )

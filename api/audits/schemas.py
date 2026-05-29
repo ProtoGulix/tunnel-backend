@@ -96,12 +96,14 @@ class AuditRules(BaseModel):
     required: bool
     silent: bool = False
     default_reason_code: Optional[str] = None
+    silent_fields: Optional[List[str]] = None
     reasons: List[AuditRuleReason]
 
 
 class AuditLogCreate(BaseModel):
     """Payload pour créer manuellement une entrée d'audit (via API directe)."""
-    entity_type: str = Field(..., description="Type d'entité : intervention, request, task, action, purchase_request")
+    entity_type: str = Field(
+        ..., description="Type d'entité : intervention, request, task, action, purchase_request")
     entity_id: UUID
     decision_type: str
     old_value: Optional[Dict[str, Any]] = None
