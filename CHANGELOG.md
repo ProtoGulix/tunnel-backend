@@ -2,6 +2,36 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [3.14.0] - 29 mai 2026
+
+### Nouvelles fonctionnalités
+
+#### Fiche d'intervention v9 (nouveau template d'export)
+
+Le template HTML de la fiche d'intervention a été entièrement refondu en version 9.0.
+
+- Structure HTML revue avec mise en page enrichie et styles CSS améliorés
+- Meilleure lisibilité sur impression
+- Le fichier de référence passe à `fiche_intervention_v9.html` dans la config d'export
+
+#### Champ `is_system` exposé dans les interventions
+
+`GET /interventions` et `GET /interventions/{id}` retournent désormais le champ `is_system` pour distinguer les interventions générées automatiquement (préventif système) des interventions manuelles.
+
+#### Règles d'audit : champs silencieux par entité (`silent_fields`)
+
+`GET /intervention-requests/{id}` et les autres endpoints avec `audit` embarqué exposent désormais un champ `silent_fields` dans l'objet `audit`. Ce champ liste les champs dont la modification ne doit pas déclencher de sélecteur de raison côté front.
+
+### Corrections
+
+#### Formulaire d'audit affiché à tort lors de l'acceptation d'une DI
+
+Les entités silencieuses (`request`, `intervention`, `task`, `action`, `purchase_request`) renvoyaient une liste `reasons` non vide dans l'objet `audit` (à cause des raisons avec `entity_types = NULL` comme `OTHER`). Le front détectait une liste non vide et affichait un sélecteur de raison malgré `silent: true`.
+
+- Correction : quand `silent=true`, `reasons` est forcé à `[]`. Le front reçoit `{ silent: true, default_reason_code: "ROUTINE", reasons: [] }` et envoie ROUTINE automatiquement.
+
+---
+
 ## [3.13.0] - 22 mai 2026
 
 ### Nouvelles fonctionnalités
