@@ -35,6 +35,7 @@ _ENTITY_MAP: Dict[str, str] = {
     "intervention-requests": "request",
     "purchase-requests": "purchase_request",
     "intervention-actions": "action",
+    "intervention-tasks": "task",
 }
 
 # Pattern : /interventions/{uuid} ou /interventions/{uuid}/sous-ressource

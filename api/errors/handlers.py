@@ -22,6 +22,7 @@ _ENTITY_MAP = {
     "intervention-requests": "request",
     "purchase-requests": "purchase_request",
     "intervention-actions": "action",
+    "intervention-tasks": "task",
 }
 
 def _entity_type_from_path(path: str):

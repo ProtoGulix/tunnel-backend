@@ -24,10 +24,14 @@ def _audit_task(cur, task_id: str, decision_type: str,
     Les erreurs sont loggées mais n'interrompent jamais la mutation métier.
     """
     try:
+        cur.execute("SAVEPOINT _audit_sp")
         cur.execute(
             """
             SELECT public.fn_audit_log_decision(
-                %s, %s::uuid, %s, %s::jsonb, %s::jsonb, %s, %s, %s::uuid, %s
+                %s::varchar, %s::uuid, %s::varchar,
+                %s::jsonb, %s::jsonb,
+                %s::varchar, %s::text,
+                %s::uuid, %s::boolean
             )
             """,
             (
@@ -42,8 +46,13 @@ def _audit_task(cur, task_id: str, decision_type: str,
                 is_system,
             ),
         )
+        cur.execute("RELEASE SAVEPOINT _audit_sp")
     except Exception as exc:
         logger.error("audit_task(%s, %s) : %s", task_id, decision_type, exc)
+        try:
+            cur.execute("ROLLBACK TO SAVEPOINT _audit_sp")
+        except Exception:
+            pass
 
 _TASK_SELECT = """
     SELECT
