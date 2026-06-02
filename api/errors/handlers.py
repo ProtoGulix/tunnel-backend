@@ -3,6 +3,7 @@ Gestion centralisée des erreurs et exceptions
 """
 
 import logging
+import re
 from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
@@ -15,6 +16,17 @@ from api.errors.exceptions import (
     ValidationError,
     ConflictError
 )
+
+_ENTITY_MAP = {
+    "interventions": "intervention",
+    "intervention-requests": "request",
+    "purchase-requests": "purchase_request",
+    "intervention-actions": "action",
+}
+
+def _entity_type_from_path(path: str):
+    segment = path.lstrip("/").split("/")[0]
+    return _ENTITY_MAP.get(segment)
 
 logger = logging.getLogger(__name__)
 
@@ -82,12 +94,27 @@ def register_error_handlers(app: FastAPI):
         ]
         logger.warning(
             "Validation error on %s: %d errors", request.url.path, len(errors))
+
+        content = {"detail": "Erreur de validation des données", "errors": errors}
+
+        # Si reason_code est manquant, injecter la config audit pour que le frontend
+        # puisse faire le retry silencieux sans afficher de dialog.
+        is_reason_code_missing = any(
+            "reason_code" in (e.get("loc") or []) and e.get("type") == "missing"
+            for e in errors
+        )
+        if is_reason_code_missing and request.method in ("POST", "PUT", "PATCH"):
+            entity_type = _entity_type_from_path(request.url.path)
+            if entity_type:
+                try:
+                    from api.utils.audit import get_audit_rules
+                    content["audit"] = get_audit_rules(entity_type).model_dump()
+                except Exception:
+                    pass
+
         return JSONResponse(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            content={
-                "detail": "Erreur de validation des données",
-                "errors": errors
-            }
+            content=content,
         )
 
     # Handler générique pour toutes les HTTPException (Starlette)
