@@ -63,5 +63,7 @@ def get_audit_rules(entity_type: str) -> AuditRules:
         silent=silent,
         default_reason_code=_AUTO_REASON_CODE if silent else None,
         silent_fields=_SILENT_FIELDS_BY_ENTITY.get(entity_type),
-        reasons=reasons,
+        # Les entités silencieuses n'exposent aucune raison au front :
+        # il doit envoyer default_reason_code automatiquement sans afficher de sélecteur.
+        reasons=[] if silent else reasons,
     )
