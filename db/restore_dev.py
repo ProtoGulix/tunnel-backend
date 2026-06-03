@@ -12,6 +12,7 @@ DB_USER = "directus"
 DB_PASSWORD = "directus"
 DB_NAME = "directus"
 BACKUP_FILE = os.path.join(os.path.dirname(__file__), "backup_prod_20260527_173647.sql")
+SCHEMA_FILE = os.path.join(os.path.dirname(__file__), "..", "schema_current.sql")
 
 
 def get_conn(database="postgres"):
@@ -99,7 +100,7 @@ def fix_jsonb_array_casts(sql: str) -> str:
 
 
 def restore():
-    print(f"[3/4] Lecture du backup ({BACKUP_FILE})...")
+    print(f"[3/5] Lecture du backup ({BACKUP_FILE})...")
     with open(BACKUP_FILE, "r", encoding="utf-8") as f:
         sql = f.read()
 
@@ -108,7 +109,7 @@ def restore():
     sequences = extract_sequences(sql)
     create_sequences(sequences)
 
-    print(f"[4/4] Import dans '{DB_NAME}'...")
+    print(f"[4/5] Import des données dans '{DB_NAME}'...")
     conn = psycopg2.connect(
         host=DB_HOST, port=DB_PORT, user=DB_USER, password=DB_PASSWORD, database=DB_NAME
     )
@@ -125,8 +126,61 @@ def restore():
         conn.close()
 
 
+def restore_functions_and_triggers():
+    """
+    Applique la section fonctions + triggers de schema_current.sql.
+    Le backup n'exporte pas pg_proc ni pg_trigger — cette étape est obligatoire
+    après chaque restauration pour que les codes auto, audit, updated_at, etc. fonctionnent.
+    """
+    schema_path = os.path.normpath(SCHEMA_FILE)
+    print(f"[5/5] Restauration des fonctions et triggers ({schema_path})...")
+
+    with open(schema_path, "r", encoding="utf-8") as f:
+        content = f.read()
+
+    start = content.find("-- FUNCTIONS & PROCEDURES")
+    if start == -1:
+        print("ERREUR : section '-- FUNCTIONS & PROCEDURES' introuvable dans schema_current.sql", file=sys.stderr)
+        sys.exit(1)
+
+    sql = content[start:]
+
+    # DROP préalable des triggers pour que le script soit idempotent
+    # (CREATE OR REPLACE n'existe pas pour les triggers en PostgreSQL)
+    drop_triggers_sql = """
+        DO $$
+        DECLARE r RECORD;
+        BEGIN
+            FOR r IN
+                SELECT trigger_name, event_object_table
+                FROM information_schema.triggers
+                WHERE trigger_schema = 'public'
+            LOOP
+                EXECUTE format('DROP TRIGGER IF EXISTS %I ON public.%I', r.trigger_name, r.event_object_table);
+            END LOOP;
+        END $$;
+    """
+
+    conn = psycopg2.connect(
+        host=DB_HOST, port=DB_PORT, user=DB_USER, password=DB_PASSWORD, database=DB_NAME
+    )
+    try:
+        with conn.cursor() as cur:
+            cur.execute(drop_triggers_sql)
+            cur.execute(sql)
+        conn.commit()
+        print("      Fonctions et triggers recréés avec succès.")
+    except Exception as e:
+        conn.rollback()
+        print(f"ERREUR lors de la restauration fonctions/triggers : {e}", file=sys.stderr)
+        sys.exit(1)
+    finally:
+        conn.close()
+
+
 if __name__ == "__main__":
     print("=== Restauration base DEV depuis backup PROD ===")
     drop_and_recreate()
     restore()
+    restore_functions_and_triggers()
     print("=== Restauration terminée ===")
