@@ -25,6 +25,9 @@ _AUTO_REASON_CODE = "ROUTINE"
 # Les autres champs modifiables déclencheront le dialog côté front.
 _SILENT_FIELDS_BY_ENTITY: Dict[str, List[str]] = {
     "intervention": ["printed_fiche", "title"],
+    # status, sort_order, skip_reason : transitions courantes (tech valide/ignore une tâche)
+    # due_date, assigned_to : décisions explicites → dialog obligatoire
+    "task": ["status", "sort_order", "skip_reason"],
 }
 
 

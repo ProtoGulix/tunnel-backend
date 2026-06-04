@@ -35,6 +35,7 @@ _ENTITY_MAP: Dict[str, str] = {
     "intervention-requests": "request",
     "purchase-requests": "purchase_request",
     "intervention-actions": "action",
+    "intervention-tasks": "task",
 }
 
 # Pattern : /interventions/{uuid} ou /interventions/{uuid}/sous-ressource
@@ -105,9 +106,15 @@ class AuditMiddleware(BaseHTTPMiddleware):
         # ── Validation reason_code AVANT la route ────────────────────────────
         if request.method in ("PATCH", "POST", "PUT"):
             if not reason_code:
+                from api.utils.audit import get_audit_rules
+                audit_rules = get_audit_rules(entity_type)
                 return JSONResponse(
                     status_code=400,
-                    content={"detail": "reason_code obligatoire pour cette mutation", "error_type": "ValidationError"},
+                    content={
+                        "detail": "reason_code obligatoire pour cette mutation",
+                        "error_type": "ValidationError",
+                        "audit": audit_rules.model_dump(),
+                    },
                 )
             repo = AuditRepository()
             reason = repo.get_reason_by_code(reason_code)
