@@ -2,6 +2,37 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [3.15.0] - 4 juin 2026
+
+### Nouvelles fonctionnalités
+
+#### Gestion du profil et du mot de passe utilisateur
+
+Deux nouveaux endpoints permettent à l'utilisateur connecté de gérer ses informations personnelles sans intervention d'un admin.
+
+- **`PATCH /users/me/profile`** : mise à jour du prénom, nom et/ou initiales. Les initiales sont validées (1 à 5 lettres majuscules uniquement)
+- **`POST /users/me/password`** : changement de mot de passe avec vérification de l'ancien. Compatible avec les hashes argon2id (héritage) et bcrypt. Validation de force : au moins une majuscule et un chiffre
+
+#### Audit des mutations de tâches
+
+Les mutations sur les tâches d'intervention (`PATCH /intervention-tasks/{id}`) sont désormais soumises au middleware d'audit.
+
+- Les champs `status`, `sort_order` et `skip_reason` sont silencieux (raison `ROUTINE` automatique)
+- Les champs `due_date` et `assigned_to` sont explicites : le front doit fournir une raison via le dialog d'audit
+- Trois nouvelles raisons d'audit dédiées aux tâches : `PLANNING_CHANGE`, `TECH_UNAVAILABLE`, `PRIORITY_CHANGE`
+
+#### Règles d'audit dans les erreurs de validation
+
+Quand un `reason_code` est manquant, la réponse d'erreur (400 ou 422) inclut désormais un bloc `audit` avec les règles de l'entité concernée. Le front peut ainsi effectuer un retry silencieux sans afficher de dialog inutile.
+
+### Corrections
+
+#### Isolation des erreurs d'audit dans les tâches
+
+La fonction `_audit_task` utilisait des casts SQL implicites pouvant provoquer des erreurs Postgres. Correction avec casts explicites (`::varchar`, `::uuid`, `::jsonb`, `::boolean`) et ajout d'un `SAVEPOINT` pour isoler les erreurs d'audit sans déclencher un rollback sur la mutation métier.
+
+---
+
 ## [3.14.0] - 29 mai 2026
 
 ### Nouvelles fonctionnalités
