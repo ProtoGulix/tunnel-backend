@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import sys
 from contextlib import asynccontextmanager
@@ -82,8 +83,11 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialise le pool DB, charge les permissions et synchronise le catalogue d'endpoints."""
-    init_pool(settings.DATABASE_URL,
-              settings.DB_POOL_MIN, settings.DB_POOL_MAX)
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(
+        None,
+        lambda: init_pool(settings.DATABASE_URL, settings.DB_POOL_MIN, settings.DB_POOL_MAX),
+    )
     # Import lazy pour éviter la circularité avec auth au niveau module
     from api.auth.permissions import permission_cache
     permission_cache.load()
