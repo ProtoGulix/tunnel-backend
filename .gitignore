@@ -20,6 +20,11 @@ wheels/
 .installed.cfg
 *.egg
 
+# Graphiphy
+
+api/graphiphy-out/cache/
+graphiphy-out/
+
 # Virtual Environment
 venv/
 ENV/
