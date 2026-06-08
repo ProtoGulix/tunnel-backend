@@ -1,4 +1,3 @@
-from fastapi import HTTPException
 from typing import Dict, Any, List, Optional
 from uuid import uuid4
 
@@ -56,8 +55,6 @@ class SupplierRepository:
             cols = [desc[0] for desc in cur.description]
 
             return [dict(zip(cols, row)) for row in rows]
-        except HTTPException:
-            raise
         except Exception as e:
             raise_db_error(e, "opération")
         finally:
@@ -81,8 +78,6 @@ class SupplierRepository:
             return dict(zip(cols, row))
         except NotFoundError:
             raise
-        except HTTPException:
-            raise
         except Exception as e:
             raise_db_error(e, "opération")
         finally:
@@ -105,8 +100,6 @@ class SupplierRepository:
             cols = [desc[0] for desc in cur.description]
             return dict(zip(cols, row))
         except NotFoundError:
-            raise
-        except HTTPException:
             raise
         except Exception as e:
             raise_db_error(e, "opération")

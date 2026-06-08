@@ -6,7 +6,6 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
-from fastapi import HTTPException
 
 from api.constants import CLOSED_STATUS_CODE
 from api.db import get_connection, release_connection
@@ -171,8 +170,6 @@ class InterventionTaskRepository:
             rows = cur.fetchall()
             cols = [d[0] for d in cur.description]
             return [_map_task(dict(zip(cols, row))) for row in rows]
-        except HTTPException:
-            raise
         except Exception as e:
             raise_db_error(e, "liste des tâches")
         finally:
@@ -190,8 +187,6 @@ class InterventionTaskRepository:
             cols = [d[0] for d in cur.description]
             return _map_task(dict(zip(cols, row)))
         except NotFoundError:
-            raise
-        except HTTPException:
             raise
         except Exception as e:
             raise_db_error(e, "récupération de la tâche")
@@ -235,8 +230,6 @@ class InterventionTaskRepository:
                 "blocking_pending": blocking_pending,
                 "is_complete": blocking_pending == 0 and total > 0,
             }
-        except HTTPException:
-            raise
         except Exception as e:
             raise_db_error(e, "calcul de la progression des tâches")
         finally:
@@ -275,8 +268,6 @@ class InterventionTaskRepository:
                 "blocking_pending": blocking_pending,
                 "is_complete": blocking_pending == 0 and total > 0,
             }
-        except HTTPException:
-            raise
         except Exception as e:
             raise_db_error(
                 e, "calcul de la progression des tâches par occurrence")
@@ -473,7 +464,7 @@ class InterventionTaskRepository:
         except (NotFoundError, ValidationError):
             conn.rollback()
             raise
-        except HTTPException:
+        except (NotFoundError, ValidationError, ConflictError):
             conn.rollback()
             raise
         except Exception as e:
@@ -523,7 +514,7 @@ class InterventionTaskRepository:
         except (NotFoundError, ValidationError):
             conn.rollback()
             raise
-        except HTTPException:
+        except (NotFoundError, ValidationError, ConflictError):
             conn.rollback()
             raise
         except Exception as e:

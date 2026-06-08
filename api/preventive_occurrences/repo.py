@@ -3,7 +3,6 @@ from datetime import date, timedelta
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
-from fastapi import HTTPException
 
 from api.db import get_connection, release_connection
 from api.errors.exceptions import NotFoundError, ValidationError, raise_db_error
@@ -80,8 +79,6 @@ class PreventiveOccurrenceRepository:
                 for occ in occurrences:
                     occ["tasks"] = tasks_by_occ.get(str(occ["id"]), [])
             return occurrences
-        except HTTPException:
-            raise
         except Exception as e:
             raise_db_error(e, "liste des occurrences préventives")
         finally:
@@ -117,8 +114,6 @@ class PreventiveOccurrenceRepository:
             tasks_by_occ = self._fetch_tasks_batch(cur, [occurrence_id])
             occ["tasks"] = tasks_by_occ.get(occurrence_id, [])
             return occ
-        except HTTPException:
-            raise
         except Exception as e:
             raise_db_error(e, "récupération de l'occurrence")
         finally:
@@ -181,7 +176,7 @@ class PreventiveOccurrenceRepository:
                 (skip_reason, occurrence_id),
             )
             conn.commit()
-        except HTTPException:
+        except (NotFoundError, ValidationError, ConflictError):
             conn.rollback()
             raise
         except Exception as e:
@@ -432,7 +427,7 @@ class PreventiveOccurrenceRepository:
 
             conn.commit()
 
-        except HTTPException:
+        except (NotFoundError, ValidationError, ConflictError):
             conn.rollback()
             raise
         except Exception as e:

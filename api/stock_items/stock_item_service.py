@@ -1,4 +1,3 @@
-from fastapi import HTTPException
 import logging
 from typing import Dict, Any
 from uuid import uuid4
@@ -103,8 +102,6 @@ class StockItemService:
             logger.info("Item legacy créé: %s", result['id'])
             return result
 
-        except HTTPException:
-            raise
         except Exception as e:
             conn.rollback()
             logger.error("Erreur création item legacy: %s", str(e))
@@ -205,8 +202,6 @@ class StockItemService:
 
         except ValidationError:
             conn.rollback()
-            raise
-        except HTTPException:
             raise
         except Exception as e:
             conn.rollback()

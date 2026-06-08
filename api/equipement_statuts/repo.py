@@ -2,10 +2,8 @@
 import logging
 from typing import Any, Dict, List
 
-from fastapi import HTTPException
-
 from api.db import get_connection, release_connection
-from api.errors.exceptions import NotFoundError, raise_db_error
+from api.errors.exceptions import NotFoundError, ValidationError, raise_db_error
 
 logger = logging.getLogger(__name__)
 
@@ -30,8 +28,6 @@ class EquipementStatutRepository:
             rows = cur.fetchall()
             cols = [desc[0] for desc in cur.description]
             return [dict(zip(cols, row)) for row in rows]
-        except HTTPException:
-            raise
         except Exception as e:
             raise_db_error(e, "opération")
         finally:
@@ -61,6 +57,6 @@ def check_equipement_statut_allows_interventions(machine_id: str) -> None:
             raise NotFoundError(f"Équipement {machine_id} non trouvé")
         statut_interventions = row[0]
         if statut_interventions is False:
-            raise HTTPException(status_code=422, detail="equipement_statut_bloque")
+            raise ValidationError("equipement_statut_bloque")
     finally:
         release_connection(conn)
