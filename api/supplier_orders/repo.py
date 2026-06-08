@@ -2,14 +2,13 @@ from fastapi import HTTPException
 from typing import Dict, Any, List, Optional
 from uuid import uuid4
 from datetime import datetime, timezone
+from decimal import Decimal
 import logging
 
 from api.settings import settings
 from api.db import get_connection, release_connection
 from api.errors.exceptions import DatabaseError, raise_db_error, NotFoundError
 from api.supplier_orders.validators import SupplierOrderValidator
-from api.utils.decimal import convert_decimals
-from api.constants import ORDER_AGE_WARNING_DAYS, ORDER_AGE_CRITICAL_DAYS
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +19,12 @@ class SupplierOrderRepository:
     def _get_connection(self):
         return get_connection()
 
+    def _convert_decimals(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Convertit les Decimal en float pour la sérialisation JSON"""
+        for key, value in data.items():
+            if isinstance(value, Decimal):
+                data[key] = float(value)
+        return data
 
     def _map_supplier(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Mappe les colonnes supplier en objet imbriqué"""
@@ -58,15 +63,17 @@ class SupplierOrderRepository:
 
         data['age_days'] = age_days
 
-        if age_days >= ORDER_AGE_CRITICAL_DAYS:
+        # Couleur basée sur l'âge (seuils: 7 jours orange, 14 jours rouge)
+        if age_days >= 14:
             data['age_color'] = 'red'
-        elif age_days >= ORDER_AGE_WARNING_DAYS:
+        elif age_days >= 7:
             data['age_color'] = 'orange'
         else:
             data['age_color'] = 'gray'
 
+        # Commande bloquante si en attente depuis trop longtemps
         blocking_statuses = ['OPEN', 'SENT', 'ACK']
-        data['is_blocking'] = status in blocking_statuses and age_days >= ORDER_AGE_WARNING_DAYS
+        data['is_blocking'] = status in blocking_statuses and age_days >= 7
 
         # Bools d'action pour l'UI (aucun calcul côté frontend)
         data['add_lines']     = status == 'OPEN'
@@ -111,7 +118,7 @@ class SupplierOrderRepository:
             cols = [desc[0] for desc in cur.description]
             results = []
             for row in rows:
-                line = convert_decimals(dict(zip(cols, row)))
+                line = self._convert_decimals(dict(zip(cols, row)))
                 supplier_ref = line.pop('catalog_supplier_ref', None)
                 sol_mfr = line.pop('sol_manufacturer', None)
                 sol_mfr_ref = line.pop('sol_manufacturer_ref', None)
@@ -200,7 +207,7 @@ class SupplierOrderRepository:
 
             items = []
             for row in rows:
-                order = convert_decimals(dict(zip(cols, row)))
+                order = self._convert_decimals(dict(zip(cols, row)))
                 order = self._map_supplier(order)
                 order = self._compute_age_fields(order)
                 items.append(order)
@@ -235,7 +242,7 @@ class SupplierOrderRepository:
                 raise NotFoundError(f"Commande {order_id} non trouvée")
 
             cols = [desc[0] for desc in cur.description]
-            result = convert_decimals(dict(zip(cols, row)))
+            result = self._convert_decimals(dict(zip(cols, row)))
             result = self._map_supplier(result)
             result = self._compute_age_fields(result)
             result['lines'] = self._get_order_lines(order_id, conn)
@@ -274,7 +281,7 @@ class SupplierOrderRepository:
                 raise NotFoundError(f"Commande {order_number} non trouvée")
 
             cols = [desc[0] for desc in cur.description]
-            result = convert_decimals(dict(zip(cols, row)))
+            result = self._convert_decimals(dict(zip(cols, row)))
             result = self._map_supplier(result)
             result = self._compute_age_fields(result)
             result['lines'] = self._get_order_lines(str(result['id']), conn)
@@ -435,7 +442,7 @@ class SupplierOrderRepository:
 
             results = []
             for row in rows:
-                line = convert_decimals(dict(zip(cols, row)))
+                line = self._convert_decimals(dict(zip(cols, row)))
 
                 # Map stock_item as nested object
                 if line.get('si_id'):
@@ -529,7 +536,7 @@ class SupplierOrderRepository:
                 raise NotFoundError(f"Commande {order_id} non trouvée")
 
             cols = [desc[0] for desc in cur.description]
-            result = convert_decimals(dict(zip(cols, row)))
+            result = self._convert_decimals(dict(zip(cols, row)))
             result = self._map_supplier(result)
             result['lines'] = self._get_export_lines(order_id, conn)
 

@@ -91,6 +91,15 @@ class InterventionsPaginated(BaseModel):
     items: list[InterventionListItem]
 
 
+class EquipementChildItem(BaseModel):
+    """Enfant d'un équipement - vue légère avec health"""
+    id: UUID
+    code: str | None = None
+    name: str
+    health: EquipementHealth
+
+    class Config:
+        from_attributes = True
 
 
 class PreventivePlanSummary(BaseModel):

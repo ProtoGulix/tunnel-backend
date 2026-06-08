@@ -1,5 +1,6 @@
 from typing import List, Dict, Any
 
+from api.settings import settings
 from api.db import get_connection, release_connection
 from api.errors.exceptions import DatabaseError
 
@@ -32,3 +33,25 @@ class InterventionStatusRepository:
         finally:
             release_connection(conn)
 
+    def get_active_status_ids(self) -> List[str]:
+        """Récupère les IDs des statuts considérés comme 'actifs' (ouvert ou en cours)"""
+        conn = self._get_connection()
+        try:
+            cur = conn.cursor()
+            # Statuts actifs : ceux qui ne sont pas fermés/annulés
+            cur.execute(
+                """
+                SELECT id
+                FROM intervention_status_ref
+                WHERE code NOT IN ('closed', 'cancelled', 'archived')
+                ORDER BY id ASC
+                """
+            )
+
+            rows = cur.fetchall()
+            return [row[0] for row in rows]
+
+        except Exception as e:
+            raise DatabaseError(f"Erreur base de données: {str(e)}")
+        finally:
+            release_connection(conn)

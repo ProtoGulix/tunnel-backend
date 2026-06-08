@@ -2,7 +2,7 @@ import hashlib
 import json
 import logging
 import math
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
@@ -754,7 +754,7 @@ class InterventionTaskRepository:
                 "counters": counters,
                 "options": options,
                 "meta": {
-                    "generated_at": datetime.now(timezone.utc),
+                    "generated_at": datetime.now(),
                     "etag": hashlib.md5(etag_payload.encode()).hexdigest(),
                 },
                 "errors": None,

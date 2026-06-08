@@ -172,3 +172,9 @@ class FamilyFacet(BaseModel):
         from_attributes = True
 
 
+class StockItemFacets(BaseModel):
+    """Facettes pour filtres famille/sous-famille"""
+    families: List[FamilyFacet] = Field(default_factory=list)
+
+    class Config:
+        from_attributes = True

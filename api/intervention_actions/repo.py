@@ -4,7 +4,7 @@ import logging
 from fastapi import HTTPException
 from typing import Dict, Any, List, Optional
 from uuid import uuid4
-from datetime import datetime, date, timezone
+from datetime import datetime, date
 
 from api.settings import settings
 from api.db import get_connection, release_connection
@@ -624,7 +624,7 @@ class InterventionActionRepository:
         try:
             cur = conn.cursor()
             action_id = str(uuid4())
-            now = datetime.now(timezone.utc)
+            now = datetime.now()
             created_at = validated_data.get('created_at', now)
 
             validated_data.pop('task_id', None)
@@ -827,7 +827,7 @@ class InterventionActionRepository:
                 set_clauses = [f"{field} = %s" for field in params_updates]
                 params = list(params_updates.values())
                 set_clauses.append("updated_at = %s")
-                params.append(datetime.now(timezone.utc))
+                params.append(datetime.now())
                 params.append(action_id)
 
                 cur.execute(

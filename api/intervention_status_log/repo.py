@@ -4,7 +4,6 @@ from uuid import uuid4
 
 import psycopg2
 
-from api.constants import PAGINATION_DEFAULT_LIMIT, PAGINATION_MAX_LIMIT
 from api.settings import settings
 from api.db import get_connection, release_connection
 from api.errors.exceptions import ConflictError, DatabaseError, raise_db_error, NotFoundError
@@ -34,12 +33,12 @@ class InterventionStatusLogRepository:
     def get_all(
         self,
         intervention_id: str | None = None,
-        limit: int = PAGINATION_DEFAULT_LIMIT,
+        limit: int = 100,
         offset: int = 0
     ) -> List[Dict[str, Any]]:
         """Liste tous les logs avec filtres optionnels"""
         # Garde-fou: limit max 1000
-        limit = min(limit, PAGINATION_MAX_LIMIT)
+        limit = min(limit, 1000)
 
         conn = self._get_connection()
         try:
@@ -207,7 +206,7 @@ class InterventionStatusLogRepository:
 
     def get_by_intervention(self, intervention_id: str) -> List[Dict[str, Any]]:
         """Récupère tous les logs d'une intervention, triés par date DESC"""
-        return self.get_all(intervention_id=intervention_id, limit=PAGINATION_MAX_LIMIT, offset=0)
+        return self.get_all(intervention_id=intervention_id, limit=1000, offset=0)
 
     def add(self, log_data: Dict[str, Any]) -> Dict[str, Any]:
         """Crée un nouveau log de changement de statut.
