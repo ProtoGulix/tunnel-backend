@@ -1,13 +1,13 @@
 from fastapi import HTTPException
 from typing import Dict, Any, List, Optional, Literal
 from uuid import uuid4
-from datetime import datetime, date, timedelta
-from decimal import Decimal
+from datetime import datetime, date, timedelta, timezone
 import logging
 
 from api.db import get_connection, release_connection
 from api.errors.exceptions import DatabaseError, raise_db_error, NotFoundError, ValidationError
-from api.constants import DERIVED_STATUS_CONFIG, CLOSED_STATUS_CODE, SUPPLIER_ORDER_STATUS_CONFIG
+from api.constants import DERIVED_STATUS_CONFIG, CLOSED_STATUS_CODE, SUPPLIER_ORDER_STATUS_CONFIG, PAGINATION_DEFAULT_LIMIT, PAGINATION_MAX_LIMIT
+from api.utils.decimal import convert_decimals
 
 logger = logging.getLogger(__name__)
 
@@ -98,7 +98,7 @@ class PurchaseRequestRepository:
                 self._ensure_action_intervention_editable(cur, action_id_str)
 
             request_id = str(uuid4())
-            now = datetime.now()
+            now = datetime.now(timezone.utc)
 
             cur.execute(
                 """
@@ -157,7 +157,7 @@ class PurchaseRequestRepository:
             cur = conn.cursor()
             self._ensure_request_intervention_editable(cur, request_id)
 
-            now = datetime.now()
+            now = datetime.now(timezone.utc)
 
             # Champs modifiables (status supprimé car calculé automatiquement)
             updatable_fields = [
@@ -343,7 +343,7 @@ class PurchaseRequestRepository:
 
     def get_list(
         self,
-        limit: int = 100,
+        limit: int = PAGINATION_DEFAULT_LIMIT,
         offset: int = 0,
         status: Optional[str] = None,
         intervention_id: Optional[str] = None,
@@ -355,7 +355,7 @@ class PurchaseRequestRepository:
         Liste optimisée avec statut dérivé et compteurs agrégés.
         Retourne PurchaseRequestListItem.
         """
-        limit = min(limit, 1000)
+        limit = min(limit, PAGINATION_MAX_LIMIT)
         logger.debug(
             "Fetching purchase request list: limit=%s, offset=%s", limit, offset)
 
@@ -620,10 +620,7 @@ class PurchaseRequestRepository:
             for row in rows:
                 line = dict(zip(cols, row))
 
-                # Convertit Decimal en float
-                for key in ['unit_price', 'total_price', 'quote_price']:
-                    if line.get(key) is not None and isinstance(line[key], Decimal):
-                        line[key] = float(line[key])
+                convert_decimals(line)
 
                 # Construit objet supplier
                 if line.get('supplier_id'):
@@ -712,7 +709,7 @@ class PurchaseRequestRepository:
         else:
             # Vue liste optimisée
             return self.get_list(
-                limit=1000,
+                limit=PAGINATION_MAX_LIMIT,
                 offset=0,
                 intervention_id=intervention_id
             )
@@ -798,7 +795,7 @@ class PurchaseRequestRepository:
             ]
 
             # Calcul par statut dérivé (en Python car pas de fonction SQL)
-            all_requests = self.get_list(limit=1000, offset=0)
+            all_requests = self.get_list(limit=PAGINATION_MAX_LIMIT, offset=0)
             by_status = {}
             for req in all_requests:
                 req_date = req.get('created_at')
@@ -920,7 +917,7 @@ class PurchaseRequestRepository:
         logger.info("Starting dispatch_all for PENDING_DISPATCH requests")
 
         pending_requests = [
-            req for req in self.get_list(limit=1000, offset=0)
+            req for req in self.get_list(limit=PAGINATION_MAX_LIMIT, offset=0)
             if req.get('derived_status', {}).get('code') == 'PENDING_DISPATCH'
         ]
 

@@ -3,6 +3,7 @@ from typing import Dict, Any, List, Optional
 from uuid import uuid4
 from decimal import Decimal
 
+from api.constants import PAGINATION_DEFAULT_LIMIT, PAGINATION_MAX_LIMIT
 from api.settings import settings
 from api.db import get_connection, release_connection
 from api.errors.exceptions import DatabaseError, raise_db_error, NotFoundError
@@ -38,14 +39,14 @@ class StockItemSupplierRepository:
 
     def get_all(
         self,
-        limit: int = 100,
+        limit: int = PAGINATION_DEFAULT_LIMIT,
         offset: int = 0,
         stock_item_id: Optional[str] = None,
         supplier_id: Optional[str] = None,
         is_preferred: Optional[bool] = None
     ) -> List[Dict[str, Any]]:
         """Récupère toutes les références fournisseurs avec filtres optionnels"""
-        limit = min(limit, 1000)
+        limit = min(limit, PAGINATION_MAX_LIMIT)
 
         conn = self._get_connection()
         try:

@@ -1,10 +1,7 @@
 """Schémas standards pour la pagination"""
-from typing import Generic, TypeVar, List
+from typing import List
 from pydantic import BaseModel, Field
 from math import ceil
-
-
-T = TypeVar('T')
 
 
 class PaginationMeta(BaseModel):
@@ -18,13 +15,6 @@ class PaginationMeta(BaseModel):
                         description="Position de début dans la liste globale")
     count: int = Field(...,
                        description="Nombre d'éléments retournés dans cette page")
-
-
-class PaginatedResponse(BaseModel, Generic[T]):
-    """Réponse paginée standard"""
-    items: List[T] = Field(..., description="Liste des éléments de la page")
-    pagination: PaginationMeta = Field(...,
-                                       description="Métadonnées de pagination")
 
 
 def create_pagination_meta(

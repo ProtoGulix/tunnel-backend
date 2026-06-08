@@ -8,6 +8,14 @@ CLOSED_STATUS_CODE = 'ferme'
 # Calcul : (2 × 39 × 4.33) + 39 ≈ 377h → arrondi conservateur
 TEAM_CAPACITY_HOURS_PER_MONTH = 400
 
+# Seuils d'âge des commandes fournisseur (en jours)
+ORDER_AGE_WARNING_DAYS = 7   # orange — commande à surveiller
+ORDER_AGE_CRITICAL_DAYS = 14  # rouge — commande bloquante
+
+# Limites de pagination
+PAGINATION_DEFAULT_LIMIT = 100
+PAGINATION_MAX_LIMIT = 1000
+
 # Base horaire journalière d'un ETP (contrat 39h ÷ 5 jours)
 ETP_HOURS_PER_DAY = 7.8
 

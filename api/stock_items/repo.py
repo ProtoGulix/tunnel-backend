@@ -2,6 +2,7 @@ from fastapi import HTTPException
 from typing import Dict, Any, List, Optional
 from uuid import uuid4
 
+from api.constants import PAGINATION_DEFAULT_LIMIT, PAGINATION_MAX_LIMIT
 from api.settings import settings
 from api.db import get_connection, release_connection
 from api.errors.exceptions import DatabaseError, raise_db_error, NotFoundError
@@ -90,7 +91,7 @@ class StockItemRepository:
 
     def get_all(
         self,
-        limit: int = 100,
+        limit: int = PAGINATION_DEFAULT_LIMIT,
         offset: int = 0,
         family_code: Optional[str] = None,
         sub_family_code: Optional[str] = None,
@@ -99,7 +100,7 @@ class StockItemRepository:
         sort_by: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """Récupère les articles avec fournisseur préféré embarqué"""
-        limit = min(limit, 1000)
+        limit = min(limit, PAGINATION_MAX_LIMIT)
 
         allowed_sort = {'name', 'ref', 'family_code', 'sub_family_code'}
         sort_col = sort_by if sort_by in allowed_sort else 'name'

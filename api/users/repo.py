@@ -2,6 +2,7 @@ from typing import List, Dict, Any, Optional
 
 import bcrypt
 
+from api.constants import PAGINATION_DEFAULT_LIMIT, PAGINATION_MAX_LIMIT
 from api.errors.exceptions import DatabaseError, NotFoundError, ValidationError
 from api.db import get_connection, release_connection
 from api.utils.sanitizer import strip_html
@@ -18,7 +19,7 @@ class UserRepository:
 
     def get_all(
         self,
-        limit: int = 100,
+        limit: int = PAGINATION_DEFAULT_LIMIT,
         offset: int = 0,
         status: Optional[str] = None,
         search: Optional[str] = None,

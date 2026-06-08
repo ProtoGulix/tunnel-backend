@@ -1,5 +1,5 @@
 from typing import Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 from api.utils.sanitizer import strip_html
 from api.utils.validators import validate_date
 from api.complexity_factors.repo import ComplexityFactorRepository
@@ -122,7 +122,7 @@ class InterventionActionValidator:
         # Valide et normalise created_at (utilise now() si None)
         created_at = action_data.get('created_at')
         if created_at is None:
-            action_data['created_at'] = datetime.now()
+            action_data['created_at'] = datetime.now(timezone.utc)
         else:
             action_data['created_at'] = validate_date(created_at, 'created_at')
 

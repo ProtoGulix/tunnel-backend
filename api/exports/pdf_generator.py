@@ -3,7 +3,7 @@ from jinja2 import Environment, FileSystemLoader
 from pathlib import Path
 from api.settings import settings
 from api.errors.exceptions import RenderError
-from datetime import datetime
+from datetime import datetime, timezone
 import base64
 
 
@@ -25,7 +25,7 @@ class PDFGenerator:
         """Rend le template Jinja2 avec les données"""
         try:
             template = self.env.get_template(settings.EXPORT_TEMPLATE_FILE)
-            data['now'] = datetime.now().strftime('%Y-%m-%d')
+            data['now'] = datetime.now(timezone.utc).strftime('%Y-%m-%d')
 
             # Add version information
             data['api_version'] = settings.API_VERSION
