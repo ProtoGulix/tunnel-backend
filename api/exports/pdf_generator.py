@@ -21,10 +21,10 @@ class PDFGenerator:
         self.env.filters['format_date'] = self._format_date
         self.env.filters['format_priority'] = self._format_priority
 
-    def render_html(self, data: dict) -> str:
+    def render_html(self, data: dict, template_file: str = None) -> str:
         """Rend le template Jinja2 avec les données"""
         try:
-            template = self.env.get_template(settings.EXPORT_TEMPLATE_FILE)
+            template = self.env.get_template(template_file or settings.EXPORT_TEMPLATE_FILE)
             data['now'] = datetime.now().strftime('%Y-%m-%d')
 
             # Add version information

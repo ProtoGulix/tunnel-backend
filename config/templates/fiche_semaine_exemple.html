@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <title>Fiche de semaine — AT — S24 2026</title>
+  <style>
+    @page {
+      size: A4 landscape;
+      margin: 8mm 10mm 14mm 10mm;
+      @bottom-left {
+        content: "Tunnel GMAO · frezille.fr";
+        font-size: 7pt;
+        color: #94a3b8;
+        font-family: Arial, Helvetica, sans-serif;
+      }
+      @bottom-center {
+        content: "AT — Semaine 24 · 9–13 juin 2026  ·  Page " counter(page) " / " counter(pages);
+        font-size: 8pt;
+        font-weight: bold;
+        color: #1e3a8a;
+        font-family: "Consolas", "Courier New", monospace;
+      }
+      @bottom-right {
+        content: "Imprimé le 09/06/2026";
+        font-size: 7pt;
+        color: #94a3b8;
+        font-family: Arial, Helvetica, sans-serif;
+      }
+    }
+    body {
+      margin: 0; padding: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 9pt; line-height: 1.2; color: #1e293b;
+    }
+    .container { margin: 0 auto; box-sizing: border-box; }
+
+    .main-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      border-bottom: 1.5px solid #1e3a8a;
+      padding-bottom: 3mm;
+      margin-bottom: 4mm;
+    }
+    .header-title { font-size: 16pt; font-weight: bold; color: #1e3a8a; margin: 0 0 1mm 0; }
+    .header-sub { font-size: 9pt; color: #475569; }
+    .tech-badge {
+      display: inline-block;
+      background: #1e3a8a; color: #fff;
+      font-size: 14pt; font-weight: bold;
+      padding: 2mm 5mm; border-radius: 1mm;
+      font-family: "Consolas", "Courier New", monospace;
+      letter-spacing: 2px;
+    }
+
+    .section { margin-bottom: 4mm; }
+    .section h2 {
+      margin: 0 0 1.5mm 0; font-size: 9.5pt;
+      color: #fff; background: #1e3a8a;
+      padding: 1mm 2mm; border-radius: 1mm;
+    }
+    .section-extras h2 { background: #64748b; }
+
+    table { border-collapse: collapse; width: 100%; font-size: 8pt; }
+    thead th {
+      background: #1e3a8a; color: #fff;
+      font-weight: 600; padding: 1mm 1.5mm; text-align: left;
+    }
+    tbody td { padding: 1.5mm 1.5mm; vertical-align: middle; border-bottom: 0.3mm solid #e2e8f0; }
+    tbody tr:nth-child(even) { background: #f8fafc; }
+    tbody tr.day-header-row td {
+      background: #dbeafe; color: #1e3a8a;
+      font-weight: bold; font-size: 8.5pt; padding: 1mm 1.5mm;
+    }
+    tbody tr.extras-row td { color: #94a3b8; font-style: italic; }
+    tbody tr.extras-row { background: #f8fafc; }
+
+    .cb {
+      width: 5mm; height: 5mm;
+      border: 0.5mm solid #94a3b8;
+      border-radius: 0.5mm; display: inline-block;
+    }
+    .pill {
+      display: inline-block; padding: 0.3mm 2mm;
+      border-radius: 1mm; font-size: 7.5pt;
+      font-weight: bold; white-space: nowrap;
+    }
+    .pill-prev { background: #dcfce7; color: #166534; border: 0.3mm solid #86efac; }
+    .pill-cur  { background: #fee2e2; color: #991b1b; border: 0.3mm solid #fca5a5; }
+    .pill-pro  { background: #ede9fe; color: #5b21b6; border: 0.3mm solid #c4b5fd; }
+    .equip-badge {
+      display: inline-block;
+      font-family: "Consolas", "Courier New", monospace;
+      font-size: 7.5pt; font-weight: bold;
+      background: #e0f2fe; color: #0369a1;
+      border: 0.3mm solid #7dd3fc;
+      border-radius: 1mm; padding: 0.3mm 2mm;
+    }
+    .inter-code {
+      font-family: "Consolas", "Courier New", monospace;
+      font-size: 7.5pt; color: #475569;
+    }
+    .urgence-flag {
+      display: inline-block;
+      background: #fee2e2; color: #991b1b;
+      font-size: 7pt; font-weight: bold;
+      padding: 0.2mm 1.5mm; border-radius: 1mm;
+      border: 0.3mm solid #fca5a5;
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <div class="main-header">
+    <div>
+      <div class="header-title">FICHE DE SEMAINE</div>
+      <div class="header-sub">Semaine 24 &nbsp;·&nbsp; 9 – 13 juin 2026</div>
+    </div>
+    <div style="text-align:center">
+      <div style="font-size:7.5pt;color:#64748b;margin-bottom:1mm">Technicien</div>
+      <span class="tech-badge">AT</span>
+      <div style="font-size:8pt;color:#475569;margin-top:1mm">Alexis TOURON</div>
+    </div>
+    <div style="text-align:right">
+      <div style="font-size:7.5pt;color:#94a3b8">Imprimé le 09/06/2026</div>
+      <div style="font-size:7.5pt;color:#94a3b8;margin-top:1mm">Tunnel GMAO v3.44</div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Tâches de la semaine — S24 (9–13 juin 2026)</h2>
+    <table>
+      <thead>
+        <tr>
+          <th style="width:18mm">Équipement</th>
+          <th style="width:38mm">Intervention</th>
+          <th style="width:16mm">Type</th>
+          <th>Tâche</th>
+          <th style="width:45mm">Notes</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="day-header-row"><td colspan="6">Lundi 9 juin</td></tr>
+        <tr>
+          <td><span class="equip-badge">VLT</span></td>
+          <td><span class="inter-code">VLT-PRE-20260504-IB</span></td>
+          <td><span class="pill pill-prev">Préventif</span></td>
+          <td>Préventive nettoyage et changement filtre</td>
+          <td style="border-left:0.3mm solid #e2e8f0"></td>
+        </tr>
+        <tr>
+          <td><span class="equip-badge">BRO</span></td>
+          <td><span class="inter-code">BRO001-CUR-20260408-QC</span></td>
+          <td><span class="pill pill-cur">Curatif</span></td>
+          <td>Préparation montage — moteur bloqué après arrêt jeudi</td>
+          <td style="border-left:0.3mm solid #e2e8f0"></td>
+        </tr>
+
+        <tr class="day-header-row"><td colspan="6">Mardi 10 juin</td></tr>
+        <tr>
+          <td><span class="equip-badge">L023</span></td>
+          <td><span class="inter-code">L023-PRE-20260428-IB</span></td>
+          <td><span class="pill pill-prev">Préventif</span></td>
+          <td>Vidange du réducteur</td>
+          <td style="border-left:0.3mm solid #e2e8f0"></td>
+        </tr>
+        <tr>
+          <td><span class="equip-badge">L023</span></td>
+          <td><span class="inter-code">L023-PRE-20260428-IB</span></td>
+          <td><span class="pill pill-prev">Préventif</span></td>
+          <td>Nettoyage gauge de niveau + remplacement filtre à huile</td>
+          <td style="border-left:0.3mm solid #e2e8f0"></td>
+        </tr>
+        <tr>
+          <td><span class="equip-badge">L023</span></td>
+          <td><span class="inter-code">L023-PRE-20260428-IB</span></td>
+          <td><span class="pill pill-prev">Préventif</span></td>
+          <td>Contrôle tension et état des courroies + serrage moteur électrique</td>
+          <td style="border-left:0.3mm solid #e2e8f0"></td>
+        </tr>
+
+        <tr class="day-header-row"><td colspan="6">Mercredi 11 juin</td></tr>
+        <tr>
+          <td><span class="equip-badge">VLT</span></td>
+          <td><span class="inter-code">VLT-PRO-20260312-QC</span></td>
+          <td><span class="pill pill-pro">Projet</span></td>
+          <td>Démantèlement rayonnages zone presse pour expédition vers SML</td>
+          <td style="border-left:0.3mm solid #e2e8f0"></td>
+        </tr>
+
+        <tr class="day-header-row"><td colspan="6">Jeudi 12 juin</td></tr>
+        <tr>
+          <td><span class="equip-badge">POV</span></td>
+          <td><span class="inter-code">POV005-CUR-20260511-IB</span></td>
+          <td><span class="pill pill-cur">Curatif</span></td>
+          <td>Démontage pompe + préparation pièce de rechange</td>
+          <td style="border-left:0.3mm solid #e2e8f0"></td>
+        </tr>
+        <tr>
+          <td><span class="equip-badge">VLT</span></td>
+          <td><span class="inter-code">VLT-PRE-20260526-IB</span></td>
+          <td><span class="pill pill-prev">Préventif</span></td>
+          <td>Classification document + rapport intervention entreprise extérieure</td>
+          <td style="border-left:0.3mm solid #e2e8f0"></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="section section-extras">
+    <h2>Extras — Si avance ou blocage · Semaine 25 (16–20 juin)</h2>
+    <table>
+      <thead>
+        <tr>
+          <th style="width:18mm">Équipement</th>
+          <th style="width:38mm">Intervention</th>
+          <th style="width:16mm">Type</th>
+          <th>Tâche</th>
+          <th style="width:45mm">Notes</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="extras-row">
+          <td><span class="equip-badge" style="background:#f1f5f9;color:#64748b;border-color:#cbd5e1">L001</span></td>
+          <td><span class="inter-code" style="color:#94a3b8">L001-PRE-20260427-IB</span></td>
+          <td><span class="pill pill-prev" style="opacity:0.5">Préventif</span></td>
+          <td>Nettoyage gauge de niveau</td>
+          <td style="border-left:0.3mm solid #e2e8f0"></td>
+        </tr>
+        <tr class="extras-row">
+          <td><span class="equip-badge" style="background:#f1f5f9;color:#64748b;border-color:#cbd5e1">L001</span></td>
+          <td><span class="inter-code" style="color:#94a3b8">L001-PRE-20260427-IB</span></td>
+          <td><span class="pill pill-prev" style="opacity:0.5">Préventif</span></td>
+          <td>Remplacement du filtre à huile</td>
+          <td style="border-left:0.3mm solid #e2e8f0"></td>
+        </tr>
+        <tr class="extras-row">
+          <td><span class="equip-badge" style="background:#f1f5f9;color:#64748b;border-color:#cbd5e1">L004</span></td>
+          <td><span class="inter-code" style="color:#94a3b8">L004-PRE-20260505-IB</span></td>
+          <td><span class="pill pill-prev" style="opacity:0.5">Préventif</span></td>
+          <td>Remplacement du filtre à huile</td>
+          <td style="border-left:0.3mm solid #e2e8f0"></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+</div>
+</body>
+</html>
