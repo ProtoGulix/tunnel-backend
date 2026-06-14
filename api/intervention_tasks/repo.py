@@ -9,7 +9,7 @@ from uuid import uuid4
 
 from api.constants import CLOSED_STATUS_CODE
 from api.db import get_connection, release_connection
-from api.errors.exceptions import NotFoundError, ValidationError, raise_db_error
+from api.errors.exceptions import ConflictError, NotFoundError, ValidationError, raise_db_error
 from api.intervention_tasks.schemas import InterventionTaskIn, InterventionTaskPatch
 
 logger = logging.getLogger(__name__)
@@ -462,9 +462,6 @@ class InterventionTaskRepository:
                 )
 
             conn.commit()
-        except (NotFoundError, ValidationError):
-            conn.rollback()
-            raise
         except (NotFoundError, ValidationError, ConflictError):
             conn.rollback()
             raise
@@ -572,7 +569,9 @@ class InterventionTaskRepository:
                 task_where.append("(it.label ILIKE %s OR i.title ILIKE %s OR i.code ILIKE %s)")
                 params.extend([like, like, like])
 
-            task_where_sql = ("WHERE " + " AND ".join(task_where)) if task_where else ""
+            # Exclure les tâches orphelines (intervention_id NULL — données incohérentes)
+            task_where.append("it.intervention_id IS NOT NULL")
+            task_where_sql = "WHERE " + " AND ".join(task_where)
 
             # Compter les interventions distinctes (pagination)
             cur.execute(
@@ -612,7 +611,7 @@ class InterventionTaskRepository:
 
             items: List[Dict[str, Any]] = []
             if interventions_page:
-                interv_ids = [str(r["interv_id"]) for r in interventions_page]
+                interv_ids = [str(r["interv_id"]) for r in interventions_page if r["interv_id"] is not None]
 
                 # Tâches de ces interventions via _TASK_SELECT (source de vérité)
                 task_extra_where = list(task_where) + [
