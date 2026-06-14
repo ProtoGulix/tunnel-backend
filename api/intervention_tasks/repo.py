@@ -6,11 +6,10 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
-from fastapi import HTTPException
 
 from api.constants import CLOSED_STATUS_CODE
 from api.db import get_connection, release_connection
-from api.errors.exceptions import NotFoundError, ValidationError, raise_db_error
+from api.errors.exceptions import ConflictError, NotFoundError, ValidationError, raise_db_error
 from api.intervention_tasks.schemas import InterventionTaskIn, InterventionTaskPatch
 
 logger = logging.getLogger(__name__)
@@ -70,6 +69,7 @@ _TASK_SELECT = """
         NULL::text   AS assigned_status,
         NULL::text   AS assigned_role
     FROM intervention_task it
+    LEFT JOIN intervention i ON it.intervention_id = i.id
     LEFT JOIN tunnel_user u ON u.id = it.assigned_to
     LEFT JOIN LATERAL (
         SELECT
@@ -171,8 +171,6 @@ class InterventionTaskRepository:
             rows = cur.fetchall()
             cols = [d[0] for d in cur.description]
             return [_map_task(dict(zip(cols, row))) for row in rows]
-        except HTTPException:
-            raise
         except Exception as e:
             raise_db_error(e, "liste des tâches")
         finally:
@@ -190,8 +188,6 @@ class InterventionTaskRepository:
             cols = [d[0] for d in cur.description]
             return _map_task(dict(zip(cols, row)))
         except NotFoundError:
-            raise
-        except HTTPException:
             raise
         except Exception as e:
             raise_db_error(e, "récupération de la tâche")
@@ -235,8 +231,6 @@ class InterventionTaskRepository:
                 "blocking_pending": blocking_pending,
                 "is_complete": blocking_pending == 0 and total > 0,
             }
-        except HTTPException:
-            raise
         except Exception as e:
             raise_db_error(e, "calcul de la progression des tâches")
         finally:
@@ -275,8 +269,6 @@ class InterventionTaskRepository:
                 "blocking_pending": blocking_pending,
                 "is_complete": blocking_pending == 0 and total > 0,
             }
-        except HTTPException:
-            raise
         except Exception as e:
             raise_db_error(
                 e, "calcul de la progression des tâches par occurrence")
@@ -470,10 +462,7 @@ class InterventionTaskRepository:
                 )
 
             conn.commit()
-        except (NotFoundError, ValidationError):
-            conn.rollback()
-            raise
-        except HTTPException:
+        except (NotFoundError, ValidationError, ConflictError):
             conn.rollback()
             raise
         except Exception as e:
@@ -487,7 +476,7 @@ class InterventionTaskRepository:
     # ── Suppression ───────────────────────────────────────────────
 
     def delete(self, task_id: str, deleted_by: Optional[str] = None, reason_code: str = "TASK_DELETED") -> None:
-        """Supprime une tâche (status=todo et aucune action liée)."""
+        """Supprime une tâche si aucune action n'y est liée."""
         conn = self._get_connection()
         try:
             cur = conn.cursor()
@@ -502,17 +491,15 @@ class InterventionTaskRepository:
             status, intervention_id, label = row
             self._ensure_intervention_editable(cur, str(intervention_id))
 
-            if status != "todo":
-                raise ValidationError(
-                    "Seule une tâche en statut 'todo' peut être supprimée")
-
             cur.execute(
-                "SELECT EXISTS(SELECT 1 FROM intervention_action_task WHERE task_id = %s)",
+                "SELECT COUNT(*) FROM intervention_action_task WHERE task_id = %s",
                 (task_id,),
             )
-            if cur.fetchone()[0]:
+            action_count = cur.fetchone()[0]
+            if action_count > 0:
                 raise ValidationError(
-                    "Impossible de supprimer une tâche liée à une action")
+                    f"Cette tâche est liée à {action_count} action{'s' if action_count > 1 else ''} — suppression impossible"
+                )
 
             _audit_task(cur, task_id, "deleted",
                         {"label": label, "status": status}, None,
@@ -520,10 +507,7 @@ class InterventionTaskRepository:
             cur.execute(
                 "DELETE FROM intervention_task WHERE id = %s", (task_id,))
             conn.commit()
-        except (NotFoundError, ValidationError):
-            conn.rollback()
-            raise
-        except HTTPException:
+        except (NotFoundError, ValidationError, ConflictError):
             conn.rollback()
             raise
         except Exception as e:
@@ -541,6 +525,7 @@ class InterventionTaskRepository:
         origin: Optional[List[str]] = None,
         assignee_id: Optional[str] = None,
         intervention_id: Optional[str] = None,
+        machine_id: Optional[str] = None,
         skip: int = 0,
         limit: int = 20,
         include_closed: bool = False,
@@ -576,12 +561,17 @@ class InterventionTaskRepository:
             elif assignee_id:
                 task_where.append("it.assigned_to = %s")
                 params.append(assignee_id)
+            if machine_id:
+                task_where.append("i.machine_id = %s")
+                params.append(machine_id)
             if q and q.strip():
                 like = f"%{q}%"
                 task_where.append("(it.label ILIKE %s OR i.title ILIKE %s OR i.code ILIKE %s)")
                 params.extend([like, like, like])
 
-            task_where_sql = ("WHERE " + " AND ".join(task_where)) if task_where else ""
+            # Exclure les tâches orphelines (intervention_id NULL — données incohérentes)
+            task_where.append("it.intervention_id IS NOT NULL")
+            task_where_sql = "WHERE " + " AND ".join(task_where)
 
             # Compter les interventions distinctes (pagination)
             cur.execute(
@@ -603,6 +593,7 @@ class InterventionTaskRepository:
                     i.code      AS interv_code,
                     i.title     AS interv_title,
                     i.status_actual AS interv_status,
+                    i.priority  AS interv_priority,
                     m.id        AS equip_id,
                     m.name      AS equip_name,
                     m.code      AS equip_code
@@ -621,7 +612,7 @@ class InterventionTaskRepository:
 
             items: List[Dict[str, Any]] = []
             if interventions_page:
-                interv_ids = [str(r["interv_id"]) for r in interventions_page]
+                interv_ids = [str(r["interv_id"]) for r in interventions_page if r["interv_id"] is not None]
 
                 # Tâches de ces interventions via _TASK_SELECT (source de vérité)
                 task_extra_where = list(task_where) + [
@@ -689,6 +680,7 @@ class InterventionTaskRepository:
                         "code": r.get("interv_code"),
                         "title": r.get("interv_title"),
                         "status": r.get("interv_status"),
+                        "priority": r.get("interv_priority"),
                         "equipement": equip,
                         "tasks": tasks_by_interv.get(iid, []),
                     })

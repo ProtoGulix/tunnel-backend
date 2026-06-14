@@ -14,6 +14,7 @@ Usage dans les repos :
 
 from api.errors.exceptions import DatabaseError
 import logging
+import time
 from contextlib import contextmanager
 from urllib.parse import urlparse
 
@@ -30,26 +31,47 @@ logger = logging.getLogger(__name__)
 _pool: pool.ThreadedConnectionPool | None = None
 
 
-def init_pool(database_url: str, minconn: int = 2, maxconn: int = 10) -> None:
-    """Initialise le pool au démarrage de l'application."""
+def init_pool(
+    database_url: str,
+    minconn: int = 2,
+    maxconn: int = 10,
+    retries: int = 10,
+    retry_delay: float = 3.0,
+) -> None:
+    """Initialise le pool au démarrage de l'application.
+
+    Réessaie jusqu'à `retries` fois avec un délai de `retry_delay` secondes
+    entre chaque tentative, afin de tolérer un démarrage tardif de PostgreSQL.
+    """
     global _pool
     parsed = urlparse(database_url)
-    try:
-        _pool = pool.ThreadedConnectionPool(
-            minconn=minconn,
-            maxconn=maxconn,
-            host=parsed.hostname,
-            port=parsed.port or 5432,
-            user=parsed.username,
-            password=parsed.password,
-            dbname=parsed.path.lstrip("/"),
-            connect_timeout=5,
-            options="-c statement_timeout=30000",  # 30s max par requête
-        )
-        logger.info("Pool DB initialisé (%d-%d connexions)", minconn, maxconn)
-    except psycopg2.OperationalError as e:
-        logger.error("Impossible d'initialiser le pool DB : %s", e)
-        raise DatabaseError(f"Connexion PostgreSQL impossible : {e}") from e
+    conn_kwargs = dict(
+        minconn=minconn,
+        maxconn=maxconn,
+        host=parsed.hostname,
+        port=parsed.port or 5432,
+        user=parsed.username,
+        password=parsed.password,
+        dbname=parsed.path.lstrip("/"),
+        connect_timeout=5,
+        options="-c statement_timeout=30000",  # 30s max par requête
+    )
+    last_error: Exception | None = None
+    for attempt in range(1, retries + 1):
+        try:
+            _pool = pool.ThreadedConnectionPool(**conn_kwargs)
+            logger.info("Pool DB initialisé (%d-%d connexions)", minconn, maxconn)
+            return
+        except psycopg2.OperationalError as e:
+            last_error = e
+            logger.warning(
+                "Tentative %d/%d : PostgreSQL indisponible, nouvel essai dans %.0fs — %s",
+                attempt, retries, retry_delay, e,
+            )
+            if attempt < retries:
+                time.sleep(retry_delay)
+    logger.error("Impossible d'initialiser le pool DB après %d tentatives", retries)
+    raise DatabaseError(f"Connexion PostgreSQL impossible : {last_error}") from last_error
 
 
 def get_connection() -> psycopg2.extensions.connection:

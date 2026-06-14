@@ -328,10 +328,8 @@ Tâche mise à jour.
 
 ## `DELETE /intervention-tasks/{id}`
 
-Supprime une tâche. La suppression n'est autorisée que si :
-
-- `status = "todo"` (tâche pas encore commencée)
-- Aucune liaison dans `intervention_action_task` (aucune action n'a traité cette tâche)
+Supprime une tâche. La suppression est bloquée si au moins une action est liée à la tâche
+(présence de lignes dans `intervention_action_task`).
 
 ### Body
 
@@ -353,8 +351,8 @@ Pas de corps.
 
 ### Erreurs
 
-| Code | Cas                                        |
-| ---- | ------------------------------------------ |
-| 400  | Tâche pas en statut `todo`                 |
-| 400  | Au moins une action est liée à cette tâche |
-| 404  | Tâche introuvable                          |
+| Code | Cas                                                         |
+| ---- | ----------------------------------------------------------- |
+| 400  | Au moins une action est liée à cette tâche                  |
+| 400  | Intervention parente fermée ou non éditable                 |
+| 404  | Tâche introuvable                                           |

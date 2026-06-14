@@ -48,8 +48,8 @@ class InterventionTaskPatch(BaseModel):
     label: Optional[str] = None
     status: Optional[str] = Field(
         default=None,
-        pattern="^skipped$",
-        description="Seule la transition vers 'skipped' est autorisée via PATCH direct",
+        pattern="^(todo|done|skipped)$",
+        description="Transitions autorisées via PATCH : todo (réouverture), done (clôture directe), skipped (exclusion)",
     )
     skip_reason: Optional[str] = None
     assigned_to: Optional[UUID] = None

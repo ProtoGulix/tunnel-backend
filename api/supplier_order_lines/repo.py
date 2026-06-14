@@ -1,4 +1,3 @@
-from fastapi import HTTPException
 from typing import Dict, Any, List, Optional
 from uuid import uuid4
 from decimal import Decimal
@@ -182,8 +181,6 @@ class SupplierOrderLineRepository:
                 line['is_consultation'] = is_consultation
                 line['consultation_resolved'] = has_selected_sister if is_consultation else True
             return lines
-        except HTTPException:
-            raise
         except Exception as e:
             raise_db_error(e, "opération")
         finally:
@@ -221,8 +218,6 @@ class SupplierOrderLineRepository:
             return result
         except NotFoundError:
             raise
-        except HTTPException:
-            raise
         except Exception as e:
             raise_db_error(e, "opération")
         finally:
@@ -253,8 +248,6 @@ class SupplierOrderLineRepository:
                 results.append(line)
 
             return results
-        except HTTPException:
-            raise
         except Exception as e:
             raise_db_error(e, "opération")
         finally:

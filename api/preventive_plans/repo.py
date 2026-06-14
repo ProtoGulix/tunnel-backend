@@ -2,7 +2,6 @@ import logging
 from typing import Any, Dict, List
 from uuid import uuid4
 
-from fastapi import HTTPException
 
 from api.db import get_connection, release_connection
 from api.errors.exceptions import NotFoundError, raise_db_error
@@ -130,8 +129,6 @@ class PreventivePlanRepository:
             for plan in plans:
                 plan["steps"] = self._fetch_steps(cur, str(plan["id"]))
             return plans
-        except HTTPException:
-            raise
         except Exception as e:
             raise_db_error(e, "liste des plans préventifs")
         finally:
@@ -162,8 +159,6 @@ class PreventivePlanRepository:
             plan = dict(zip(cols, row))
             plan["steps"] = self._fetch_steps(cur, plan_id)
             return plan
-        except HTTPException:
-            raise
         except Exception as e:
             raise_db_error(e, "récupération du plan préventif")
         finally:
@@ -198,7 +193,7 @@ class PreventivePlanRepository:
             if data.steps:
                 self._insert_steps(cur, plan_id, data.steps)
             conn.commit()
-        except HTTPException:
+        except (NotFoundError, ValidationError, ConflictError):
             conn.rollback()
             raise
         except Exception as e:
@@ -258,7 +253,7 @@ class PreventivePlanRepository:
                 self._replace_steps_in_tx(cur, plan_id, steps)
 
             conn.commit()
-        except HTTPException:
+        except (NotFoundError, ValidationError, ConflictError):
             conn.rollback()
             raise
         except Exception as e:
@@ -284,7 +279,7 @@ class PreventivePlanRepository:
                 raise NotFoundError(f"Plan préventif {plan_id} non trouvé")
             conn.commit()
             return True
-        except HTTPException:
+        except (NotFoundError, ValidationError, ConflictError):
             conn.rollback()
             raise
         except Exception as e:
@@ -306,7 +301,7 @@ class PreventivePlanRepository:
             self._replace_steps_in_tx(cur, plan_id, steps)
             conn.commit()
             return self._fetch_steps(cur, plan_id)
-        except HTTPException:
+        except (NotFoundError, ValidationError, ConflictError):
             conn.rollback()
             raise
         except Exception as e:

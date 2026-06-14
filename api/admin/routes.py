@@ -23,6 +23,7 @@ from api.admin.schemas import (
 )
 from api.auth.permissions import require_role
 from api.db import get_connection, release_connection
+from api.errors.exceptions import ValidationError, NotFoundError
 from api.settings import settings
 
 logger = logging.getLogger(__name__)
@@ -212,7 +213,7 @@ def patch_action_category(category_id: int, payload: ActionCategoryPatch):
             sets.append("color = %s")
             params.append(payload.color)
         if not sets:
-            raise HTTPException(status_code=400, detail="Rien à mettre à jour")
+            raise ValidationError("Rien à mettre à jour")
         params.append(category_id)
         with conn.cursor() as cur:
             cur.execute(
@@ -295,7 +296,7 @@ def patch_action_subcategory(subcat_id: int, payload: ActionSubcategoryPatch):
     try:
         conn = get_connection()
         if payload.label is None:
-            raise HTTPException(status_code=400, detail="Rien à mettre à jour")
+            raise ValidationError("Rien à mettre à jour")
         with conn.cursor() as cur:
             cur.execute(
                 "UPDATE action_subcategory SET name = %s WHERE id = %s",
@@ -356,7 +357,7 @@ def patch_complexity_factor(factor_id: int, payload: ComplexityFactorPatch):
             sets.append("category = %s")
             params.append(payload.category)
         if not sets:
-            raise HTTPException(status_code=400, detail="Rien à mettre à jour")
+            raise ValidationError("Rien à mettre à jour")
         params.append(factor_id)
         with conn.cursor() as cur:
             cur.execute(
@@ -427,7 +428,7 @@ def patch_intervention_type(type_id: int, payload: InterventionTypePatch):
     try:
         conn = get_connection()
         if payload.label is None:
-            raise HTTPException(status_code=400, detail="Rien à mettre à jour")
+            raise ValidationError("Rien à mettre à jour")
         with conn.cursor() as cur:
             cur.execute(
                 "UPDATE intervention_type SET label = %s WHERE id = %s",
@@ -489,7 +490,7 @@ def patch_intervention_status(status_code: str, payload: InterventionStatusPatch
             sets.append("color = %s")
             params.append(payload.color)
         if not sets:
-            raise HTTPException(status_code=400, detail="Rien à mettre à jour")
+            raise ValidationError("Rien à mettre à jour")
         params.append(status_code)
         with conn.cursor() as cur:
             cur.execute(

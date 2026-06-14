@@ -1,4 +1,3 @@
-from fastapi import HTTPException
 from typing import Any, Dict, List
 from uuid import uuid4
 
@@ -119,8 +118,6 @@ class InterventionStatusLogRepository:
 
             return result
 
-        except HTTPException:
-            raise
         except Exception as e:
             raise_db_error(e, "opération")
         finally:
@@ -196,8 +193,6 @@ class InterventionStatusLogRepository:
             return row_dict
 
         except NotFoundError:
-            raise
-        except HTTPException:
             raise
         except Exception as e:
             raise_db_error(e, "opération")

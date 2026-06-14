@@ -24,6 +24,7 @@ router = APIRouter(
 @router.get("")
 def list_tasks(
     intervention_id: Optional[str] = Query(None, description="Filtrer par intervention"),
+    machine_id: Optional[str] = Query(None, description="Filtrer par équipement (machine_id)"),
     assigned_to: Optional[str] = Query(None, description="UUID technicien assigné ou 'unassigned'"),
     status: Optional[str] = Query(None, description="Valeurs CSV : todo,in_progress,done,skipped"),
     origin: Optional[str] = Query(None, description="Valeurs CSV : plan,resp,tech"),
@@ -53,6 +54,7 @@ def list_tasks(
         origin=origin_list,
         assignee_id=assigned_to,
         intervention_id=intervention_id,
+        machine_id=machine_id,
         skip=skip,
         limit=limit,
         include_closed=include_done,
