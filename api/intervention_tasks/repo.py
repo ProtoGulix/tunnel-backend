@@ -593,6 +593,7 @@ class InterventionTaskRepository:
                     i.code      AS interv_code,
                     i.title     AS interv_title,
                     i.status_actual AS interv_status,
+                    i.priority  AS interv_priority,
                     m.id        AS equip_id,
                     m.name      AS equip_name,
                     m.code      AS equip_code
@@ -679,6 +680,7 @@ class InterventionTaskRepository:
                         "code": r.get("interv_code"),
                         "title": r.get("interv_title"),
                         "status": r.get("interv_status"),
+                        "priority": r.get("interv_priority"),
                         "equipement": equip,
                         "tasks": tasks_by_interv.get(iid, []),
                     })

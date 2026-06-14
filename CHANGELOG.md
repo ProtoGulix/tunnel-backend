@@ -2,6 +2,37 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [3.16.0] - 14 juin 2026
+
+### Nouvelles fonctionnalités
+
+#### Export PDF — Planning semaine
+
+Nouvel endpoint de génération de planning hebdomadaire en PDF.
+
+- **`GET /planning/week`** : retourne un récapitulatif des tâches planifiées sur la semaine pour tous les techniciens
+- Nouveau `PlanningRepository` centralisant les requêtes de planning
+- Template d'export dédié au planning semaine
+
+#### Retry de connexion à la base de données au démarrage
+
+L'application tente désormais de se connecter à PostgreSQL de façon répétée au démarrage, au lieu d'échouer immédiatement si la base n'est pas encore prête. Utile en contexte Docker Compose où le conteneur API démarre avant PostgreSQL.
+
+### Refactorisation
+
+#### Remplacement des `HTTPException` par `ValidationError` custom
+
+Les repositories utilisent désormais les exceptions métier custom (`ValidationError`, `NotFoundError`, etc.) au lieu des `HTTPException` de FastAPI, conformément à l'architecture cible.
+
+### Corrections
+
+#### Gestion des conflits et tâches orphelines
+
+- `ConflictError` ajouté au gestionnaire d'exceptions global pour renvoyer un HTTP 409 propre
+- Les tâches sans intervention associée (orphelines) sont exclues des requêtes de liste
+
+---
+
 ## [3.15.0] - 4 juin 2026
 
 ### Nouvelles fonctionnalités
