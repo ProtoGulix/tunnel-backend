@@ -2,6 +2,20 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [3.17.0] - 15 juin 2026
+
+### Nouvelles fonctionnalités
+
+#### Facettes des demandes d'achat en temps réel
+
+Nouvel endpoint pour obtenir les compteurs de demandes d'achat par statut dérivé, sans filtre de date.
+
+- **`GET /purchase-requests/facets`** : retourne `by_status` (compteurs par statut dérivé) et `pending_dispatch_count` (nombre de demandes au statut `PENDING_DISPATCH`)
+- Requête SQL directe sur la vue `purchase_request_derived_status` — aucun filtre temporel contrairement à `/stats` qui limite aux 90 derniers jours
+- Utilisé par le front pour afficher le bouton "Dispatcher" en temps réel quel que soit le filtre actif
+
+---
+
 ## [3.16.0] - 14 juin 2026
 
 ### Nouvelles fonctionnalités
