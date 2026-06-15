@@ -717,6 +717,32 @@ class PurchaseRequestRepository:
                 intervention_id=intervention_id
             )
 
+    def get_facets(self) -> Dict[str, Any]:
+        """Compteurs par statut dérivé en temps réel, sans filtre de date."""
+        conn = self._get_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT derived_status, COUNT(*) AS count
+                FROM purchase_request_derived_status
+                GROUP BY derived_status
+            """)
+            by_status = [
+                {'status': row[0], 'count': row[1], **DERIVED_STATUS_CONFIG.get(row[0], {})}
+                for row in cur.fetchall()
+            ]
+            pending_dispatch_count = next(
+                (s['count'] for s in by_status if s['status'] == 'PENDING_DISPATCH'), 0
+            )
+            return {
+                'by_status': by_status,
+                'pending_dispatch_count': pending_dispatch_count,
+            }
+        except Exception as e:
+            raise_db_error(e, "opération")
+        finally:
+            release_connection(conn)
+
     def get_stats(
         self,
         start_date: Optional[date] = None,
