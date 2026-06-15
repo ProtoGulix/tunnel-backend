@@ -132,6 +132,13 @@ def get_purchase_requests_by_intervention_optimized(
     return repo.get_by_intervention_optimized(intervention_id, view=view)
 
 
+@router.get("/facets")
+def get_purchase_request_facets():
+    """Compteurs par statut dérivé en temps réel, sans filtre de date."""
+    repo = PurchaseRequestRepository()
+    return single(repo.get_facets())
+
+
 @router.post("/dispatch")
 def dispatch_pending_requests():
     """
