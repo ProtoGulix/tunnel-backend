@@ -2,6 +2,50 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [4.0.0] - 16 juin 2026
+
+### Migration majeure — Catalogue pièces V4 (breaking)
+
+Refonte complète du référentiel articles : le modèle `stock_item` legacy est remplacé par le catalogue `part` V4, avec une stratégie de migration UUID reuse garantissant la continuité des données.
+
+#### Nouveau schéma catalogue (`migration 009`)
+
+- Table `part` avec référence interne auto-générée (`P000001`, `P000002`…)
+- Tables `part_manufacturer_ref` et `part_supplier_ref` pour les références fabricants et fournisseurs
+- Migration automatique de tous les `stock_item` existants vers `part` (même UUID)
+
+#### Demandes d'achat — migration vers `part_id` (`migrations 010-011`)
+
+- Vue `purchase_request_derived_status` mise à jour pour `part_id`
+- Les 271 DAs existantes migrées de `stock_item_id` → `part_id`
+- Nouvelle règle : le backend résout automatiquement `stock_item_id` → `part_id` si l'UUID correspond (compatibilité clients legacy)
+- Statut `TO_QUALIFY` déclenché uniquement si ni `stock_item_id` ni `part_id` n'est présent
+
+#### Dispatch — support V4 (`migration 012`)
+
+- `supplier_order_line.stock_item_id` rendu nullable (migration 012)
+- Index partiels `uq_sol_stock_item` et `uq_sol_part` remplacent l'ancien index unique
+- `ON CONFLICT` dynamique selon le type de référence (V4 ou legacy)
+- Erreurs de dispatch enrichies : message lisible + `item_label` + `error_detail`
+
+#### Séquence de numérotation (`migration 013`)
+
+- Création de `supplier_order_seq` (manquante sur les environnements existants)
+
+#### Lignes de commande fournisseur
+
+- `get_lines()` enrichi avec jointures `part`, `part_manufacturer_ref`, `part_supplier_ref`
+- Mapping automatique V4 → champs `stock_item_*` pour compatibilité frontend
+- Références fournisseur et fabricant résolues depuis le catalogue V4
+
+#### Schémas Pydantic
+
+- `PartDetail` ajouté dans `PurchaseRequestDetail`
+- `DispatchError` enrichi : `item_label` et `error_detail`
+- `PurchaseRequestDetail` expose `part_id` et `part`
+
+---
+
 ## [3.17.0] - 15 juin 2026
 
 ### Nouvelles fonctionnalités
