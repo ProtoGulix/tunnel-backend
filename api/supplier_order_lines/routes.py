@@ -27,7 +27,8 @@ def list_supplier_order_lines(
     skip: int = Query(0, ge=0, description="Nombre d'éléments à sauter"),
     limit: int = Query(100, ge=1, le=1000, description="Nombre max d'éléments"),
     supplier_order_id: Optional[str] = Query(None, description="Filtrer par commande"),
-    stock_item_id: Optional[str] = Query(None, description="Filtrer par article"),
+    stock_item_id: Optional[str] = Query(None, description="Filtrer par article (legacy)"),
+    part_id: Optional[str] = Query(None, description="Filtrer par pièce (nouveau)"),
     is_selected: Optional[bool] = Query(None, description="Filtrer par sélection")
 ):
     """Liste toutes les lignes de commande avec filtres optionnels"""
@@ -37,6 +38,7 @@ def list_supplier_order_lines(
         offset=skip,
         supplier_order_id=supplier_order_id,
         stock_item_id=stock_item_id,
+        part_id=part_id,
         is_selected=is_selected
     )
 

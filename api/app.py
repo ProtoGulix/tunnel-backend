@@ -25,6 +25,7 @@ from api.equipement_statuts.routes import router as equipement_statut_router
 from api.stats.routes import router as stats_router
 from api.purchase_requests.routes import router as purchase_request_router
 from api.stock_items.routes import router as stock_item_router
+from api.parts.routes import router as parts_router
 from api.stock_families.routes import router as stock_family_router
 from api.stock_sub_families.routes import router as stock_sub_family_router
 from api.part_templates.routes import router as part_template_router
@@ -144,6 +145,7 @@ app.include_router(stats_router)
 app.include_router(complexity_factor_router)
 app.include_router(purchase_request_router)
 app.include_router(stock_item_router)
+app.include_router(parts_router)
 app.include_router(stock_family_router)
 app.include_router(stock_sub_family_router)
 app.include_router(part_template_router)

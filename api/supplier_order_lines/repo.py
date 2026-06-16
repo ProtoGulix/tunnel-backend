@@ -21,7 +21,7 @@ class SupplierOrderLineRepository:
         return data
 
     def _enrich_with_stock_item(self, line_dict: Dict[str, Any], conn) -> Dict[str, Any]:
-        """Enrichit une ligne avec les détails du stock_item"""
+        """Enrichit une ligne avec les détails du stock_item (legacy) et de la part (nouveau)."""
         stock_item_id = line_dict.get('stock_item_id')
         if stock_item_id:
             try:
@@ -44,6 +44,36 @@ class SupplierOrderLineRepository:
                 line_dict['stock_item'] = None
         else:
             line_dict['stock_item'] = None
+
+        part_id = line_dict.get('part_id')
+        if part_id:
+            try:
+                cur = conn.cursor()
+                cur.execute(
+                    """
+                    SELECT p.id, p.internal_ref, p.family_code, p.sub_family_code,
+                           p.qty_in_stock, p.unit, p.location,
+                           COALESCE(pmr.label, pmr.manufacturer_ref, p.internal_ref) AS display_name
+                    FROM part p
+                    LEFT JOIN LATERAL (
+                        SELECT label, manufacturer_ref FROM part_manufacturer_ref
+                        WHERE part_id = p.id AND is_preferred = true LIMIT 1
+                    ) pmr ON true
+                    WHERE p.id = %s
+                    """,
+                    (str(part_id),)
+                )
+                row = cur.fetchone()
+                if row:
+                    cols = [desc[0] for desc in cur.description]
+                    line_dict['part'] = dict(zip(cols, row))
+                else:
+                    line_dict['part'] = None
+            except Exception:
+                line_dict['part'] = None
+        else:
+            line_dict['part'] = None
+
         return line_dict
 
     def _compute_consultation_fields(self, line_id: str, conn) -> tuple[bool, bool]:
@@ -109,6 +139,7 @@ class SupplierOrderLineRepository:
         offset: int = 0,
         supplier_order_id: Optional[str] = None,
         stock_item_id: Optional[str] = None,
+        part_id: Optional[str] = None,
         is_selected: Optional[bool] = None
     ) -> List[Dict[str, Any]]:
         """Récupère toutes les lignes de commande avec filtres optionnels"""
@@ -129,6 +160,10 @@ class SupplierOrderLineRepository:
                 where_clauses.append("sol.stock_item_id = %s")
                 params.append(stock_item_id)
 
+            if part_id:
+                where_clauses.append("sol.part_id = %s")
+                params.append(part_id)
+
             if is_selected is not None:
                 where_clauses.append("sol.is_selected = %s")
                 params.append(is_selected)
@@ -138,10 +173,11 @@ class SupplierOrderLineRepository:
 
             query = f"""
                 SELECT
-                    sol.id, sol.supplier_order_id, sol.stock_item_id,
+                    sol.id, sol.supplier_order_id, sol.stock_item_id, sol.part_id,
                     sol.quantity, sol.unit_price, sol.total_price,
                     sol.quantity_received, sol.is_selected,
                     si.name as stock_item_name, si.ref as stock_item_ref,
+                    COALESCE(pmr_pref.label, pmr_pref.manufacturer_ref, pt.internal_ref) AS part_display_name,
                     (SELECT COUNT(*) FROM supplier_order_line_purchase_request
                      WHERE supplier_order_line_id = sol.id) as purchase_request_count,
                     EXISTS (
@@ -164,6 +200,11 @@ class SupplierOrderLineRepository:
                     ) AS has_selected_sister
                 FROM supplier_order_line sol
                 LEFT JOIN stock_item si ON sol.stock_item_id = si.id
+                LEFT JOIN part pt ON sol.part_id = pt.id
+                LEFT JOIN LATERAL (
+                    SELECT label, manufacturer_ref FROM part_manufacturer_ref
+                    WHERE part_id = pt.id AND is_preferred = true LIMIT 1
+                ) pmr_pref ON true
                 {where_sql}
                 ORDER BY sol.created_at DESC
                 LIMIT %s OFFSET %s
@@ -264,16 +305,17 @@ class SupplierOrderLineRepository:
             cur.execute(
                 """
                 INSERT INTO supplier_order_line
-                (id, supplier_order_id, stock_item_id, supplier_ref_snapshot,
+                (id, supplier_order_id, stock_item_id, part_id, supplier_ref_snapshot,
                  quantity, unit_price, notes, quote_received, is_selected,
                  quote_price, manufacturer, manufacturer_ref, quote_received_at,
                  rejected_reason, lead_time_days)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     line_id,
                     data['supplier_order_id'],
-                    data['stock_item_id'],
+                    data.get('stock_item_id'),
+                    data.get('part_id'),
                     data.get('supplier_ref_snapshot'),
                     data['quantity'],
                     data.get('unit_price'),
