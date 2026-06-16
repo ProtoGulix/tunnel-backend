@@ -89,26 +89,62 @@ class SupplierOrderRepository:
             cur.execute(
                 """
                 SELECT
-                    sol.id, sol.supplier_order_id, sol.stock_item_id,
+                    sol.id, sol.supplier_order_id, sol.stock_item_id, sol.part_id,
                     sol.quantity, sol.unit_price, sol.total_price,
                     sol.quantity_received, sol.is_selected,
                     sol.notes, sol.quote_price, sol.lead_time_days,
                     sol.manufacturer as sol_manufacturer,
                     sol.manufacturer_ref as sol_manufacturer_ref,
+
+                    -- Champs legacy (stock_item)
                     si.name as stock_item_name, si.ref as stock_item_ref,
                     si.spec as stock_item_spec, si.unit as stock_item_unit,
-                    sis.supplier_ref as catalog_supplier_ref,
-                    mi.manufacturer_name as catalog_manufacturer,
-                    mi.manufacturer_ref as catalog_manufacturer_ref,
+                    sis.supplier_ref as legacy_supplier_ref,
+                    mi.manufacturer_name as legacy_manufacturer,
+                    mi.manufacturer_ref as legacy_manufacturer_ref,
+
+                    -- Champs V4 (part)
+                    pt.internal_ref as part_internal_ref,
+                    pt.unit as part_unit,
+                    COALESCE(
+                        (SELECT pmr.label FROM part_manufacturer_ref pmr
+                         WHERE pmr.part_id = pt.id AND pmr.is_preferred = true LIMIT 1),
+                        (SELECT pmr.label FROM part_manufacturer_ref pmr
+                         WHERE pmr.part_id = pt.id LIMIT 1)
+                    ) as part_display_name,
+                    COALESCE(
+                        (SELECT psr.supplier_ref FROM part_supplier_ref psr
+                         JOIN part_manufacturer_ref pmr ON pmr.id = psr.part_manufacturer_ref_id
+                         WHERE pmr.part_id = pt.id AND psr.supplier_id = so.supplier_id LIMIT 1),
+                        (SELECT psr.supplier_ref FROM part_supplier_ref psr
+                         JOIN part_manufacturer_ref pmr ON pmr.id = psr.part_manufacturer_ref_id
+                         WHERE pmr.part_id = pt.id AND psr.is_preferred = true LIMIT 1)
+                    ) as part_supplier_ref,
+                    COALESCE(
+                        (SELECT pmr.manufacturer_name FROM part_manufacturer_ref pmr
+                         WHERE pmr.part_id = pt.id AND pmr.is_preferred = true LIMIT 1),
+                        (SELECT pmr.manufacturer_name FROM part_manufacturer_ref pmr
+                         WHERE pmr.part_id = pt.id LIMIT 1)
+                    ) as part_manufacturer_name,
+                    COALESCE(
+                        (SELECT pmr.manufacturer_ref FROM part_manufacturer_ref pmr
+                         WHERE pmr.part_id = pt.id AND pmr.is_preferred = true LIMIT 1),
+                        (SELECT pmr.manufacturer_ref FROM part_manufacturer_ref pmr
+                         WHERE pmr.part_id = pt.id LIMIT 1)
+                    ) as part_manufacturer_ref,
+
                     (SELECT COUNT(*) FROM supplier_order_line_purchase_request
                      WHERE supplier_order_line_id = sol.id) as purchase_request_count
                 FROM supplier_order_line sol
-                LEFT JOIN stock_item si ON sol.stock_item_id = si.id
                 JOIN supplier_order so ON sol.supplier_order_id = so.id
+                -- Legacy
+                LEFT JOIN stock_item si ON sol.stock_item_id = si.id
                 LEFT JOIN stock_item_supplier sis
                     ON sis.stock_item_id = sol.stock_item_id
                     AND sis.supplier_id = so.supplier_id
                 LEFT JOIN manufacturer_item mi ON sis.manufacturer_item_id = mi.id
+                -- V4
+                LEFT JOIN part pt ON pt.id = sol.part_id
                 WHERE sol.supplier_order_id = %s
                 ORDER BY sol.created_at ASC
                 """,
@@ -119,11 +155,36 @@ class SupplierOrderRepository:
             results = []
             for row in rows:
                 line = self._convert_decimals(dict(zip(cols, row)))
-                supplier_ref = line.pop('catalog_supplier_ref', None)
+
+                # Choisit la source V4 (part) ou legacy (stock_item)
+                is_v4 = line.get('part_id') is not None
+
+                if is_v4:
+                    line['stock_item_name'] = line.pop('part_display_name', None)
+                    line['stock_item_ref'] = line.pop('part_internal_ref', None)
+                    line['stock_item_unit'] = line.pop('part_unit', None)
+                    line['stock_item_spec'] = None
+                    supplier_ref = line.pop('part_supplier_ref', None)
+                    mfr_name = line.pop('part_manufacturer_name', None)
+                    mfr_ref = line.pop('part_manufacturer_ref', None)
+                    line.pop('legacy_supplier_ref', None)
+                    line.pop('legacy_manufacturer', None)
+                    line.pop('legacy_manufacturer_ref', None)
+                else:
+                    line.pop('part_display_name', None)
+                    line.pop('part_internal_ref', None)
+                    line.pop('part_unit', None)
+                    supplier_ref = line.pop('legacy_supplier_ref', None)
+                    mfr_name = line.pop('legacy_manufacturer', None)
+                    mfr_ref = line.pop('legacy_manufacturer_ref', None)
+                    line.pop('part_supplier_ref', None)
+                    line.pop('part_manufacturer_name', None)
+                    line.pop('part_manufacturer_ref', None)
+
                 sol_mfr = line.pop('sol_manufacturer', None)
                 sol_mfr_ref = line.pop('sol_manufacturer_ref', None)
-                mfr_name = sol_mfr or line.pop('catalog_manufacturer', None)
-                mfr_ref = sol_mfr_ref or line.pop('catalog_manufacturer_ref', None)
+                mfr_name = sol_mfr or mfr_name
+                mfr_ref = sol_mfr_ref or mfr_ref
 
                 line['supplier'] = {'ref': supplier_ref} if supplier_ref else None
                 line['manufacturer'] = {'name': mfr_name, 'ref': mfr_ref} if (mfr_name or mfr_ref) else None

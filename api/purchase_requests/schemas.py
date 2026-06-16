@@ -128,6 +128,22 @@ class StockItemDetail(BaseModel):
         from_attributes = True
 
 
+class PartDetail(BaseModel):
+    """Pièce catalogue V4 (pour édition)"""
+    id: UUID
+    internal_ref: str
+    display_name: Optional[str] = Field(default=None)
+    family_code: Optional[str] = Field(default=None)
+    sub_family_code: Optional[str] = Field(default=None)
+    qty_in_stock: Optional[int] = Field(default=0)
+    unit: Optional[str] = Field(default=None)
+    location: Optional[str] = Field(default=None)
+    supplier_refs_count: Optional[int] = Field(default=0)
+
+    class Config:
+        from_attributes = True
+
+
 class PurchaseRequestDetail(BaseModel):
     """Schéma complet pour détails (modal, édition)"""
     id: UUID
@@ -140,8 +156,12 @@ class PurchaseRequestDetail(BaseModel):
     is_editable: bool = Field(default=False, description="True si la DA peut encore être modifiée (non dispatchée)")
 
     # Relations complètes
+    stock_item_id: Optional[UUID] = Field(default=None)
+    part_id: Optional[UUID] = Field(default=None)
     stock_item: Optional[StockItemDetail] = Field(
-        default=None, description="Article stock complet")
+        default=None, description="Article stock legacy")
+    part: Optional[PartDetail] = Field(
+        default=None, description="Pièce catalogue V4")
     intervention: Optional[InterventionInfo] = Field(
         default=None, description="Intervention complète")
     order_lines: List[LinkedOrderLineDetail] = Field(
@@ -178,7 +198,9 @@ class PurchaseRequestStats(BaseModel):
 class DispatchError(BaseModel):
     """Erreur lors du dispatch d'une demande"""
     purchase_request_id: str
+    item_label: Optional[str] = Field(default=None)
     error: str
+    error_detail: Optional[str] = Field(default=None)
 
 
 class DispatchResult(BaseModel):
@@ -202,6 +224,8 @@ class PurchaseRequestIn(BaseModel):
     """Schéma d'entrée pour créer ou modifier une demande d'achat"""
     stock_item_id: Optional[UUID] = Field(
         default=None, description="ID de l'item en stock (optionnel)")
+    part_id: Optional[UUID] = Field(
+        default=None, description="ID de la pièce catalogue V4 (optionnel, prioritaire sur stock_item_id)")
     item_label: str = Field(..., description="Libellé de l'article demandé")
     quantity: int = Field(..., gt=0, description="Quantité demandée")
     unit: Optional[str] = Field(

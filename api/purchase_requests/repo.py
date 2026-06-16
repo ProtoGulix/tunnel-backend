@@ -76,14 +76,7 @@ class PurchaseRequestRepository:
             )
 
     def add(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Crée une nouvelle demande d'achat.
-
-        Deux modes :
-        - Lié à une action (intervention_action_id fourni) : liaison insérée dans
-          intervention_action_purchase_request.
-        - Autonome (intervention_action_id absent) : DA spontanée sans aucune relation.
-        """
+        """Crée une nouvelle demande d'achat."""
         from api.errors.exceptions import NotFoundError
 
         intervention_action_id = data.get('intervention_action_id')
@@ -93,9 +86,23 @@ class PurchaseRequestRepository:
             cur = conn.cursor()
 
             if intervention_action_id:
-                # Vérifie que l'action existe
                 action_id_str = str(intervention_action_id)
                 self._ensure_action_intervention_editable(cur, action_id_str)
+
+            # Résolution part_id : priorité à part_id explicite,
+            # fallback sur stock_item_id legacy (résolu via UUID reuse)
+            part_id = data.get('part_id')
+            if not part_id and data.get('stock_item_id'):
+                stock_item_id_raw = str(data['stock_item_id'])
+                cur.execute("SELECT id FROM part WHERE id = %s", (stock_item_id_raw,))
+                row = cur.fetchone()
+                if row:
+                    part_id = str(row[0])
+                else:
+                    logger.warning(
+                        "add(): stock_item_id=%s fourni mais aucun part correspondant — DA créée sans référence",
+                        stock_item_id_raw
+                    )
 
             request_id = str(uuid4())
             now = datetime.now()
@@ -103,7 +110,7 @@ class PurchaseRequestRepository:
             cur.execute(
                 """
                 INSERT INTO purchase_request
-                (id, status, stock_item_id, item_label, quantity, unit,
+                (id, status, part_id, item_label, quantity, unit,
                  requested_by, urgency, reason, notes, workshop,
                  created_at, updated_at)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
@@ -111,7 +118,7 @@ class PurchaseRequestRepository:
                 (
                     request_id,
                     data.get('status', 'open'),
-                    data.get('stock_item_id'),
+                    str(part_id) if part_id else None,
                     data['item_label'],
                     data['quantity'],
                     data.get('unit'),
@@ -161,7 +168,7 @@ class PurchaseRequestRepository:
 
             # Champs modifiables (status supprimé car calculé automatiquement)
             updatable_fields = [
-                'stock_item_id', 'item_label', 'quantity', 'unit',
+                'stock_item_id', 'part_id', 'item_label', 'quantity', 'unit',
                 'requested_by', 'urgency', 'reason', 'notes', 'workshop',
                 'quantity_approved',
                 'approver_name', 'approved_at'
@@ -225,8 +232,6 @@ class PurchaseRequestRepository:
         finally:
             release_connection(conn)
 
-    # ========== Méthodes optimisées v1.2.0 ==========
-
     def _map_derived_status(self, status_code: str) -> Dict[str, Any]:
         """Mappe un code statut vers objet DerivedStatus"""
         config = DERIVED_STATUS_CONFIG.get(
@@ -240,6 +245,7 @@ class PurchaseRequestRepository:
     def _derive_status(
         self,
         stock_item_id: Optional[str] = None,
+        part_id: Optional[str] = None,
         supplier_refs_count: Optional[int] = None,
         has_order_lines: bool = False,
         quotes_count: int = 0,
@@ -251,8 +257,8 @@ class PurchaseRequestRepository:
         Calcule le statut dérivé basé sur les compteurs agrégés.
 
         Règles métier :
-        - TO_QUALIFY : Pas de référence stock normalisée (stock_item_id is NULL)
-        - NO_SUPPLIER_REF : Référence stock ok, mais aucune référence fournisseur liée
+        - TO_QUALIFY : Pas de référence normalisée (ni stock_item_id ni part_id)
+        - NO_SUPPLIER_REF : Référence ok, mais aucune référence fournisseur liée
         - PENDING_DISPATCH : Référence fournisseur ok, mais pas encore dans un supplier order
         - OPEN : Présent dans un supplier order (mutualisation)
         - QUOTED : Au moins un devis reçu
@@ -260,8 +266,8 @@ class PurchaseRequestRepository:
         - PARTIAL : Livraison partielle
         - RECEIVED : Livraison complète
         """
-        # Règle 1 : Pas de référence normalisée = À qualifier
-        if stock_item_id is None:
+        # Règle 1 : Pas de référence normalisée = À qualifier (legacy stock_item OU nouveau part)
+        if stock_item_id is None and part_id is None:
             return 'TO_QUALIFY'
 
         # Règle 2 : Référence fournisseur manquante
@@ -287,6 +293,7 @@ class PurchaseRequestRepository:
         self,
         order_lines: List[Dict],
         stock_item_id: Optional[str] = None,
+        part_id: Optional[str] = None,
         supplier_refs_count: Optional[int] = None
     ) -> str:
         """
@@ -296,6 +303,7 @@ class PurchaseRequestRepository:
         if not order_lines:
             return self._derive_status(
                 stock_item_id=stock_item_id,
+                part_id=part_id,
                 supplier_refs_count=supplier_refs_count,
                 has_order_lines=False
             )
@@ -333,6 +341,7 @@ class PurchaseRequestRepository:
 
         return self._derive_status(
             stock_item_id=stock_item_id,
+            part_id=part_id,
             supplier_refs_count=supplier_refs_count,
             has_order_lines=True,
             quotes_count=quotes_count,
@@ -388,15 +397,19 @@ class PurchaseRequestRepository:
                     prd.quantity,
                     prd.unit,
                     prd.stock_item_id,
+                    pr_base.part_id,
                     prd.derived_status,
                     prd.quotes_count,
                     prd.selected_count,
                     prd.total_allocated,
                     prd.total_received,
 
-                    -- Infos jointes
+                    -- Infos jointes stock_item (legacy)
                     si.ref AS stock_item_ref,
                     si.name AS stock_item_name,
+                    -- Infos jointes part (nouveau)
+                    pt.internal_ref AS part_internal_ref,
+                    pt_pref.label AS part_display_name,
                     i.code AS intervention_code,
                     prd.requested_by AS requester_name,
                     prd.urgency,
@@ -406,7 +419,15 @@ class PurchaseRequestRepository:
                     prd.updated_at
 
                 FROM purchase_request_derived_status prd
+                JOIN purchase_request pr_base ON pr_base.id = prd.id
                 LEFT JOIN stock_item si ON si.id = prd.stock_item_id
+                LEFT JOIN part pt ON pt.id = pr_base.part_id
+                LEFT JOIN LATERAL (
+                    SELECT COALESCE(label, manufacturer_ref) AS label
+                    FROM part_manufacturer_ref
+                    WHERE part_id = pt.id AND is_preferred = true
+                    LIMIT 1
+                ) pt_pref ON true
                 LEFT JOIN intervention_action_purchase_request iapr ON iapr.purchase_request_id = prd.id
                 LEFT JOIN intervention_action ia ON ia.id = iapr.intervention_action_id
                 LEFT JOIN intervention i ON i.id = ia.intervention_id
@@ -417,10 +438,11 @@ class PurchaseRequestRepository:
                 WHERE {where_sql}
 
                 GROUP BY prd.id, prd.item_label, prd.quantity, prd.unit, prd.stock_item_id,
+                         pr_base.part_id,
                          prd.derived_status, prd.quotes_count, prd.selected_count,
                          prd.total_allocated, prd.total_received, prd.requested_by, prd.urgency,
                          prd.created_at, prd.updated_at,
-                         si.ref, si.name, i.code
+                         si.ref, si.name, pt.internal_ref, pt_pref.label, i.code
 
                 ORDER BY prd.created_at DESC
                 LIMIT %s OFFSET %s
@@ -469,24 +491,33 @@ class PurchaseRequestRepository:
         try:
             cur = conn.cursor()
 
-            # Récupère la demande avec stock_item et intervention
+            # Récupère la demande avec stock_item, part et intervention
             cur.execute(
                 """
                 SELECT
                     pr.*,
-                    -- Stock item
+                    -- Stock item (legacy)
                     si.id as si_id, si.name as si_name, si.ref as si_ref,
                     si.family_code as si_family_code, si.sub_family_code as si_sub_family_code,
                     si.quantity as si_quantity, si.unit as si_unit, si.location as si_location,
                     (SELECT COUNT(*) FROM stock_item_supplier WHERE stock_item_id = si.id) as si_supplier_refs_count,
-                    -- Intervention
+                    -- Part (nouveau)
+                    pt.id as pt_id, pt.internal_ref as pt_internal_ref,
+                    pt.family_code as pt_family_code, pt.sub_family_code as pt_sub_family_code,
+                    pt.qty_in_stock as pt_qty_in_stock, pt.unit as pt_unit, pt.location as pt_location,
+                    (SELECT COUNT(*) FROM part_supplier_ref psr
+                     JOIN part_manufacturer_ref pmr ON pmr.id = psr.part_manufacturer_ref_id
+                     WHERE pmr.part_id = pt.id) as pt_supplier_refs_count,
+                    (SELECT COALESCE(label, manufacturer_ref) FROM part_manufacturer_ref
+                     WHERE part_id = pt.id AND is_preferred = true LIMIT 1) as pt_display_name,
+                    -- Intervention déduite via la table de jonction action↔DA
                     i.id as i_id, i.code as i_code, i.title as i_title,
                     i.priority as i_priority, i.status_actual as i_status_actual,
                     -- Équipement
                     e.id as e_id, e.code as e_code, e.name as e_name
                 FROM purchase_request pr
                 LEFT JOIN stock_item si ON pr.stock_item_id = si.id
-                -- Intervention déduite via la table de jonction action↔DA
+                LEFT JOIN part pt ON pr.part_id = pt.id
                 LEFT JOIN intervention_action_purchase_request iapr ON iapr.purchase_request_id = pr.id
                 LEFT JOIN intervention_action ia ON ia.id = iapr.intervention_action_id
                 LEFT JOIN intervention i ON i.id = ia.intervention_id
@@ -504,7 +535,7 @@ class PurchaseRequestRepository:
             cols = [desc[0] for desc in cur.description]
             data = dict(zip(cols, row))
 
-            # Construit stock_item
+            # Construit stock_item (legacy)
             if data.get('si_id'):
                 data['stock_item'] = {
                     'id': data['si_id'],
@@ -519,6 +550,22 @@ class PurchaseRequestRepository:
                 }
             else:
                 data['stock_item'] = None
+
+            # Construit part (nouveau)
+            if data.get('pt_id'):
+                data['part'] = {
+                    'id': data['pt_id'],
+                    'internal_ref': data['pt_internal_ref'],
+                    'display_name': data.get('pt_display_name') or data['pt_internal_ref'],
+                    'family_code': data['pt_family_code'],
+                    'sub_family_code': data['pt_sub_family_code'],
+                    'qty_in_stock': data['pt_qty_in_stock'],
+                    'unit': data['pt_unit'],
+                    'location': data['pt_location'],
+                    'supplier_refs_count': data['pt_supplier_refs_count']
+                }
+            else:
+                data['part'] = None
 
             # Construit intervention avec équipement
             if data.get('i_id'):
@@ -542,22 +589,26 @@ class PurchaseRequestRepository:
 
             # Nettoie les colonnes intermédiaires
             for key in list(data.keys()):
-                if key.startswith('si_') or key.startswith('i_') or key.startswith('e_'):
+                if key.startswith('si_') or key.startswith('pt_') or key.startswith('i_') or key.startswith('e_'):
                     del data[key]
 
             # Récupère order_lines enrichis avec fournisseur
             order_lines = self._get_linked_order_lines_detail(request_id, conn)
             data['order_lines'] = order_lines
 
-            # Calcule le statut dérivé (passe stock_item_id pour règle "À qualifier")
+            # Calcule le statut dérivé (stock_item_id legacy OU part_id nouveau)
             stock_item_id = data.get('stock_item_id')
+            part_id_val = data.get('part_id')
+            part = data.get('part')
             stock_item = data.get('stock_item')
             supplier_refs_count = (
+                part.get('supplier_refs_count') if part else
                 stock_item.get('supplier_refs_count') if stock_item else None
             )
             status_code = self._derive_status_from_order_lines(
                 order_lines,
                 stock_item_id=str(stock_item_id) if stock_item_id else None,
+                part_id=str(part_id_val) if part_id_val else None,
                 supplier_refs_count=supplier_refs_count
             )
             data['derived_status'] = self._map_derived_status(status_code)
@@ -897,16 +948,22 @@ class PurchaseRequestRepository:
                     new_order_id, supplier_id_str)
         return new_order_id, True
 
-    def _dispatch_to_supplier(self, cur, order_id: str, stock_item_id: str,
+    def _dispatch_to_supplier(self, cur, order_id: str, stock_item_id: Optional[str],
                               supplier_ref: str, unit_price, req_id_str: str,
-                              req_quantity: int):
+                              req_quantity: int, part_id: Optional[str] = None):
         """Crée ou fusionne la ligne de commande et lie la purchase_request."""
+        # Le ON CONFLICT doit cibler l'index partiel correspondant au type de référence
+        if part_id:
+            conflict_clause = "ON CONFLICT (supplier_order_id, part_id) WHERE part_id IS NOT NULL"
+        else:
+            conflict_clause = "ON CONFLICT (supplier_order_id, stock_item_id) WHERE stock_item_id IS NOT NULL"
+
         cur.execute(
-            """
+            f"""
             INSERT INTO supplier_order_line
-            (id, supplier_order_id, stock_item_id, supplier_ref_snapshot, quantity, unit_price)
-            VALUES (%s, %s, %s, %s, %s, %s)
-            ON CONFLICT (supplier_order_id, stock_item_id)
+            (id, supplier_order_id, stock_item_id, part_id, supplier_ref_snapshot, quantity, unit_price)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            {conflict_clause}
             DO UPDATE SET quantity = COALESCE(supplier_order_line.quantity, 0) + EXCLUDED.quantity
             RETURNING id
             """,
@@ -914,6 +971,7 @@ class PurchaseRequestRepository:
                 str(uuid4()),
                 order_id,
                 stock_item_id,
+                part_id,
                 supplier_ref,
                 req_quantity,
                 float(unit_price) if unit_price else None
@@ -970,36 +1028,54 @@ class PurchaseRequestRepository:
                     cur.execute(f"SAVEPOINT {savepoint_name}")
 
                     stock_item_id = req.get('stock_item_id')
-                    if not stock_item_id:
+                    part_id = req.get('part_id')
+                    if not stock_item_id and not part_id:
                         cur.execute(f"ROLLBACK TO SAVEPOINT {savepoint_name}")
                         errors.append({
                             'purchase_request_id': req_id_str,
-                            'error': 'Pas de stock_item_id'
+                            'item_label': req.get('item_label', ''),
+                            'error': "Pièce catalogue non liée — qualifier la demande d'abord",
                         })
                         continue
 
                     req_quantity = req.get('quantity', 1)
-                    stock_item_id_str = str(stock_item_id)
+                    stock_item_id_str = str(stock_item_id) if stock_item_id else None
+                    part_id_str = str(part_id) if part_id else None
 
-                    # Récupère tous les fournisseurs de l'article (préféré en premier)
-                    cur.execute(
-                        """
-                        SELECT sis.supplier_id, sis.supplier_ref, sis.unit_price,
-                               sis.is_preferred, s.name AS supplier_name
-                        FROM stock_item_supplier sis
-                        LEFT JOIN supplier s ON s.id = sis.supplier_id
-                        WHERE sis.stock_item_id = %s
-                        ORDER BY sis.is_preferred DESC, s.name ASC
-                        """,
-                        (stock_item_id_str,)
-                    )
+                    # Récupère les fournisseurs : via part_supplier_ref si part_id, sinon stock_item_supplier
+                    if part_id_str:
+                        cur.execute(
+                            """
+                            SELECT psr.supplier_id, psr.supplier_ref, psr.unit_price,
+                                   psr.is_preferred, s.name AS supplier_name
+                            FROM part_supplier_ref psr
+                            JOIN part_manufacturer_ref pmr ON pmr.id = psr.part_manufacturer_ref_id
+                            LEFT JOIN supplier s ON s.id = psr.supplier_id
+                            WHERE pmr.part_id = %s
+                            ORDER BY psr.is_preferred DESC, s.name ASC
+                            """,
+                            (part_id_str,)
+                        )
+                    else:
+                        cur.execute(
+                            """
+                            SELECT sis.supplier_id, sis.supplier_ref, sis.unit_price,
+                                   sis.is_preferred, s.name AS supplier_name
+                            FROM stock_item_supplier sis
+                            LEFT JOIN supplier s ON s.id = sis.supplier_id
+                            WHERE sis.stock_item_id = %s
+                            ORDER BY sis.is_preferred DESC, s.name ASC
+                            """,
+                            (stock_item_id_str,)
+                        )
                     supplier_rows = cur.fetchall()
 
                     if not supplier_rows:
                         cur.execute(f"ROLLBACK TO SAVEPOINT {savepoint_name}")
                         errors.append({
                             'purchase_request_id': req_id_str,
-                            'error': 'Aucun fournisseur référencé'
+                            'item_label': req.get('item_label', ''),
+                            'error': 'Aucun fournisseur référencé pour cette pièce',
                         })
                         continue
 
@@ -1021,7 +1097,8 @@ class PurchaseRequestRepository:
 
                         self._dispatch_to_supplier(
                             cur, order_id, stock_item_id_str,
-                            supplier_ref, unit_price, req_id_str, req_quantity
+                            supplier_ref, unit_price, req_id_str, req_quantity,
+                            part_id=part_id_str
                         )
 
                         details.append({
@@ -1046,7 +1123,8 @@ class PurchaseRequestRepository:
 
                             self._dispatch_to_supplier(
                                 cur, order_id, stock_item_id_str,
-                                supplier_ref, unit_price, req_id_str, req_quantity
+                                supplier_ref, unit_price, req_id_str, req_quantity,
+                                part_id=part_id_str
                             )
 
                             consultation_orders.append({
@@ -1069,12 +1147,25 @@ class PurchaseRequestRepository:
                         cur.execute(f"ROLLBACK TO SAVEPOINT {savepoint_name}")
                     except Exception:
                         pass
+                    raw = str(e)
+                    if 'supplier_order_seq' in raw:
+                        user_msg = "Séquence de numérotation des commandes manquante (contacter l'admin)"
+                    elif 'not-null constraint' in raw and 'stock_item_id' in raw:
+                        user_msg = "Référence article manquante sur la ligne de commande"
+                    elif 'unique constraint' in raw or 'UniqueViolation' in raw:
+                        user_msg = "Cette demande est déjà présente dans un panier fournisseur"
+                    elif 'Aucun fournisseur' in raw:
+                        user_msg = raw
+                    else:
+                        user_msg = "Erreur technique lors du dispatch"
                     errors.append({
                         'purchase_request_id': req_id_str,
-                        'error': str(e)
+                        'item_label': req.get('item_label', ''),
+                        'error': user_msg,
+                        'error_detail': raw,
                     })
                     logger.error(
-                        "Error dispatching request %s: %s", req['id'], str(e))
+                        "Error dispatching request %s: %s", req['id'], raw)
 
             conn.commit()
             logger.info("Dispatch completed: %d dispatched, %d orders created, %d errors",
