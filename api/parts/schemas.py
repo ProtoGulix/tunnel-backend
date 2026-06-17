@@ -10,6 +10,7 @@ class PartSupplierRefOut(BaseModel):
     id: UUID
     part_manufacturer_ref_id: UUID
     supplier_id: UUID
+    supplier_name: Optional[str] = None
     supplier_ref: str
     unit_price: Optional[float] = None
     min_order_quantity: int = 1

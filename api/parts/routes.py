@@ -42,35 +42,35 @@ def list_parts(
     return paginated(items, total=total, offset=skip, limit=limit)
 
 
-@router.get("/ref/{internal_ref}", response_model=SingleResponse[PartDetail])
+@router.get("/ref/{internal_ref}", response_model=SingleResponse[PartDetail], response_model_exclude_none=True)
 def get_part_by_ref(internal_ref: str):
     """Récupère une pièce par sa référence interne (ex: P000042)"""
     repo = PartRepository()
     return single(repo.get_by_internal_ref(internal_ref))
 
 
-@router.get("/{part_id}", response_model=SingleResponse[PartDetail])
+@router.get("/{part_id}", response_model=SingleResponse[PartDetail], response_model_exclude_none=True)
 def get_part(part_id: str):
     """Récupère une pièce par ID avec toutes ses références"""
     repo = PartRepository()
     return single(repo.get_by_id(part_id))
 
 
-@router.post("", response_model=SingleResponse[PartDetail], status_code=201)
+@router.post("", response_model=SingleResponse[PartDetail], status_code=201, response_model_exclude_none=True)
 def create_part(data: PartCreate):
     """Crée une nouvelle pièce (internal_ref P000001 générée automatiquement)"""
     repo = PartRepository()
     return single(repo.create(data.model_dump()))
 
 
-@router.patch("/{part_id}", response_model=SingleResponse[PartDetail])
+@router.patch("/{part_id}", response_model=SingleResponse[PartDetail], response_model_exclude_none=True)
 def update_part(part_id: str, data: PartUpdate):
     """Met à jour une pièce (modification partielle)"""
     repo = PartRepository()
     return single(repo.update(part_id, data.model_dump(exclude_unset=True)))
 
 
-@router.post("/{part_id}/manufacturer-refs", response_model=SingleResponse[PartDetail], status_code=201)
+@router.post("/{part_id}/manufacturer-refs", response_model=SingleResponse[PartDetail], status_code=201, response_model_exclude_none=True)
 def add_manufacturer_ref(part_id: str, data: PartManufacturerRefCreate):
     """Ajoute une référence fabricant à une pièce"""
     repo = PartRepository()
@@ -81,6 +81,7 @@ def add_manufacturer_ref(part_id: str, data: PartManufacturerRefCreate):
     "/{part_id}/manufacturer-refs/{mfr_ref_id}/supplier-refs",
     response_model=SingleResponse[PartDetail],
     status_code=201,
+    response_model_exclude_none=True,
 )
 def add_supplier_ref(part_id: str, mfr_ref_id: str, data: PartSupplierRefCreate):
     """Ajoute une référence fournisseur à une référence fabricant"""

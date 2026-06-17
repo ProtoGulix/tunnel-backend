@@ -146,6 +146,7 @@ class PartRepository:
                                        'id', psr.id,
                                        'part_manufacturer_ref_id', psr.part_manufacturer_ref_id,
                                        'supplier_id', psr.supplier_id,
+                                       'supplier_name', s.name,
                                        'supplier_ref', psr.supplier_ref,
                                        'unit_price', psr.unit_price,
                                        'min_order_quantity', psr.min_order_quantity,
@@ -160,6 +161,7 @@ class PartRepository:
                            ) AS supplier_refs
                     FROM part_manufacturer_ref pmr
                     LEFT JOIN part_supplier_ref psr ON psr.part_manufacturer_ref_id = pmr.id
+                    LEFT JOIN supplier s ON s.id = psr.supplier_id
                     WHERE pmr.part_id = %s
                     GROUP BY pmr.id
                     ORDER BY pmr.is_preferred DESC, pmr.created_at ASC
