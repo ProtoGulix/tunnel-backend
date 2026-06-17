@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, Query
-from typing import List, Optional
+from typing import Optional
 
 from api.parts.repo import PartRepository
 from api.parts.schemas import (
@@ -7,6 +7,7 @@ from api.parts.schemas import (
     PartSupplierRefCreate, PartUpdate,
 )
 from api.auth.permissions import require_authenticated
+from api.utils.pagination import PaginatedResponse
 from api.utils.response import paginated, single
 
 router = APIRouter(
@@ -16,7 +17,7 @@ router = APIRouter(
 )
 
 
-@router.get("", response_model=List[PartListItem])
+@router.get("", response_model=PaginatedResponse[PartListItem])
 def list_parts(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=500),
