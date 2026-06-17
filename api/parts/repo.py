@@ -50,8 +50,13 @@ class PartRepository:
                         pmr.manufacturer_ref   AS preferred_manufacturer_ref,
                         pmr.label              AS preferred_label
                     FROM part p
-                    LEFT JOIN part_manufacturer_ref pmr
-                        ON pmr.part_id = p.id AND pmr.is_preferred = true
+                    LEFT JOIN LATERAL (
+                        SELECT manufacturer_name, manufacturer_ref, label
+                        FROM part_manufacturer_ref
+                        WHERE part_id = p.id
+                        ORDER BY is_preferred DESC, created_at ASC
+                        LIMIT 1
+                    ) pmr ON true
                     {where_sql}
                     ORDER BY p.internal_ref ASC
                     LIMIT %s OFFSET %s
@@ -102,8 +107,13 @@ class PartRepository:
                     f"""
                     SELECT COUNT(*)
                     FROM part p
-                    LEFT JOIN part_manufacturer_ref pmr
-                        ON pmr.part_id = p.id AND pmr.is_preferred = true
+                    LEFT JOIN LATERAL (
+                        SELECT manufacturer_name, manufacturer_ref, label
+                        FROM part_manufacturer_ref
+                        WHERE part_id = p.id
+                        ORDER BY is_preferred DESC, created_at ASC
+                        LIMIT 1
+                    ) pmr ON true
                     {where_sql}
                     """,
                     params,
@@ -224,6 +234,26 @@ class PartRepository:
                     ),
                 )
                 part_id = str(cur.fetchone()[0])
+
+                for mfr in data.get("manufacturer_refs") or []:
+                    manufacturer_name = mfr.get("manufacturer_name", "")
+                    manufacturer_ref = mfr.get("manufacturer_ref", "")
+                    label = mfr.get("label")
+                    is_preferred = mfr.get("is_preferred", False)
+                    if is_preferred:
+                        cur.execute(
+                            "UPDATE part_manufacturer_ref SET is_preferred = false WHERE part_id = %s",
+                            (part_id,),
+                        )
+                    cur.execute(
+                        """
+                        INSERT INTO part_manufacturer_ref
+                            (part_id, manufacturer_name, manufacturer_ref, label, is_preferred)
+                        VALUES (%s, %s, %s, %s, %s)
+                        """,
+                        (part_id, manufacturer_name, manufacturer_ref, label, is_preferred),
+                    )
+
             conn.commit()
             return self.get_by_id(part_id)
         except Exception as e:
@@ -308,18 +338,20 @@ class PartRepository:
             if conn:
                 release_connection(conn)
 
-    def add_supplier_ref(self, part_id: str, mfr_ref_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
+    def add_supplier_ref(self, mfr_ref_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
         """Ajoute une référence fournisseur à une référence fabricant"""
         conn = None
         try:
             conn = get_connection()
             with conn.cursor() as cur:
                 cur.execute(
-                    "SELECT id FROM part_manufacturer_ref WHERE id = %s AND part_id = %s",
-                    (mfr_ref_id, part_id),
+                    "SELECT part_id FROM part_manufacturer_ref WHERE id = %s",
+                    (mfr_ref_id,),
                 )
-                if not cur.fetchone():
-                    raise NotFoundError(f"Référence fabricant {mfr_ref_id} non trouvée pour la pièce {part_id}")
+                row = cur.fetchone()
+                if not row:
+                    raise NotFoundError(f"Référence fabricant {mfr_ref_id} non trouvée")
+                part_id = str(row[0])
 
                 if data.get("is_preferred"):
                     cur.execute(

@@ -2,6 +2,39 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [4.0.2] - 17 juin 2026
+
+### Correctifs — module parts V4 et liste des demandes d'achat
+
+#### `POST /parts/manufacturer-refs/{id}/supplier-refs` — 404 en production
+
+- La route attendait `/{part_id}/manufacturer-refs/{mfr_ref_id}/supplier-refs` mais le frontend envoyait `/manufacturer-refs/{mfr_ref_id}/supplier-refs` (cohérent avec toutes les autres routes sur les refs fabricant)
+- Correction route : `/{part_id}/manufacturer-refs/{mfr_ref_id}/supplier-refs` → `/manufacturer-refs/{mfr_ref_id}/supplier-refs`
+- Correction repo : `add_supplier_ref` retrouve désormais le `part_id` via `SELECT part_id FROM part_manufacturer_ref WHERE id = %s`, sans le recevoir en paramètre
+
+#### `POST /parts` — création sans référence fabricant lors de la qualification d'une DA
+
+- `PartCreate` n'avait pas le champ `manufacturer_refs` → le payload était silencieusement ignoré
+- `repo.create()` n'insérait que la pièce de base, sans les refs fabricant incluses dans le payload
+- Correction : `PartCreate` accepte maintenant `manufacturer_refs: List[PartManufacturerRefCreate]`
+- Correction repo : les refs fabricant sont insérées dans la même transaction que la pièce ; la réponse contient le `id` de la ref fabricant, ce qui permet à l'étape suivante du frontend d'appeler `addSupplierRef` correctement
+
+#### `GET /parts` — liste affichant « Sans fabricant » pour des pièces ayant une ref
+
+- La requête joignait `part_manufacturer_ref` avec `AND is_preferred = true`, excluant les refs dont `is_preferred = false`
+- Correction : remplacement par un `LATERAL` triant par `is_preferred DESC, created_at ASC` → la ref préférée est prioritaire, sinon la première ref disponible est utilisée
+- Même correction appliquée à `count_all` pour que la recherche par ref fabricant reste cohérente
+
+#### Liste des demandes d'achat — décalage intitulé / référence interne
+
+- Deux bugs dans la requête `get_list` de `PurchaseRequestRepository` :
+  1. `item_label` pouvait être `NULL` pour des DAs créées via le flux V4 → titre vide affiché dans la liste
+  2. Le `LEFT JOIN` en chaîne `intervention_action_purchase_request → intervention_action → intervention` avec `i.code` dans le `GROUP BY` pouvait dupliquer une même DA si elle était liée à plusieurs actions d'intervention
+- Correction 1 : `COALESCE(prd.item_label, pt_pref.label, si.name)` comme fallback pour l'intitulé
+- Correction 2 : remplacement du JOIN en chaîne par un `LATERAL` qui sélectionne une seule intervention par DA
+
+---
+
 ## [4.0.1] - 17 juin 2026
 
 ### Correctifs — module catalogue pièces V4

@@ -393,7 +393,7 @@ class PurchaseRequestRepository:
             query = f"""
                 SELECT
                     prd.id,
-                    prd.item_label,
+                    COALESCE(prd.item_label, pt_pref.label, si.name) AS item_label,
                     prd.quantity,
                     prd.unit,
                     prd.stock_item_id,
@@ -410,7 +410,7 @@ class PurchaseRequestRepository:
                     -- Infos jointes part (nouveau)
                     pt.internal_ref AS part_internal_ref,
                     pt_pref.label AS part_display_name,
-                    i.code AS intervention_code,
+                    pr_intervention.code AS intervention_code,
                     prd.requested_by AS requester_name,
                     prd.urgency,
                     COUNT(DISTINCT so.supplier_id) AS suppliers_count,
@@ -425,12 +425,18 @@ class PurchaseRequestRepository:
                 LEFT JOIN LATERAL (
                     SELECT COALESCE(label, manufacturer_ref) AS label
                     FROM part_manufacturer_ref
-                    WHERE part_id = pt.id AND is_preferred = true
+                    WHERE part_id = pt.id
+                    ORDER BY is_preferred DESC, created_at ASC
                     LIMIT 1
                 ) pt_pref ON true
-                LEFT JOIN intervention_action_purchase_request iapr ON iapr.purchase_request_id = prd.id
-                LEFT JOIN intervention_action ia ON ia.id = iapr.intervention_action_id
-                LEFT JOIN intervention i ON i.id = ia.intervention_id
+                LEFT JOIN LATERAL (
+                    SELECT i.code
+                    FROM intervention_action_purchase_request iapr2
+                    JOIN intervention_action ia2 ON ia2.id = iapr2.intervention_action_id
+                    JOIN intervention i ON i.id = ia2.intervention_id
+                    WHERE iapr2.purchase_request_id = prd.id
+                    LIMIT 1
+                ) pr_intervention ON true
                 LEFT JOIN supplier_order_line_purchase_request solpr ON solpr.purchase_request_id = prd.id
                 LEFT JOIN supplier_order_line sol ON sol.id = solpr.supplier_order_line_id
                 LEFT JOIN supplier_order so ON so.id = sol.supplier_order_id
@@ -442,7 +448,7 @@ class PurchaseRequestRepository:
                          prd.derived_status, prd.quotes_count, prd.selected_count,
                          prd.total_allocated, prd.total_received, prd.requested_by, prd.urgency,
                          prd.created_at, prd.updated_at,
-                         si.ref, si.name, pt.internal_ref, pt_pref.label, i.code
+                         si.ref, si.name, pt.internal_ref, pt_pref.label, pr_intervention.code
 
                 ORDER BY prd.created_at DESC
                 LIMIT %s OFFSET %s
