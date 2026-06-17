@@ -2,6 +2,35 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [4.0.1] - 17 juin 2026
+
+### Correctifs — module catalogue pièces V4
+
+#### Module `api/parts` manquant au démarrage
+
+- Le répertoire `api/parts/` était masqué par l'entrée `parts/` du `.gitignore` Python standard
+- Correction du `.gitignore` : `parts/` → `/parts/` (ancré à la racine, sans effet sur `api/parts/`)
+- Création et versionnement du module complet : `__init__.py`, `routes.py`, `schemas.py`, `repo.py`
+
+#### Endpoint `GET /parts` — erreur 500 `ResponseValidationError`
+
+- `response_model=List[PartListItem]` rejetait la réponse paginée `{items, pagination}` retournée par `paginated()`
+- Correction : `response_model=PaginatedResponse[PartListItem]`
+
+#### Endpoints unitaires `/parts/{id}` — erreur 500 `ResponseValidationError`
+
+- `response_model=PartDetail` rejetait l'enveloppe `{data: {...}}` retournée par `single()`
+- Nouveau schéma générique `SingleResponse[T]` ajouté dans `api/utils/pagination.py`
+- Correction : `response_model=SingleResponse[PartDetail]` + `response_model_exclude_none=True` sur toutes les routes unitaires (évite que `audit: null` brise l'unwrap Axios côté frontend)
+
+#### `PartSupplierRefOut` — nom fournisseur absent
+
+- La requête `get_by_id()` n'incluait pas de JOIN sur la table `supplier`
+- Correction : `LEFT JOIN supplier s ON s.id = psr.supplier_id` + champ `supplier_name` dans le `json_build_object`
+- Ajout de `supplier_name: Optional[str] = None` dans le schéma `PartSupplierRefOut`
+
+---
+
 ## [4.0.0] - 16 juin 2026
 
 ### Migration majeure — Catalogue pièces V4 (breaking)
