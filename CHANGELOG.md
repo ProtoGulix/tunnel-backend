@@ -2,6 +2,24 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [4.0.3] - 17 juin 2026
+
+### Correctifs — export email demandes de prix
+
+#### `POST /supplier-orders/{id}/export/email` — références fabricant absentes pour les pièces V4
+
+- `_get_export_lines` ne joignait pas la table `part` ni `part_manufacturer_ref` : pour les lignes V4 (`part_id` non nul), le label, la référence et le nom fabricant étaient systématiquement vides dans l'email
+- Correction : alignement de `_get_export_lines` sur `_get_order_lines` — ajout des jointures V4 et des sous-requêtes `COALESCE` sur `part_manufacturer_ref` pour récupérer label, `manufacturer_name`, `manufacturer_ref` et `supplier_ref` préférés
+- La ligne expose désormais `manufacturer_label` (champ `label` de `part_manufacturer_ref`) utilisé comme désignation dans l'email
+
+#### `config/export_templates.py` — mise en conformité du format email
+
+- Suppression des colonnes superflues (article interne, spécification, référence fournisseur, prix)
+- Format réduit à trois colonnes : **Désignation** (`manufacturer_label`) · **Réf. fabricant** · **Quantité**
+- Correction template HTML : lecture de `manufacturer_item` depuis `stock_item` (inexistant) remplacée par lecture directe sur `line`
+
+---
+
 ## [4.0.2] - 17 juin 2026
 
 ### Correctifs — module parts V4 et liste des demandes d'achat

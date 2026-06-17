@@ -465,34 +465,65 @@ class SupplierOrderRepository:
             release_connection(conn)
 
     def _get_export_lines(self, order_id: str, conn) -> List[Dict[str, Any]]:
-        """Récupère les lignes enrichies pour l'export"""
+        """Récupère les lignes enrichies pour l'export (CSV et email)"""
         try:
             cur = conn.cursor()
             cur.execute(
                 """
                 SELECT
-                    sol.id, sol.supplier_order_id, sol.stock_item_id,
+                    sol.id, sol.supplier_order_id, sol.stock_item_id, sol.part_id,
                     sol.quantity, sol.unit_price, sol.total_price,
                     sol.quantity_received, sol.is_selected,
-                    -- Références depuis la ligne (remplies quand devis reçu)
-                    sol.manufacturer, sol.manufacturer_ref,
-                    -- Stock item details
+                    sol.manufacturer as sol_manufacturer,
+                    sol.manufacturer_ref as sol_manufacturer_ref,
+
+                    -- Champs legacy (stock_item)
                     si.id as si_id, si.name as si_name, si.ref as si_ref,
                     si.family_code, si.sub_family_code, si.spec as si_spec,
                     si.dimension, si.unit as si_unit,
-                    si.standars_spec as si_standard_spec_id,
-                    -- Référence fournisseur depuis catalogue (stock_item_supplier)
-                    sis.supplier_ref as sis_supplier_ref,
-                    -- Fabricant depuis catalogue
-                    mi.manufacturer_name as mi_manufacturer_name,
-                    mi.manufacturer_ref as mi_manufacturer_ref
+                    sis.supplier_ref as legacy_supplier_ref,
+                    mi.manufacturer_name as legacy_manufacturer,
+                    mi.manufacturer_ref as legacy_manufacturer_ref,
+
+                    -- Champs V4 (part)
+                    pt.internal_ref as part_internal_ref,
+                    pt.unit as part_unit,
+                    COALESCE(
+                        (SELECT pmr.label FROM part_manufacturer_ref pmr
+                         WHERE pmr.part_id = pt.id AND pmr.is_preferred = true LIMIT 1),
+                        (SELECT pmr.label FROM part_manufacturer_ref pmr
+                         WHERE pmr.part_id = pt.id LIMIT 1)
+                    ) as part_display_name,
+                    COALESCE(
+                        (SELECT psr.supplier_ref FROM part_supplier_ref psr
+                         JOIN part_manufacturer_ref pmr ON pmr.id = psr.part_manufacturer_ref_id
+                         WHERE pmr.part_id = pt.id AND psr.supplier_id = so.supplier_id LIMIT 1),
+                        (SELECT psr.supplier_ref FROM part_supplier_ref psr
+                         JOIN part_manufacturer_ref pmr ON pmr.id = psr.part_manufacturer_ref_id
+                         WHERE pmr.part_id = pt.id AND psr.is_preferred = true LIMIT 1)
+                    ) as part_supplier_ref,
+                    COALESCE(
+                        (SELECT pmr.manufacturer_name FROM part_manufacturer_ref pmr
+                         WHERE pmr.part_id = pt.id AND pmr.is_preferred = true LIMIT 1),
+                        (SELECT pmr.manufacturer_name FROM part_manufacturer_ref pmr
+                         WHERE pmr.part_id = pt.id LIMIT 1)
+                    ) as part_manufacturer_name,
+                    COALESCE(
+                        (SELECT pmr.manufacturer_ref FROM part_manufacturer_ref pmr
+                         WHERE pmr.part_id = pt.id AND pmr.is_preferred = true LIMIT 1),
+                        (SELECT pmr.manufacturer_ref FROM part_manufacturer_ref pmr
+                         WHERE pmr.part_id = pt.id LIMIT 1)
+                    ) as part_manufacturer_ref
                 FROM supplier_order_line sol
-                LEFT JOIN stock_item si ON sol.stock_item_id = si.id
                 JOIN supplier_order so ON sol.supplier_order_id = so.id
+                -- Legacy
+                LEFT JOIN stock_item si ON sol.stock_item_id = si.id
                 LEFT JOIN stock_item_supplier sis
                     ON sis.stock_item_id = sol.stock_item_id
                     AND sis.supplier_id = so.supplier_id
                 LEFT JOIN manufacturer_item mi ON sis.manufacturer_item_id = mi.id
+                -- V4
+                LEFT JOIN part pt ON pt.id = sol.part_id
                 WHERE sol.supplier_order_id = %s
                 ORDER BY sol.created_at ASC
                 """,
@@ -505,42 +536,67 @@ class SupplierOrderRepository:
             for row in rows:
                 line = self._convert_decimals(dict(zip(cols, row)))
 
-                # Map stock_item as nested object
-                if line.get('si_id'):
+                is_v4 = line.get('part_id') is not None
+
+                if is_v4:
+                    mfr_label = line.pop('part_display_name', None)
+                    stock_item_ref = line.pop('part_internal_ref', None)
+                    stock_item_unit = line.pop('part_unit', None)
+                    supplier_ref = line.pop('part_supplier_ref', None)
+                    mfr_name = line.pop('part_manufacturer_name', None)
+                    mfr_ref = line.pop('part_manufacturer_ref', None)
+                    line.pop('legacy_supplier_ref', None)
+                    line.pop('legacy_manufacturer', None)
+                    line.pop('legacy_manufacturer_ref', None)
+                    line['manufacturer_label'] = mfr_label
                     line['stock_item'] = {
-                        'id': line['si_id'],
-                        'name': line['si_name'],
-                        'ref': line['si_ref'],
-                        'family_code': line['family_code'],
-                        'sub_family_code': line['sub_family_code'],
-                        'spec': line['si_spec'],
-                        'dimension': line['dimension'],
-                        'unit': line['si_unit']
-                    }
+                        'name': mfr_label,
+                        'ref': stock_item_ref,
+                        'spec': None,
+                        'unit': stock_item_unit,
+                        'family_code': None,
+                        'sub_family_code': None,
+                    } if (mfr_label or stock_item_ref) else None
                 else:
-                    line['stock_item'] = None
+                    line.pop('part_display_name', None)
+                    line.pop('part_internal_ref', None)
+                    line.pop('part_unit', None)
+                    supplier_ref = line.pop('legacy_supplier_ref', None)
+                    mfr_name = line.pop('legacy_manufacturer', None)
+                    mfr_ref = line.pop('legacy_manufacturer_ref', None)
+                    line.pop('part_supplier_ref', None)
+                    line.pop('part_manufacturer_name', None)
+                    line.pop('part_manufacturer_ref', None)
+                    line['manufacturer_label'] = None
+                    if line.get('si_id'):
+                        line['stock_item'] = {
+                            'id': line['si_id'],
+                            'name': line['si_name'],
+                            'ref': line['si_ref'],
+                            'family_code': line['family_code'],
+                            'sub_family_code': line['sub_family_code'],
+                            'spec': line['si_spec'],
+                            'dimension': line['dimension'],
+                            'unit': line['si_unit']
+                        }
+                    else:
+                        line['stock_item'] = None
 
-                # Références: priorité aux champs manuels de la ligne, sinon catalogue
-                line['supplier_ref'] = line.get('sis_supplier_ref')
-                line['manufacturer'] = (
-                    line.get('manufacturer')
-                    or line.get('mi_manufacturer_name')
-                )
-                line['manufacturer_ref'] = (
-                    line.get('manufacturer_ref')
-                    or line.get('mi_manufacturer_ref')
-                )
+                # Champs manuels de la ligne ont priorité sur le catalogue
+                sol_mfr = line.pop('sol_manufacturer', None)
+                sol_mfr_ref = line.pop('sol_manufacturer_ref', None)
+                line['supplier_ref'] = supplier_ref
+                line['manufacturer'] = sol_mfr or mfr_name
+                line['manufacturer_ref'] = sol_mfr_ref or mfr_ref
 
-                # Get linked purchase_requests
+                # Nettoyage colonnes legacy stock_item
+                for key in ['si_id', 'si_name', 'si_ref', 'family_code', 'sub_family_code',
+                            'si_spec', 'dimension', 'si_unit']:
+                    line.pop(key, None)
+
                 line['purchase_requests'] = self._get_line_purchase_requests(
                     str(line['id']), conn
                 )
-
-                # Clean up intermediate columns
-                for key in ['si_id', 'si_name', 'si_ref', 'family_code', 'sub_family_code',
-                            'si_spec', 'dimension', 'si_unit', 'si_standard_spec_id',
-                            'sis_supplier_ref', 'mi_manufacturer_name', 'mi_manufacturer_ref']:
-                    line.pop(key, None)
 
                 results.append(line)
 
