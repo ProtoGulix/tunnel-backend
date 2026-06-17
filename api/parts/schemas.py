@@ -71,6 +71,7 @@ class PartCreate(BaseModel):
     unit: Optional[str] = Field(default=None, description="Unité")
     location: Optional[str] = Field(default=None, description="Emplacement")
     qty_in_stock: int = Field(default=0, ge=0, description="Quantité en stock")
+    manufacturer_refs: List["PartManufacturerRefCreate"] = Field(default_factory=list)
 
 
 class PartUpdate(BaseModel):

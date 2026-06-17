@@ -78,12 +78,12 @@ def add_manufacturer_ref(part_id: str, data: PartManufacturerRefCreate):
 
 
 @router.post(
-    "/{part_id}/manufacturer-refs/{mfr_ref_id}/supplier-refs",
+    "/manufacturer-refs/{mfr_ref_id}/supplier-refs",
     response_model=SingleResponse[PartDetail],
     status_code=201,
     response_model_exclude_none=True,
 )
-def add_supplier_ref(part_id: str, mfr_ref_id: str, data: PartSupplierRefCreate):
+def add_supplier_ref(mfr_ref_id: str, data: PartSupplierRefCreate):
     """Ajoute une référence fournisseur à une référence fabricant"""
     repo = PartRepository()
-    return single(repo.add_supplier_ref(part_id, mfr_ref_id, data.model_dump()))
+    return single(repo.add_supplier_ref(mfr_ref_id, data.model_dump()))
