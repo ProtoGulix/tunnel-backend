@@ -132,9 +132,6 @@ def get_email_body_text(order_number, supplier_name, lines):
         - Utiliser des séparateurs clairs (-, =, *)
         - Tester l'affichage sur mobile (largeur 40 caractères max)
     """
-    total_articles = len(lines)
-    total_units = sum(line.get('quantity', 0) for line in lines)
-
     body_lines = [
         "Bonjour,",
         "",
@@ -144,29 +141,16 @@ def get_email_body_text(order_number, supplier_name, lines):
 
     for i, line in enumerate(lines, 1):
         stock_item = line.get('stock_item') or {}
-
-        # Préfère le libellé de la demande d'achat liée
-        prs = line.get('purchase_requests', [])
-        name = prs[0].get('item_label') if prs else None
-        if not name:
-            name = stock_item.get('name', 'Article')
-
-        manufacturer = line.get('manufacturer') or 'N/A'
+        label = line.get('manufacturer_label') or 'N/A'
         manufacturer_ref = line.get('manufacturer_ref') or 'N/A'
-        supplier_ref = line.get('supplier_ref') or 'N/A'
-        unit_price = line.get('unit_price')
-        price_str = f"{unit_price:.2f} €" if unit_price is not None else 'N/A'
         quantity = line.get('quantity', 0)
         unit = stock_item.get('unit') or 'pcs'
 
         body_lines.append(
-            f"{i}. {name} - {manufacturer} - {manufacturer_ref} - {supplier_ref} - {price_str} - {quantity} {unit}"
+            f"{i}. {label} - {manufacturer_ref} - {quantity} {unit}"
         )
 
     body_lines.extend([
-        "",
-        "------------------",
-        f"TOTAL : {total_articles} article{'s' if total_articles > 1 else ''} - {total_units} unité{'s' if total_units > 1 else ''}",
         "",
         "Merci de nous faire parvenir votre meilleur prix et délai de livraison.",
         "",
@@ -206,16 +190,12 @@ def get_email_body_html(order_number, supplier_name, lines):
         "<html>",
         "<body style='font-family: Arial, sans-serif; font-size: 14px; color: #333;'>",
         "<p>Bonjour,</p>",
-        f"<p>Veuillez trouver ci-dessous notre demande de commande n°<strong>{order_number}</strong>.</p>",
-        "<h3 style='color: #2563EB; margin-top: 20px;'>Articles commandés :</h3>",
-        "<table border='1' cellpadding='8' cellspacing='0' style='border-collapse: collapse; width: 100%; max-width: 800px;'>",
+        f"<p>Veuillez trouver ci-dessous notre demande de devis n°<strong>{order_number}</strong>.</p>",
+        "<table border='1' cellpadding='8' cellspacing='0' style='border-collapse: collapse; width: 100%; max-width: 600px;'>",
         "<thead>",
         "<tr style='background-color: #f0f0f0;'>",
-        "<th style='text-align: left; padding: 10px; border: 1px solid #ddd;'>Article</th>",
-        "<th style='text-align: left; padding: 10px; border: 1px solid #ddd;'>Référence</th>",
-        "<th style='text-align: left; padding: 10px; border: 1px solid #ddd;'>Spécification</th>",
-        "<th style='text-align: left; padding: 10px; border: 1px solid #ddd;'>Fabricant</th>",
-        "<th style='text-align: left; padding: 10px; border: 1px solid #ddd;'>Réf. Fabricant</th>",
+        "<th style='text-align: left; padding: 10px; border: 1px solid #ddd;'>Désignation</th>",
+        "<th style='text-align: left; padding: 10px; border: 1px solid #ddd;'>Réf. fabricant</th>",
         "<th style='text-align: center; padding: 10px; border: 1px solid #ddd;'>Quantité</th>",
         "</tr>",
         "</thead>",
@@ -224,28 +204,19 @@ def get_email_body_html(order_number, supplier_name, lines):
 
     for idx, line in enumerate(lines):
         stock_item = line.get('stock_item') or {}
-        manufacturer_item = stock_item.get('manufacturer_item') or {}
-
-        # Alternance de couleurs pour lisibilité
+        label = line.get('manufacturer_label', '')
+        manufacturer_ref = line.get('manufacturer_ref', '')
+        quantity = line.get('quantity', 0)
+        unit = stock_item.get('unit') or 'pcs'
         bg_color = '#ffffff' if idx % 2 == 0 else '#f9f9f9'
 
-        html_lines.append(f"<tr style='background-color: {bg_color};'>")
-        html_lines.append(
-            f"<td style='padding: 8px; border: 1px solid #ddd;'>{stock_item.get('name', '')}</td>")
-        html_lines.append(
-            f"<td style='padding: 8px; border: 1px solid #ddd;'>{stock_item.get('ref', '')}</td>")
-        html_lines.append(
-            f"<td style='padding: 8px; border: 1px solid #ddd;'>{stock_item.get('spec', '')}</td>")
-        html_lines.append(
-            f"<td style='padding: 8px; border: 1px solid #ddd;'>{manufacturer_item.get('manufacturer', '') or line.get('manufacturer', '')}</td>")
-        html_lines.append(
-            f"<td style='padding: 8px; border: 1px solid #ddd;'>{manufacturer_item.get('ref', '') or line.get('manufacturer_ref', '')}</td>")
-        html_lines.extend(
-            (
-                f"<td style='padding: 8px; border: 1px solid #ddd; text-align: center;'>{line.get('quantity', 0)} {stock_item.get('unit', 'pcs')}</td>",
-                "</tr>",
-            )
-        )
+        html_lines.extend([
+            f"<tr style='background-color: {bg_color};'>",
+            f"<td style='padding: 8px; border: 1px solid #ddd;'>{label}</td>",
+            f"<td style='padding: 8px; border: 1px solid #ddd;'>{manufacturer_ref}</td>",
+            f"<td style='padding: 8px; border: 1px solid #ddd; text-align: center;'>{quantity} {unit}</td>",
+            "</tr>",
+        ])
     html_lines.extend([
         "</tbody>",
         "</table>",
