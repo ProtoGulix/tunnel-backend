@@ -220,6 +220,37 @@ class DispatchResult(BaseModel):
         from_attributes = True
 
 
+class ImportLineResult(BaseModel):
+    """Résultat pour une ligne du CSV importé"""
+    row: int
+    raw_ref: str
+    raw_qty: str
+    part_id: Optional[str] = Field(default=None)
+    display_name: Optional[str] = Field(default=None)
+    internal_ref: Optional[str] = Field(default=None)
+    status: str = Field(..., description="preview | created | skipped | error")
+    da_status: Optional[str] = Field(default=None, description="Statut dérivé de la DA créée")
+    duplicate_warning: bool = Field(default=False)
+    existing_qty: Optional[int] = Field(default=None)
+    existing_to_qualify: int = Field(default=0, description="Nombre de DA À qualifier existantes pour cette référence")
+    error: Optional[str] = Field(default=None)
+
+    class Config:
+        from_attributes = True
+
+
+class ImportResult(BaseModel):
+    """Rapport global de l'import CSV"""
+    total: int
+    created: int
+    skipped: int = Field(default=0)
+    errors: int
+    lines: List[ImportLineResult]
+
+    class Config:
+        from_attributes = True
+
+
 class PurchaseRequestIn(BaseModel):
     """Schéma d'entrée pour créer ou modifier une demande d'achat"""
     stock_item_id: Optional[UUID] = Field(

@@ -991,6 +991,300 @@ class PurchaseRequestRepository:
             (str(uuid4()), line_id, req_id_str, req_quantity)
         )
 
+    def _search_part(self, cur, search_term: str) -> Optional[Dict[str, Any]]:
+        """Cherche la meilleure pièce correspondant au terme de recherche."""
+        pat = f"%{search_term}%"
+        cur.execute(
+            """
+            SELECT
+                p.id,
+                p.internal_ref,
+                COALESCE(
+                    (SELECT COALESCE(pmr.label, pmr.manufacturer_ref)
+                     FROM part_manufacturer_ref pmr
+                     WHERE pmr.part_id = p.id AND pmr.is_preferred = true
+                     LIMIT 1),
+                    (SELECT COALESCE(pmr.label, pmr.manufacturer_ref)
+                     FROM part_manufacturer_ref pmr
+                     WHERE pmr.part_id = p.id
+                     LIMIT 1)
+                ) AS display_name
+            FROM part p
+            WHERE
+                p.internal_ref ILIKE %s
+                OR EXISTS (
+                    SELECT 1 FROM part_manufacturer_ref pmr2
+                    WHERE pmr2.part_id = p.id
+                    AND (pmr2.manufacturer_ref ILIKE %s OR pmr2.label ILIKE %s OR pmr2.manufacturer_name ILIKE %s)
+                )
+                OR EXISTS (
+                    SELECT 1 FROM part_supplier_ref psr2
+                    JOIN part_manufacturer_ref pmr3 ON pmr3.id = psr2.part_manufacturer_ref_id
+                    WHERE pmr3.part_id = p.id AND psr2.supplier_ref ILIKE %s
+                )
+            LIMIT 1
+            """,
+            (pat, pat, pat, pat, pat)
+        )
+        row = cur.fetchone()
+        if not row:
+            return None
+        cols = [d[0] for d in cur.description]
+        return dict(zip(cols, row))
+
+    def _count_existing_to_qualify(self, cur, part_id: Optional[str], item_label: str) -> int:
+        """
+        Retourne le nombre de DA À qualifier (TO_QUALIFY) déjà existantes
+        pour cette pièce (si part_id trouvé) ou ce libellé (si pas de part).
+        """
+        if part_id:
+            cur.execute(
+                """
+                SELECT COUNT(*) FROM purchase_request
+                WHERE part_id = %s
+                  AND stock_item_id IS NULL
+                  AND id NOT IN (
+                    SELECT purchase_request_id FROM supplier_order_line_purchase_request
+                  )
+                """,
+                (part_id,)
+            )
+        else:
+            cur.execute(
+                """
+                SELECT COUNT(*) FROM purchase_request
+                WHERE part_id IS NULL
+                  AND stock_item_id IS NULL
+                  AND item_label ILIKE %s
+                """,
+                (item_label,)
+            )
+        row = cur.fetchone()
+        return int(row[0]) if row and row[0] else 0
+
+    def _check_duplicate_on_intervention(self, cur, part_id: Optional[str], item_label: str, intervention_id: str) -> Optional[int]:
+        """
+        Vérifie si une DA avec ce part_id (ou ce label si pas de part) existe déjà sur l'intervention.
+        Retourne la quantité déjà commandée si doublon, None sinon.
+        """
+        if part_id:
+            cur.execute(
+                """
+                SELECT SUM(pr.quantity)
+                FROM purchase_request pr
+                JOIN intervention_action_purchase_request iapr ON iapr.purchase_request_id = pr.id
+                JOIN intervention_action ia ON ia.id = iapr.intervention_action_id
+                WHERE ia.intervention_id = %s AND pr.part_id = %s
+                """,
+                (intervention_id, part_id)
+            )
+        else:
+            cur.execute(
+                """
+                SELECT SUM(pr.quantity)
+                FROM purchase_request pr
+                JOIN intervention_action_purchase_request iapr ON iapr.purchase_request_id = pr.id
+                JOIN intervention_action ia ON ia.id = iapr.intervention_action_id
+                WHERE ia.intervention_id = %s AND pr.part_id IS NULL AND pr.item_label ILIKE %s
+                """,
+                (intervention_id, item_label)
+            )
+        row = cur.fetchone()
+        existing_qty = row[0] if row and row[0] is not None else None
+        return int(existing_qty) if existing_qty else None
+
+    def import_from_csv(
+        self,
+        rows: List[Dict[str, str]],
+        intervention_id: str,
+        col_ref: str,
+        col_qty: str,
+        urgency: str = 'normal',
+        reason_code: str = 'IMPORT_CSV',
+        dry_run: bool = False,
+        excluded_rows: Optional[List[int]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Importe des DA en masse depuis les lignes d'un CSV.
+
+        Pour chaque ligne :
+        1. Tente de matcher la ref via recherche dans le catalogue part
+        2. Vérifie les doublons sur l'intervention (warning non bloquant)
+        3. Compte les DA À qualifier existantes pour cette référence
+        4. Si dry_run=True : analyse sans créer (status='preview')
+        5. Si excluded_rows contient le numéro de ligne : ignore (status='skipped')
+        6. Sinon : crée la DA via la même mécanique que add()
+        """
+        excluded_set = set(excluded_rows or [])
+        lines = []
+        created = 0
+        skipped = 0
+        errors = 0
+
+        conn = self._get_connection()
+        try:
+            cur = conn.cursor()
+
+            for idx, raw_row in enumerate(rows):
+                row_num = idx + 1
+                raw_ref = str(raw_row.get(col_ref, '') or '').strip()
+                raw_qty = str(raw_row.get(col_qty, '') or '').strip()
+
+                if not raw_ref:
+                    errors += 1
+                    lines.append({
+                        'row': row_num,
+                        'raw_ref': raw_ref,
+                        'raw_qty': raw_qty,
+                        'part_id': None,
+                        'display_name': None,
+                        'internal_ref': None,
+                        'status': 'error',
+                        'da_status': None,
+                        'duplicate_warning': False,
+                        'existing_qty': None,
+                        'existing_to_qualify': 0,
+                        'error': 'Référence vide',
+                    })
+                    continue
+
+                try:
+                    qty = int(float(raw_qty))
+                    if qty <= 0:
+                        raise ValueError
+                except (ValueError, TypeError):
+                    errors += 1
+                    lines.append({
+                        'row': row_num,
+                        'raw_ref': raw_ref,
+                        'raw_qty': raw_qty,
+                        'part_id': None,
+                        'display_name': None,
+                        'internal_ref': None,
+                        'status': 'error',
+                        'da_status': None,
+                        'duplicate_warning': False,
+                        'existing_qty': None,
+                        'existing_to_qualify': 0,
+                        'error': f"Quantité invalide : '{raw_qty}'",
+                    })
+                    continue
+
+                try:
+                    # Recherche dans le catalogue
+                    part = self._search_part(cur, raw_ref)
+                    part_id_str = str(part['id']) if part else None
+                    display_name = part.get('display_name') if part else None
+                    internal_ref = part.get('internal_ref') if part else None
+
+                    # Vérification doublon sur l'intervention
+                    existing_qty = self._check_duplicate_on_intervention(
+                        cur, part_id_str, raw_ref, intervention_id
+                    )
+                    duplicate_warning = existing_qty is not None
+
+                    # Compte les DA À qualifier existantes pour cette référence
+                    existing_to_qualify = self._count_existing_to_qualify(
+                        cur, part_id_str, display_name or raw_ref
+                    )
+
+                    # Ligne exclue par l'utilisateur (dry_run=False requis)
+                    if not dry_run and row_num in excluded_set:
+                        skipped += 1
+                        lines.append({
+                            'row': row_num,
+                            'raw_ref': raw_ref,
+                            'raw_qty': raw_qty,
+                            'part_id': part_id_str,
+                            'display_name': display_name,
+                            'internal_ref': internal_ref,
+                            'status': 'skipped',
+                            'da_status': None,
+                            'duplicate_warning': duplicate_warning,
+                            'existing_qty': existing_qty,
+                            'existing_to_qualify': existing_to_qualify,
+                            'error': None,
+                        })
+                        continue
+
+                    if dry_run:
+                        # Mode aperçu : analyse sans création
+                        lines.append({
+                            'row': row_num,
+                            'raw_ref': raw_ref,
+                            'raw_qty': raw_qty,
+                            'part_id': part_id_str,
+                            'display_name': display_name,
+                            'internal_ref': internal_ref,
+                            'status': 'preview',
+                            'da_status': None,
+                            'duplicate_warning': duplicate_warning,
+                            'existing_qty': existing_qty,
+                            'existing_to_qualify': existing_to_qualify,
+                            'error': None,
+                        })
+                        continue
+
+                    # Préparation du payload DA
+                    da_data = {
+                        'item_label': display_name or raw_ref,
+                        'quantity': qty,
+                        'urgency': urgency,
+                        'reason_code': reason_code,
+                    }
+                    if part_id_str:
+                        da_data['part_id'] = part_id_str
+
+                    # Création via la mécanique existante (sans intervention_action_id car DA autonome)
+                    created_da = self.add(da_data)
+
+                    da_status_code = created_da.get('derived_status', {}).get('code')
+                    created += 1
+
+                    lines.append({
+                        'row': row_num,
+                        'raw_ref': raw_ref,
+                        'raw_qty': raw_qty,
+                        'part_id': part_id_str,
+                        'display_name': display_name,
+                        'internal_ref': internal_ref,
+                        'status': 'created',
+                        'da_status': da_status_code,
+                        'duplicate_warning': duplicate_warning,
+                        'existing_qty': existing_qty,
+                        'existing_to_qualify': existing_to_qualify,
+                        'error': None,
+                    })
+
+                except Exception as e:
+                    logger.error("Erreur import ligne %d ('%s'): %s", row_num, raw_ref, str(e))
+                    errors += 1
+                    lines.append({
+                        'row': row_num,
+                        'raw_ref': raw_ref,
+                        'raw_qty': raw_qty,
+                        'part_id': None,
+                        'display_name': None,
+                        'internal_ref': None,
+                        'status': 'error',
+                        'da_status': None,
+                        'duplicate_warning': False,
+                        'existing_qty': None,
+                        'existing_to_qualify': 0,
+                        'error': str(e),
+                    })
+
+        finally:
+            release_connection(conn)
+
+        return {
+            'total': len(rows),
+            'created': created,
+            'skipped': skipped,
+            'errors': errors,
+            'lines': lines,
+        }
+
     def dispatch_all(self) -> Dict[str, Any]:
         """
         Dispatch toutes les demandes PENDING_DISPATCH vers des supplier_orders.

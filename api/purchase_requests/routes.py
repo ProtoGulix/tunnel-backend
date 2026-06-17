@@ -1,4 +1,7 @@
-from fastapi import APIRouter, HTTPException, Query, Depends
+import csv
+import io
+import logging
+from fastapi import APIRouter, File, Form, HTTPException, Query, Depends, UploadFile
 from typing import Any, Dict, List, Optional, Literal, Union
 from datetime import date
 from api.purchase_requests.repo import PurchaseRequestRepository
@@ -7,17 +10,58 @@ from api.purchase_requests.schemas import (
     PurchaseRequestListItem,
     PurchaseRequestDetail,
     PurchaseRequestStats,
-    DispatchResult
+    DispatchResult,
+    ImportResult,
 )
 from api.errors.exceptions import ValidationError
 from api.constants import DERIVED_STATUS_CONFIG
 from api.utils.response import single, referentiel
+
+logger = logging.getLogger(__name__)
 
 VALID_STATUSES = tuple(DERIVED_STATUS_CONFIG.keys())
 
 from api.auth.permissions import require_authenticated
 
 router = APIRouter(prefix="/purchase-requests", tags=["purchase-requests"], dependencies=[Depends(require_authenticated)])
+
+
+# ─── Helper CSV partagé ───────────────────────────────────────────────────────
+
+def _parse_csv_bytes(content_bytes: bytes) -> tuple[list[dict], str, int]:
+    """
+    Décode, détecte le séparateur et parse un fichier CSV.
+    Retourne (rows, separator, header_line_index).
+    Utilisé par /import/headers ET /import pour garantir un parsing identique.
+    """
+    try:
+        content = content_bytes.decode('utf-8-sig')
+    except UnicodeDecodeError:
+        content = content_bytes.decode('latin-1')
+
+    sample = content[:2048]
+    try:
+        dialect = csv.Sniffer().sniff(sample, delimiters=',;')
+        sep = dialect.delimiter
+    except csv.Error:
+        sep = ','
+
+    all_lines = [l for l in content.splitlines() if l.strip()]
+    header_line_idx = 0
+    for i, line in enumerate(all_lines[:10]):
+        cells = [c.strip().strip('"').strip("'") for c in line.split(sep)]
+        if sum(1 for c in cells if c) >= 2:
+            header_line_idx = i
+            break
+    effective_content = '\n'.join(all_lines[header_line_idx:])
+
+    reader = csv.DictReader(io.StringIO(effective_content), delimiter=sep)
+    try:
+        rows = list(reader)
+    except Exception as e:
+        raise ValidationError(f"Impossible de lire le CSV : {e}")
+
+    return rows, sep, header_line_idx
 
 
 # ========== Endpoints optimisés v1.2.0 ==========
@@ -153,6 +197,84 @@ def dispatch_pending_requests():
     """
     repo = PurchaseRequestRepository()
     return single(repo.dispatch_all())
+
+
+@router.post("/import/headers", status_code=200)
+async def get_csv_import_headers(
+    file: UploadFile = File(..., description="Fichier CSV"),
+):
+    """
+    Retourne les colonnes détectées par le backend pour un fichier CSV.
+    À appeler avant /import pour construire les sélecteurs de colonnes côté client.
+    Utilise le même parseur que /import pour garantir la cohérence des noms de colonnes.
+    """
+    if not file.filename or not file.filename.lower().endswith('.csv'):
+        raise ValidationError("Le fichier doit être un CSV (.csv)")
+
+    rows, sep, header_line_idx = _parse_csv_bytes(await file.read())
+
+    if not rows:
+        raise ValidationError("Le fichier CSV est vide")
+
+    headers = [h for h in rows[0].keys() if h and h != 'None']
+    return {"headers": headers, "separator": sep, "header_row_index": header_line_idx}
+
+
+@router.post("/import", response_model=ImportResult, status_code=201)
+async def import_purchase_requests_from_csv(
+    file: UploadFile = File(..., description="Fichier CSV"),
+    intervention_id: str = Form(..., description="UUID de l'intervention cible"),
+    col_ref: str = Form(..., description="Nom de la colonne référence"),
+    col_qty: str = Form(..., description="Nom de la colonne quantité"),
+    urgency: str = Form("normal", description="Urgence globale (normal, high, critical)"),
+    dry_run: bool = Form(False, description="Mode aperçu : analyse sans créer les DA"),
+    excluded_rows: str = Form("", description="Numéros de lignes à ignorer, séparés par virgule (ex: 2,5,7)"),
+):
+    """
+    Importe des demandes d'achat en masse depuis un fichier CSV.
+
+    Détecte automatiquement le séparateur (`,` ou `;`).
+    Pour chaque ligne : tente de résoudre la référence dans le catalogue part,
+    crée la DA via la logique existante, retourne un rapport ligne par ligne.
+
+    En mode dry_run=True, retourne une analyse sans créer de DA (status='preview').
+    Les lignes listées dans excluded_rows sont ignorées lors de l'import réel.
+    """
+    if not file.filename or not file.filename.lower().endswith('.csv'):
+        raise ValidationError("Le fichier doit être un CSV (.csv)")
+
+    rows, _sep, _header_idx = _parse_csv_bytes(await file.read())
+
+    if not rows:
+        raise ValidationError("Le fichier CSV est vide")
+
+    headers = list(rows[0].keys()) if rows else []
+    if col_ref not in headers:
+        raise ValidationError(f"Colonne '{col_ref}' introuvable. Colonnes disponibles : {', '.join(headers)}")
+    if col_qty not in headers:
+        raise ValidationError(f"Colonne '{col_qty}' introuvable. Colonnes disponibles : {', '.join(headers)}")
+
+    excluded_list = [
+        int(r.strip()) for r in excluded_rows.split(',')
+        if r.strip().isdigit()
+    ] if excluded_rows.strip() else []
+
+    repo = PurchaseRequestRepository()
+    result = repo.import_from_csv(
+        rows=rows,
+        intervention_id=intervention_id,
+        col_ref=col_ref,
+        col_qty=col_qty,
+        urgency=urgency,
+        dry_run=dry_run,
+        excluded_rows=excluded_list,
+    )
+    logger.info(
+        "Import CSV (%s) : %d créées, %d ignorées, %d erreurs sur %d lignes (intervention=%s)",
+        "aperçu" if dry_run else "réel",
+        result['created'], result.get('skipped', 0), result['errors'], result['total'], intervention_id
+    )
+    return result
 
 
 # ========== Endpoints CRUD ==========
