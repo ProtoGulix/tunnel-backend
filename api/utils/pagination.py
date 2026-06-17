@@ -1,5 +1,5 @@
-"""Schémas standards pour la pagination"""
-from typing import Generic, TypeVar, List
+"""Schémas standards pour la pagination et les réponses unitaires"""
+from typing import Any, Generic, Optional, TypeVar, List
 from pydantic import BaseModel, Field
 from math import ceil
 
@@ -18,6 +18,12 @@ class PaginationMeta(BaseModel):
                         description="Position de début dans la liste globale")
     count: int = Field(...,
                        description="Nombre d'éléments retournés dans cette page")
+
+
+class SingleResponse(BaseModel, Generic[T]):
+    """Réponse standard pour un objet unique"""
+    data: T
+    audit: Optional[Any] = None
 
 
 class PaginatedResponse(BaseModel, Generic[T]):
