@@ -278,9 +278,9 @@ class PurchaseRequestIn(BaseModel):
         default=None, description="Quantité demandée (détail)")
     requester_name: Optional[str] = Field(
         default=None, description="Nom du demandeur")
-    reason_code: str = Field(
-        ...,
-        description="Code raison obligatoire pour l'audit (ex: SUPPLIER_DELAY, OTHER). Voir GET /audit/reasons.",
+    reason_code: Optional[str] = Field(
+        default=None,
+        description="Code raison pour l'audit (ex: ROUTINE, OTHER). Voir GET /audit/reasons. Géré automatiquement par le middleware si absent.",
     )
     reason_text: Optional[str] = Field(
         default=None,
