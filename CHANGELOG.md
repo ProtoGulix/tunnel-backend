@@ -2,6 +2,25 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [4.0.4] - 19 juin 2026
+
+### Refactoring — middleware d'audit et schéma demandes d'achat
+
+#### `api/audits/middleware.py` — prise en charge des routes sans UUID (POST création)
+
+- `_PATH_RE` : UUID rendu optionnel dans le pattern — les routes de création (`POST /interventions`, `POST /parts`, etc.) sont désormais interceptées même sans UUID dans l'URL
+- `_extract_entity` : signature mise à jour → retourne `Optional[Tuple[str, Optional[str]]]` (`entity_id_str` peut être `None`)
+- Snapshot avant mutation (`PATCH / PUT / DELETE`) : conditionné à `entity_id_str` non nul (inchangé dans le comportement, plus explicite)
+- Lecture de l'état post-succès : conditionné à `entity_id_str` non nul — évite un appel `_fetch_entity_state` inutile pour les POSTs sans ID de retour
+- `_write_audit_log` : retour anticipé si `entity_id_str` est `None` — la signature accepte `Optional[str]`
+
+#### `api/purchase_requests/schemas.py` — `reason_code` optionnel dans `PurchaseRequestIn`
+
+- `reason_code` passe de champ obligatoire (`str`, `...`) à champ optionnel (`Optional[str]`, `default=None`)
+- Le middleware d'audit gère lui-même le code raison ; rendre le champ obligatoire dans le schéma créait des rejets 422 lors des créations de DA sans raison explicite
+
+---
+
 ## [4.0.3] - 17 juin 2026
 
 ### Correctifs — export email demandes de prix

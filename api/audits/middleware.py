@@ -38,9 +38,9 @@ _ENTITY_MAP: Dict[str, str] = {
     "intervention-tasks": "task",
 }
 
-# Pattern : /interventions/{uuid} ou /interventions/{uuid}/sous-ressource
+# Pattern : /interventions ou /interventions/{uuid} ou /interventions/{uuid}/sous-ressource
 _PATH_RE = re.compile(
-    r"^/([a-z][a-z0-9\-]+)/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})",
+    r"^/([a-z][a-z0-9\-]+)(?:/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}))?",
     re.IGNORECASE,
 )
 
@@ -48,8 +48,8 @@ _PATH_RE = re.compile(
 _DIFF_IGNORE = frozenset({"id", "created_at", "updated_at", "updated_by", "reason_code", "reason_text"})
 
 
-def _extract_entity(path: str) -> Optional[Tuple[str, str]]:
-    """Retourne (entity_type, entity_id_str) ou None."""
+def _extract_entity(path: str) -> Optional[Tuple[str, Optional[str]]]:
+    """Retourne (entity_type, entity_id_str_ou_None) ou None si ressource inconnue."""
     m = _PATH_RE.match(path)
     if not m:
         return None
@@ -80,7 +80,7 @@ class AuditMiddleware(BaseHTTPMiddleware):
         if not entity_info:
             return await call_next(request)
 
-        entity_type, entity_id_str = entity_info
+        entity_type, entity_id_str = entity_info  # entity_id_str peut être None pour les POST création
 
         # ── Lecture et bufferisation du corps ────────────────────────────────
         # Starlette ne permet de lire request.body() qu'une fois ;
@@ -124,7 +124,7 @@ class AuditMiddleware(BaseHTTPMiddleware):
                     content={"detail": f"Raison '{reason_code}' inconnue ou inactive", "error_type": "ValidationError"},
                 )
 
-        # ── Snapshot avant mutation (PATCH / DELETE uniquement) ──────────────
+        # ── Snapshot avant mutation (PATCH / PUT / DELETE avec UUID uniquement) ──
         old_state: Dict[str, Any] = {}
         if request.method in ("PATCH", "PUT", "DELETE") and entity_type and entity_id_str:
             old_state = await _fetch_entity_state(entity_type, entity_id_str)
@@ -135,7 +135,7 @@ class AuditMiddleware(BaseHTTPMiddleware):
         # ── Log post-succès ──────────────────────────────────────────────────
         if 200 <= response.status_code < 300:
             new_state: Dict[str, Any] = {}
-            if request.method != "DELETE":
+            if request.method != "DELETE" and entity_id_str:
                 new_state = await _fetch_entity_state(entity_type, entity_id_str)
 
             diffs = _compute_diff(old_state, new_state)
@@ -182,7 +182,7 @@ class AuditMiddleware(BaseHTTPMiddleware):
 
 def _write_audit_log(
     entity_type: str,
-    entity_id_str: str,
+    entity_id_str: Optional[str],
     decision_type: str,
     old_value: Optional[Dict],
     new_value: Optional[Dict],
@@ -191,7 +191,7 @@ def _write_audit_log(
     request: Request,
 ) -> None:
     """Appelle fn_audit_log_decision() ; les erreurs n'interrompent pas la réponse."""
-    if not reason_code:
+    if not reason_code or not entity_id_str:
         return
     try:
         entity_id = UUID(entity_id_str)
