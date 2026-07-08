@@ -7,7 +7,7 @@ import logging
 
 from api.db import get_connection, release_connection
 from api.errors.exceptions import DatabaseError, raise_db_error, NotFoundError, ValidationError
-from api.constants import DERIVED_STATUS_CONFIG, CLOSED_STATUS_CODE, SUPPLIER_ORDER_STATUS_CONFIG
+from api.constants import DERIVED_STATUS_CONFIG, CLOSED_STATUS_CODE, SUPPLIER_ORDER_STATUS_CONFIG, NON_DISPATCHED_PR_STATUSES
 
 logger = logging.getLogger(__name__)
 
@@ -618,8 +618,7 @@ class PurchaseRequestRepository:
                 supplier_refs_count=supplier_refs_count
             )
             data['derived_status'] = self._map_derived_status(status_code)
-            data['is_editable'] = status_code in {
-                'TO_QUALIFY', 'NO_SUPPLIER_REF', 'PENDING_DISPATCH'}
+            data['is_editable'] = status_code in NON_DISPATCHED_PR_STATUSES
 
             logger.info("Fetched purchase request detail: %s", request_id)
             return data

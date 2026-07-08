@@ -66,3 +66,15 @@ def patch_action(action_id: str, patch: InterventionActionPatch):
     """
     repo = InterventionActionRepository()
     return single(repo.update(action_id, patch.model_dump(exclude_none=True)))
+
+
+@router.delete("/{action_id}", status_code=204)
+def delete_action(action_id: str):
+    """
+    Supprime une action d'intervention.
+
+    Bloqué si l'intervention parente est fermée, ou si une demande d'achat
+    liée à l'action a déjà été dispatchée (statut dérivé hors "à dispatcher").
+    """
+    repo = InterventionActionRepository()
+    repo.delete(action_id)

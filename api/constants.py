@@ -29,6 +29,9 @@ DERIVED_STATUS_CONFIG = {
     'REJECTED': {'label': 'Refusé', 'color': '#EF4444'}
 }
 
+# Statuts dérivés DA considérés comme "non dispatchés" (encore éditables/supprimables)
+NON_DISPATCHED_PR_STATUSES = {'TO_QUALIFY', 'NO_SUPPLIER_REF', 'PENDING_DISPATCH'}
+
 # Statuts des commandes fournisseur
 SUPPLIER_ORDER_STATUS_CONFIG = {
     'OPEN': {
