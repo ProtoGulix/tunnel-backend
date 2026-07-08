@@ -388,3 +388,36 @@ class PartRepository:
         finally:
             if conn:
                 release_connection(conn)
+
+    def delete_supplier_ref(self, supplier_ref_id: str) -> Dict[str, Any]:
+        """Supprime une référence fournisseur d'une référence fabricant"""
+        conn = None
+        try:
+            conn = get_connection()
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT pmr.part_id FROM part_supplier_ref psr "
+                    "JOIN part_manufacturer_ref pmr ON pmr.id = psr.part_manufacturer_ref_id "
+                    "WHERE psr.id = %s",
+                    (supplier_ref_id,),
+                )
+                row = cur.fetchone()
+                if not row:
+                    raise NotFoundError(f"Référence fournisseur {supplier_ref_id} non trouvée")
+                part_id = str(row[0])
+
+                cur.execute(
+                    "DELETE FROM part_supplier_ref WHERE id = %s",
+                    (supplier_ref_id,),
+                )
+            conn.commit()
+            return self.get_by_id(part_id)
+        except NotFoundError:
+            raise
+        except Exception as e:
+            if conn:
+                conn.rollback()
+            raise_db_error(e, "suppression référence fournisseur")
+        finally:
+            if conn:
+                release_connection(conn)

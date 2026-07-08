@@ -2,6 +2,26 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [4.1.0] - 8 juillet 2026
+
+### Suppression d'une action d'intervention
+
+- Nouvel endpoint `DELETE /intervention-actions/{action_id}`
+- Refusée si l'intervention parente est fermée, ou si une demande d'achat liée à l'action a déjà été dispatchée (mutualisée dans un panier fournisseur) — évite de supprimer une action dont l'achat est déjà engagé
+- Nouvelle constante partagée `NON_DISPATCHED_PR_STATUSES` (`api/constants.py`), réutilisée pour le calcul de `is_editable` sur les demandes d'achat et pour la vérification de suppression d'action
+
+### Suppression d'une référence fournisseur (catalogue pièces V4)
+
+- Nouvel endpoint `DELETE /parts/supplier-refs/{supplier_ref_id}`
+- Retourne la pièce mise à jour après suppression de la référence fournisseur
+
+### Dispatch des demandes d'achat — clarification du mode consultation
+
+- `dispatch_all()` ouvre désormais systématiquement un panier fournisseur par fournisseur référencé pour la pièce (mode consultation), qu'il y ait ou non un fournisseur préféré
+- Le fournisseur préféré (`is_preferred`) ne détermine plus l'ouverture d'un panier unique en mode direct — il ne sert plus qu'à l'ordre de traitement des fournisseurs
+
+---
+
 ## [4.0.4] - 19 juin 2026
 
 ### Refactoring — middleware d'audit et schéma demandes d'achat

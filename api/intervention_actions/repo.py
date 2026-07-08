@@ -8,7 +8,7 @@ from datetime import datetime, date
 
 from api.settings import settings
 from api.db import get_connection, release_connection
-from api.constants import CLOSED_STATUS_CODE
+from api.constants import CLOSED_STATUS_CODE, NON_DISPATCHED_PR_STATUSES
 from api.errors.exceptions import DatabaseError, raise_db_error, NotFoundError, ValidationError
 from api.utils.sanitizer import strip_html
 from api.intervention_actions.validators import InterventionActionValidator
@@ -922,3 +922,48 @@ class InterventionActionRepository:
             release_connection(conn)
 
         return self.get_by_id(action_id)
+
+    def delete(self, action_id: str) -> bool:
+        """Supprime une action d'intervention.
+
+        Bloquée si l'intervention parente est fermée, ou si une DA liée
+        a déjà été dispatchée (statut dérivé hors NON_DISPATCHED_PR_STATUSES).
+        """
+        conn = self._get_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT intervention_id FROM intervention_action WHERE id = %s",
+                (action_id,),
+            )
+            row = cur.fetchone()
+            if not row:
+                raise NotFoundError(f"Action {action_id} non trouvée")
+            intervention_id = str(row[0])
+
+            self._ensure_intervention_editable(cur, intervention_id)
+
+            linked_prs = self._get_linked_purchase_requests(action_id, conn)
+            dispatched = [
+                pr for pr in linked_prs
+                if pr.get('derived_status', {}).get('code') not in NON_DISPATCHED_PR_STATUSES
+            ]
+            if dispatched:
+                raise ValidationError(
+                    "Suppression impossible : une demande d'achat liée a déjà été dispatchée"
+                )
+
+            cur.execute("DELETE FROM intervention_action WHERE id = %s", (action_id,))
+            conn.commit()
+            return True
+        except (ValidationError, NotFoundError):
+            conn.rollback()
+            raise
+        except HTTPException:
+            conn.rollback()
+            raise
+        except Exception as e:
+            conn.rollback()
+            raise_db_error(e, "suppression action")
+        finally:
+            release_connection(conn)

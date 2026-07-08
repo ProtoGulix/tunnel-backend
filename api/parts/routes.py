@@ -87,3 +87,14 @@ def add_supplier_ref(mfr_ref_id: str, data: PartSupplierRefCreate):
     """Ajoute une référence fournisseur à une référence fabricant"""
     repo = PartRepository()
     return single(repo.add_supplier_ref(mfr_ref_id, data.model_dump()))
+
+
+@router.delete(
+    "/supplier-refs/{supplier_ref_id}",
+    response_model=SingleResponse[PartDetail],
+    response_model_exclude_none=True,
+)
+def delete_supplier_ref(supplier_ref_id: str):
+    """Supprime une référence fournisseur"""
+    repo = PartRepository()
+    return single(repo.delete_supplier_ref(supplier_ref_id))
