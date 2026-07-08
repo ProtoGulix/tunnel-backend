@@ -1296,8 +1296,8 @@ class PurchaseRequestRepository:
         Dispatch toutes les demandes PENDING_DISPATCH vers des supplier_orders.
 
         Règles métier :
-        - Fournisseur préféré (is_preferred=true) → mode DIRECT : 1 commande, 1 ligne
-        - Aucun préféré → mode CONSULTATION : 1 commande par fournisseur référencé
+        - 1 commande par fournisseur référencé pour la référence fabricant (mode CONSULTATION)
+        - is_preferred n'influence que l'ordre de traitement, pas le nombre de paniers
         - Aucun fournisseur → erreur remontée dans errors[]
         - Invariant : une demande déjà liée à une supplier_order_line est ignorée
         """
@@ -1379,14 +1379,12 @@ class PurchaseRequestRepository:
                         })
                         continue
 
-                    # Détermine le mode : préféré trouvé → direct, sinon consultation
-                    # is_preferred du premier
-                    has_preferred = supplier_rows[0][3]
-
-                    if has_preferred:
-                        # Mode DIRECT : un seul fournisseur (le préféré)
-                        supplier_id_str, supplier_ref, unit_price, _, supplier_name = supplier_rows[
-                            0]
+                    # Mode CONSULTATION : un panier par fournisseur référencé.
+                    # is_preferred (utilisé dans le ORDER BY) ne pilote que l'ordre de
+                    # traitement, pas le nombre de paniers générés.
+                    consultation_orders = []
+                    for sup_row in supplier_rows:
+                        supplier_id_str, supplier_ref, unit_price, _, supplier_name = sup_row
                         supplier_id_str = str(supplier_id_str)
 
                         order_id, was_created = self._find_or_create_order(
@@ -1401,42 +1399,16 @@ class PurchaseRequestRepository:
                             part_id=part_id_str
                         )
 
-                        details.append({
-                            'purchase_request_id': req_id_str,
-                            'mode': 'direct',
+                        consultation_orders.append({
                             'supplier_order_id': order_id,
                             'supplier_name': supplier_name
                         })
 
-                    else:
-                        # Mode CONSULTATION : tous les fournisseurs
-                        consultation_orders = []
-                        for sup_row in supplier_rows:
-                            supplier_id_str, supplier_ref, unit_price, _, supplier_name = sup_row
-                            supplier_id_str = str(supplier_id_str)
-
-                            order_id, was_created = self._find_or_create_order(
-                                cur, supplier_id_str, orders_cache
-                            )
-                            if was_created:
-                                created_orders += 1
-
-                            self._dispatch_to_supplier(
-                                cur, order_id, stock_item_id_str,
-                                supplier_ref, unit_price, req_id_str, req_quantity,
-                                part_id=part_id_str
-                            )
-
-                            consultation_orders.append({
-                                'supplier_order_id': order_id,
-                                'supplier_name': supplier_name
-                            })
-
-                        details.append({
-                            'purchase_request_id': req_id_str,
-                            'mode': 'consultation',
-                            'supplier_orders': consultation_orders
-                        })
+                    details.append({
+                        'purchase_request_id': req_id_str,
+                        'mode': 'consultation',
+                        'supplier_orders': consultation_orders
+                    })
 
                     cur.execute(f"RELEASE SAVEPOINT {savepoint_name}")
                     dispatched_count += 1

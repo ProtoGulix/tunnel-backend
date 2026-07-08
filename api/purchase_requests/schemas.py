@@ -213,7 +213,7 @@ class DispatchResult(BaseModel):
         default_factory=list, description="Erreurs rencontrées")
     details: List[dict] = Field(
         default_factory=list,
-        description="Détail par demande : mode 'direct' (préféré) ou 'consultation' (tous)"
+        description="Détail par demande : mode 'consultation' (un panier par fournisseur référencé)"
     )
 
     class Config:
