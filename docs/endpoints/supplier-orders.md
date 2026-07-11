@@ -82,6 +82,7 @@ Liste les commandes avec filtres, pagination et facets.
 | `limit`       | int    | 100    | Max: 1000                                                |
 | `status`      | string | —      | `OPEN`, `SENT`, `ACK`, `RECEIVED`, `CLOSED`, `CANCELLED` |
 | `supplier_id` | uuid   | —      | Filtrer par fournisseur                                  |
+| `search`      | string | —      | Recherche texte sur `order_number` et nom du fournisseur (`ILIKE`) |
 
 ### Réponse `200` — SupplierOrderListResponse
 
@@ -256,7 +257,7 @@ Crée une commande.
 ### Règles métier
 
 - `order_number` est auto-généré par trigger
-- `total_amount` est calculé par trigger depuis les lignes
+- `total_amount` est recalculé automatiquement par trigger (`trg_recalculate_supplier_order_total`) à chaque INSERT/UPDATE/DELETE sur `supplier_order_line` — somme des `total_price` des lignes. Aucun calcul côté API ou frontend nécessaire.
 
 ---
 

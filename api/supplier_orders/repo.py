@@ -134,7 +134,30 @@ class SupplierOrderRepository:
                     ) as part_manufacturer_ref,
 
                     (SELECT COUNT(*) FROM supplier_order_line_purchase_request
-                     WHERE supplier_order_line_id = sol.id) as purchase_request_count
+                     WHERE supplier_order_line_id = sol.id) as purchase_request_count,
+                    (
+                        -- Autres paniers fournisseur (lignes sœurs) portant sur la même DA :
+                        -- c'est le principe de la consultation multi-fournisseurs.
+                        SELECT json_agg(sib ORDER BY (sib->>'order_number'))
+                        FROM (
+                            SELECT DISTINCT ON (sol2.id) json_build_object(
+                                'supplier_order_line_id', sol2.id,
+                                'supplier_order_id', so2.id,
+                                'order_number', so2.order_number,
+                                'supplier_name', s2.name,
+                                'is_selected', sol2.is_selected
+                            ) AS sib
+                            FROM supplier_order_line_purchase_request solpr2
+                            JOIN supplier_order_line sol2 ON sol2.id = solpr2.supplier_order_line_id
+                            JOIN supplier_order so2 ON so2.id = sol2.supplier_order_id
+                            LEFT JOIN supplier s2 ON s2.id = so2.supplier_id
+                            WHERE solpr2.purchase_request_id IN (
+                                SELECT purchase_request_id FROM supplier_order_line_purchase_request
+                                WHERE supplier_order_line_id = sol.id
+                            )
+                            AND sol2.id != sol.id
+                        ) siblings
+                    ) as competing_order_lines
                 FROM supplier_order_line sol
                 JOIN supplier_order so ON sol.supplier_order_id = so.id
                 -- Legacy
@@ -155,6 +178,13 @@ class SupplierOrderRepository:
             results = []
             for row in rows:
                 line = self._convert_decimals(dict(zip(cols, row)))
+                line['competing_order_lines'] = line.get('competing_order_lines') or []
+                line['competing_orders_count'] = len(line['competing_order_lines'])
+                line['is_consultation'] = line['competing_orders_count'] > 0
+                line['consultation_resolved'] = (
+                    bool(line.get('is_selected'))
+                    or any(sib.get('is_selected') for sib in line['competing_order_lines'])
+                ) if line['is_consultation'] else True
 
                 # Choisit la source V4 (part) ou legacy (stock_item)
                 is_v4 = line.get('part_id') is not None
@@ -198,7 +228,8 @@ class SupplierOrderRepository:
         limit: int = 100,
         offset: int = 0,
         status: Optional[str] = None,
-        supplier_id: Optional[str] = None
+        supplier_id: Optional[str] = None,
+        search: Optional[str] = None
     ) -> Dict[str, Any]:
         """Récupère toutes les commandes avec filtres, pagination et facets par statut"""
         limit = min(limit, 1000)
@@ -218,10 +249,19 @@ class SupplierOrderRepository:
                 where_clauses.append("so.supplier_id = %s")
                 params.append(supplier_id)
 
+            if search:
+                where_clauses.append("(so.order_number ILIKE %s OR s.name ILIKE %s)")
+                search_pattern = f"%{search}%"
+                params.extend([search_pattern] * 2)
+
             where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
+            join_supplier_sql = "LEFT JOIN supplier s ON so.supplier_id = s.id" if search else ""
 
             # Total filtré
-            cur.execute(f"SELECT COUNT(*) FROM supplier_order so {where_sql}", params)
+            cur.execute(
+                f"SELECT COUNT(*) FROM supplier_order so {join_supplier_sql} {where_sql}",
+                params
+            )
             total = cur.fetchone()[0]
 
             # Facets par statut (toujours sur l'ensemble non filtré par status)

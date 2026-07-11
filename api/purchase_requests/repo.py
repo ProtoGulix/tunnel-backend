@@ -358,7 +358,8 @@ class PurchaseRequestRepository:
         intervention_id: Optional[str] = None,
         urgency: Optional[str] = None,
         ids: Optional[List[str]] = None,
-        exclude_statuses: Optional[List[str]] = None
+        exclude_statuses: Optional[List[str]] = None,
+        search: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """
         Liste optimisée avec statut dérivé et compteurs agrégés.
@@ -387,6 +388,16 @@ class PurchaseRequestRepository:
                 placeholders = ','.join(['%s'] * len(ids))
                 where_clauses.append(f"prd.id IN ({placeholders})")
                 params.extend(ids)
+
+            if search:
+                where_clauses.append("""(
+                    prd.item_label ILIKE %s
+                    OR si.ref ILIKE %s
+                    OR si.name ILIKE %s
+                    OR pt.internal_ref ILIKE %s
+                )""")
+                search_pattern = f"%{search}%"
+                params.extend([search_pattern] * 4)
 
             where_sql = " AND ".join(where_clauses)
 

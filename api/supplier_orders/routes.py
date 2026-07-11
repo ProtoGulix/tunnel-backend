@@ -44,7 +44,8 @@ def list_supplier_orders(
     skip: int = Query(0, ge=0, description="Nombre d'éléments à sauter"),
     limit: int = Query(100, ge=1, le=1000, description="Nombre max d'éléments"),
     status: Optional[str] = Query(None, description="Filtrer par statut : OPEN, SENT, ACK, RECEIVED, CLOSED, CANCELLED"),
-    supplier_id: Optional[str] = Query(None, description="Filtrer par fournisseur")
+    supplier_id: Optional[str] = Query(None, description="Filtrer par fournisseur"),
+    search: Optional[str] = Query(None, description="Recherche texte (numéro de commande, nom fournisseur)")
 ):
     """Liste les commandes fournisseur avec pagination et facets par statut"""
     repo = SupplierOrderRepository()
@@ -52,7 +53,8 @@ def list_supplier_orders(
         limit=limit,
         offset=skip,
         status=status,
-        supplier_id=supplier_id
+        supplier_id=supplier_id,
+        search=search
     )
     return paginated(result["items"], total=result["total"], offset=skip, limit=limit, facets=result["facets"])
 

@@ -107,7 +107,9 @@ def list_purchase_requests_optimized(
         None, description="Statuts à exclure, séparés par virgule. Ex: RECEIVED,REJECTED"),
     intervention_id: Optional[str] = Query(
         None, description="Filtrer par intervention"),
-    urgency: Optional[str] = Query(None, description="Filtrer par urgence")
+    urgency: Optional[str] = Query(None, description="Filtrer par urgence"),
+    search: Optional[str] = Query(
+        None, description="Recherche texte (article, référence, intervention)")
 ) -> Dict[str, Any]:
     """
     [v1.2.0] Liste optimisée légère pour tableaux.
@@ -124,7 +126,8 @@ def list_purchase_requests_optimized(
         status=status,
         intervention_id=intervention_id,
         urgency=urgency,
-        exclude_statuses=exclude_list
+        exclude_statuses=exclude_list,
+        search=search
     )
     return single(data, audit_entity="purchase_request")
 
