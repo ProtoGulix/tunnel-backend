@@ -2,6 +2,19 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [4.2.0] - 14 juillet 2026
+
+### Références fournisseur — gestion complète (catalogue pièces V4)
+
+- Nouveaux endpoints de modification et de suppression pour les références fabricant et fournisseur d'une pièce : `PATCH`/`DELETE /parts/manufacturer-refs/{id}`, `POST /parts/manufacturer-refs/{id}/set-preferred`, `PATCH /parts/supplier-refs/{id}`, `POST /parts/supplier-refs/{id}/set-preferred`
+- Nouvel endpoint `GET /parts/supplier-refs` : liste toutes les références fournisseur du catalogue, filtrables par fournisseur ou recherche libre, avec la pièce et la référence fabricant liées
+- Le prix unitaire d'une référence fournisseur n'est plus une valeur saisie manuellement : il est désormais calculé automatiquement à partir de la moyenne des prix constatés dans l'historique des commandes passées auprès de ce fournisseur pour cette pièce
+- Nouvel endpoint `GET /supplier-order-lines/price-stats` : statistiques de prix (moyenne, min, max, dernier prix, date de dernière commande) pour une pièce chez un fournisseur donné
+
+### Commandes fournisseur — recherche
+
+- Ajout d'un paramètre de recherche libre sur les listes de commandes fournisseur
+
 ## [4.1.0] - 8 juillet 2026
 
 ### Suppression d'une action d'intervention

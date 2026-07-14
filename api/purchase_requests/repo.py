@@ -358,7 +358,8 @@ class PurchaseRequestRepository:
         intervention_id: Optional[str] = None,
         urgency: Optional[str] = None,
         ids: Optional[List[str]] = None,
-        exclude_statuses: Optional[List[str]] = None
+        exclude_statuses: Optional[List[str]] = None,
+        search: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """
         Liste optimisée avec statut dérivé et compteurs agrégés.
@@ -376,7 +377,13 @@ class PurchaseRequestRepository:
             params: List[Any] = []
 
             if intervention_id:
-                where_clauses.append("ia.intervention_id = %s")
+                where_clauses.append("""EXISTS (
+                    SELECT 1
+                    FROM intervention_action_purchase_request iapr_filter
+                    JOIN intervention_action ia_filter ON ia_filter.id = iapr_filter.intervention_action_id
+                    WHERE iapr_filter.purchase_request_id = prd.id
+                    AND ia_filter.intervention_id = %s
+                )""")
                 params.append(intervention_id)
 
             if urgency:
@@ -387,6 +394,16 @@ class PurchaseRequestRepository:
                 placeholders = ','.join(['%s'] * len(ids))
                 where_clauses.append(f"prd.id IN ({placeholders})")
                 params.extend(ids)
+
+            if search:
+                where_clauses.append("""(
+                    prd.item_label ILIKE %s
+                    OR si.ref ILIKE %s
+                    OR si.name ILIKE %s
+                    OR pt.internal_ref ILIKE %s
+                )""")
+                search_pattern = f"%{search}%"
+                params.extend([search_pattern] * 4)
 
             where_sql = " AND ".join(where_clauses)
 

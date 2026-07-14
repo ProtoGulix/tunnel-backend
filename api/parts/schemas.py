@@ -12,7 +12,7 @@ class PartSupplierRefOut(BaseModel):
     supplier_id: UUID
     supplier_name: Optional[str] = None
     supplier_ref: str
-    unit_price: Optional[float] = None
+    unit_price: Optional[float] = Field(default=None, description="Prix unitaire moyen constaté (calculé depuis l'historique des commandes, non saisissable)")
     min_order_quantity: int = 1
     delivery_time_days: Optional[int] = None
     is_preferred: bool = False
@@ -31,6 +31,29 @@ class PartManufacturerRefOut(BaseModel):
     label: Optional[str] = None
     is_preferred: bool = False
     supplier_refs: List[PartSupplierRefOut] = []
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+
+class PartSupplierRefListItem(BaseModel):
+    """Référence fournisseur enrichie avec la pièce et la référence fabricant liées"""
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    part_manufacturer_ref_id: UUID
+    supplier_id: UUID
+    supplier_name: Optional[str] = None
+    supplier_ref: str
+    unit_price: Optional[float] = Field(default=None, description="Prix unitaire moyen constaté (calculé depuis l'historique des commandes, non saisissable)")
+    min_order_quantity: int = 1
+    delivery_time_days: Optional[int] = None
+    is_preferred: bool = False
+    product_url: Optional[str] = None
+    part_id: UUID
+    internal_ref: str
+    manufacturer_name: str
+    manufacturer_ref: str
+    label: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
@@ -89,11 +112,25 @@ class PartManufacturerRefCreate(BaseModel):
     is_preferred: bool = Field(default=False)
 
 
+class PartManufacturerRefUpdate(BaseModel):
+    manufacturer_name: Optional[str] = Field(default=None, description="Nom fabricant")
+    manufacturer_ref: Optional[str] = Field(default=None, description="Référence fabricant")
+    label: Optional[str] = Field(default=None, description="Désignation")
+    is_preferred: Optional[bool] = Field(default=None)
+
+
 class PartSupplierRefCreate(BaseModel):
     supplier_id: UUID = Field(..., description="ID fournisseur")
     supplier_ref: str = Field(..., description="Référence fournisseur")
-    unit_price: Optional[float] = Field(default=None, ge=0)
     min_order_quantity: int = Field(default=1, ge=1)
     delivery_time_days: Optional[int] = Field(default=None, ge=0)
     is_preferred: bool = Field(default=False)
+    product_url: Optional[str] = Field(default=None)
+
+
+class PartSupplierRefUpdate(BaseModel):
+    supplier_ref: Optional[str] = Field(default=None, description="Référence fournisseur")
+    min_order_quantity: Optional[int] = Field(default=None, ge=1)
+    delivery_time_days: Optional[int] = Field(default=None, ge=0)
+    is_preferred: Optional[bool] = Field(default=None)
     product_url: Optional[str] = Field(default=None)

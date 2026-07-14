@@ -126,6 +126,19 @@ class ManufacturerInfo(BaseModel):
         from_attributes = True
 
 
+class SupplierPriceStats(BaseModel):
+    """Statistiques de prix obtenus pour une pièce chez un fournisseur, à partir de l'historique des commandes"""
+    order_count: int = Field(..., description="Nombre de commandes prises en compte")
+    avg_price: Optional[float] = Field(default=None, description="Prix unitaire moyen")
+    min_price: Optional[float] = Field(default=None, description="Prix unitaire minimum")
+    max_price: Optional[float] = Field(default=None, description="Prix unitaire maximum")
+    last_price: Optional[float] = Field(default=None, description="Dernier prix unitaire obtenu")
+    last_ordered_at: Optional[datetime] = Field(default=None, description="Date de la dernière commande")
+
+    class Config:
+        from_attributes = True
+
+
 class SupplierOrderLineListItem(BaseModel):
     """Schéma léger pour la liste"""
     id: UUID

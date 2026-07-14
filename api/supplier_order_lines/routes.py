@@ -7,6 +7,7 @@ from api.supplier_order_lines.schemas import (
     SupplierOrderLineIn,
     SupplierOrderLinePatch,
     SupplierOrderLineListItem,
+    SupplierPriceStats,
     PurchaseRequestLink
 )
 
@@ -41,6 +42,16 @@ def list_supplier_order_lines(
         part_id=part_id,
         is_selected=is_selected
     )
+
+
+@router.get("/price-stats", response_model=SupplierPriceStats)
+def get_price_stats(
+    part_id: str = Query(..., description="ID de la pièce"),
+    supplier_id: str = Query(..., description="ID du fournisseur"),
+):
+    """Statistiques de prix obtenus pour une pièce chez un fournisseur, à partir de l'historique des commandes"""
+    repo = SupplierOrderLineRepository()
+    return repo.get_price_stats(part_id, supplier_id)
 
 
 @router.get("/order/{supplier_order_id}", )
