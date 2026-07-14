@@ -377,7 +377,13 @@ class PurchaseRequestRepository:
             params: List[Any] = []
 
             if intervention_id:
-                where_clauses.append("ia.intervention_id = %s")
+                where_clauses.append("""EXISTS (
+                    SELECT 1
+                    FROM intervention_action_purchase_request iapr_filter
+                    JOIN intervention_action ia_filter ON ia_filter.id = iapr_filter.intervention_action_id
+                    WHERE iapr_filter.purchase_request_id = prd.id
+                    AND ia_filter.intervention_id = %s
+                )""")
                 params.append(intervention_id)
 
             if urgency:

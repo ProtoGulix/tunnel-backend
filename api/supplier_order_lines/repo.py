@@ -227,6 +227,34 @@ class SupplierOrderLineRepository:
         finally:
             release_connection(conn)
 
+    def get_price_stats(self, part_id: str, supplier_id: str) -> Dict[str, Any]:
+        """Statistiques de prix obtenus pour une pièce chez un fournisseur, à partir de l'historique des commandes"""
+        conn = self._get_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                SELECT
+                    COUNT(*) AS order_count,
+                    AVG(sol.unit_price) AS avg_price,
+                    MIN(sol.unit_price) AS min_price,
+                    MAX(sol.unit_price) AS max_price,
+                    (ARRAY_AGG(sol.unit_price ORDER BY so.ordered_at DESC))[1] AS last_price,
+                    MAX(so.ordered_at) AS last_ordered_at
+                FROM supplier_order_line sol
+                JOIN supplier_order so ON so.id = sol.supplier_order_id
+                WHERE sol.part_id = %s AND so.supplier_id = %s AND sol.unit_price IS NOT NULL
+                """,
+                (part_id, supplier_id),
+            )
+            row = cur.fetchone()
+            cols = [desc[0] for desc in cur.description]
+            return self._convert_decimals(dict(zip(cols, row)))
+        except Exception as e:
+            raise_db_error(e, "statistiques de prix")
+        finally:
+            release_connection(conn)
+
     def get_by_id(self, line_id: str) -> Dict[str, Any]:
         """Récupère une ligne par ID avec stock_item et purchase_requests"""
         conn = self._get_connection()

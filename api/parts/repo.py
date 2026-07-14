@@ -125,6 +125,114 @@ class PartRepository:
             if conn:
                 release_connection(conn)
 
+    def get_supplier_refs_by_supplier(
+        self,
+        supplier_id: Optional[str] = None,
+        limit: int = 50,
+        offset: int = 0,
+        search: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """Liste les références fournisseur (toutes, ou filtrées par fournisseur), avec pièce et référence fabricant liées"""
+        conn = None
+        try:
+            conn = get_connection()
+            with conn.cursor() as cur:
+                where_clauses = []
+                params: List[Any] = []
+
+                if supplier_id:
+                    where_clauses.append("psr.supplier_id = %s")
+                    params.append(supplier_id)
+
+                if search:
+                    where_clauses.append(
+                        "(p.internal_ref ILIKE %s OR pmr.manufacturer_ref ILIKE %s OR psr.supplier_ref ILIKE %s)"
+                    )
+                    pattern = f"%{search}%"
+                    params.extend([pattern, pattern, pattern])
+
+                where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
+
+                cur.execute(
+                    f"""
+                    SELECT
+                        psr.id, psr.part_manufacturer_ref_id, psr.supplier_id, s.name AS supplier_name,
+                        psr.supplier_ref,
+                        price_stats.avg_price AS unit_price,
+                        psr.min_order_quantity, psr.delivery_time_days,
+                        psr.is_preferred, psr.product_url, psr.created_at, psr.updated_at,
+                        p.id AS part_id, p.internal_ref,
+                        pmr.manufacturer_name, pmr.manufacturer_ref, pmr.label
+                    FROM part_supplier_ref psr
+                    JOIN part_manufacturer_ref pmr ON pmr.id = psr.part_manufacturer_ref_id
+                    JOIN part p ON p.id = pmr.part_id
+                    JOIN supplier s ON s.id = psr.supplier_id
+                    LEFT JOIN LATERAL (
+                        SELECT AVG(sol.unit_price) AS avg_price
+                        FROM supplier_order_line sol
+                        JOIN supplier_order so ON so.id = sol.supplier_order_id
+                        WHERE sol.part_id = p.id AND so.supplier_id = psr.supplier_id
+                          AND sol.unit_price IS NOT NULL
+                    ) price_stats ON true
+                    {where_sql}
+                    ORDER BY p.internal_ref ASC
+                    LIMIT %s OFFSET %s
+                    """,
+                    (*params, limit, offset),
+                )
+                rows = cur.fetchall()
+                cols = [desc[0] for desc in cur.description]
+                return [dict(zip(cols, row)) for row in rows]
+        except Exception as e:
+            raise_db_error(e, "liste des références fournisseur")
+        finally:
+            if conn:
+                release_connection(conn)
+
+    def count_supplier_refs_by_supplier(
+        self,
+        supplier_id: Optional[str] = None,
+        search: Optional[str] = None,
+    ) -> int:
+        """Compte les références fournisseur (toutes, ou filtrées par fournisseur) pour la pagination"""
+        conn = None
+        try:
+            conn = get_connection()
+            with conn.cursor() as cur:
+                where_clauses = []
+                params: List[Any] = []
+
+                if supplier_id:
+                    where_clauses.append("psr.supplier_id = %s")
+                    params.append(supplier_id)
+
+                if search:
+                    where_clauses.append(
+                        "(p.internal_ref ILIKE %s OR pmr.manufacturer_ref ILIKE %s OR psr.supplier_ref ILIKE %s)"
+                    )
+                    pattern = f"%{search}%"
+                    params.extend([pattern, pattern, pattern])
+
+                where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
+
+                cur.execute(
+                    f"""
+                    SELECT COUNT(*)
+                    FROM part_supplier_ref psr
+                    JOIN part_manufacturer_ref pmr ON pmr.id = psr.part_manufacturer_ref_id
+                    JOIN part p ON p.id = pmr.part_id
+                    JOIN supplier s ON s.id = psr.supplier_id
+                    {where_sql}
+                    """,
+                    params,
+                )
+                return cur.fetchone()[0]
+        except Exception as e:
+            raise_db_error(e, "comptage des références fournisseur")
+        finally:
+            if conn:
+                release_connection(conn)
+
     def get_by_id(self, part_id: str) -> Dict[str, Any]:
         """Récupère une pièce avec toutes ses références fabricant et fournisseur"""
         conn = None
@@ -158,7 +266,7 @@ class PartRepository:
                                        'supplier_id', psr.supplier_id,
                                        'supplier_name', s.name,
                                        'supplier_ref', psr.supplier_ref,
-                                       'unit_price', psr.unit_price,
+                                       'unit_price', price_stats.avg_price,
                                        'min_order_quantity', psr.min_order_quantity,
                                        'delivery_time_days', psr.delivery_time_days,
                                        'is_preferred', psr.is_preferred,
@@ -172,6 +280,13 @@ class PartRepository:
                     FROM part_manufacturer_ref pmr
                     LEFT JOIN part_supplier_ref psr ON psr.part_manufacturer_ref_id = pmr.id
                     LEFT JOIN supplier s ON s.id = psr.supplier_id
+                    LEFT JOIN LATERAL (
+                        SELECT AVG(sol.unit_price) AS avg_price
+                        FROM supplier_order_line sol
+                        JOIN supplier_order so ON so.id = sol.supplier_order_id
+                        WHERE sol.part_id = pmr.part_id AND so.supplier_id = psr.supplier_id
+                          AND sol.unit_price IS NOT NULL
+                    ) price_stats ON psr.id IS NOT NULL
                     WHERE pmr.part_id = %s
                     GROUP BY pmr.id
                     ORDER BY pmr.is_preferred DESC, pmr.created_at ASC
@@ -338,6 +453,120 @@ class PartRepository:
             if conn:
                 release_connection(conn)
 
+    def update_manufacturer_ref(self, mfr_ref_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Met à jour une référence fabricant (modification partielle)"""
+        conn = None
+        try:
+            conn = get_connection()
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT part_id FROM part_manufacturer_ref WHERE id = %s",
+                    (mfr_ref_id,),
+                )
+                row = cur.fetchone()
+                if not row:
+                    raise NotFoundError(f"Référence fabricant {mfr_ref_id} non trouvée")
+                part_id = str(row[0])
+
+                updatable = ["manufacturer_name", "manufacturer_ref", "label", "is_preferred"]
+                set_clauses = []
+                params: List[Any] = []
+                for field in updatable:
+                    if field in data and data[field] is not None:
+                        set_clauses.append(f"{field} = %s")
+                        value = strip_html(data[field]) if field == "label" else data[field]
+                        params.append(value)
+
+                if data.get("is_preferred"):
+                    cur.execute(
+                        "UPDATE part_manufacturer_ref SET is_preferred = false WHERE part_id = %s",
+                        (part_id,),
+                    )
+
+                if set_clauses:
+                    params.append(mfr_ref_id)
+                    cur.execute(
+                        f"UPDATE part_manufacturer_ref SET {', '.join(set_clauses)} WHERE id = %s",
+                        params,
+                    )
+            conn.commit()
+            return self.get_by_id(part_id)
+        except NotFoundError:
+            raise
+        except Exception as e:
+            if conn:
+                conn.rollback()
+            raise_db_error(e, "mise à jour référence fabricant")
+        finally:
+            if conn:
+                release_connection(conn)
+
+    def delete_manufacturer_ref(self, mfr_ref_id: str) -> Dict[str, Any]:
+        """Supprime une référence fabricant (et ses références fournisseur en cascade)"""
+        conn = None
+        try:
+            conn = get_connection()
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT part_id FROM part_manufacturer_ref WHERE id = %s",
+                    (mfr_ref_id,),
+                )
+                row = cur.fetchone()
+                if not row:
+                    raise NotFoundError(f"Référence fabricant {mfr_ref_id} non trouvée")
+                part_id = str(row[0])
+
+                cur.execute(
+                    "DELETE FROM part_manufacturer_ref WHERE id = %s",
+                    (mfr_ref_id,),
+                )
+            conn.commit()
+            return self.get_by_id(part_id)
+        except NotFoundError:
+            raise
+        except Exception as e:
+            if conn:
+                conn.rollback()
+            raise_db_error(e, "suppression référence fabricant")
+        finally:
+            if conn:
+                release_connection(conn)
+
+    def set_preferred_manufacturer_ref(self, mfr_ref_id: str) -> Dict[str, Any]:
+        """Définit une référence fabricant comme préférée (désélectionne les autres)"""
+        conn = None
+        try:
+            conn = get_connection()
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT part_id FROM part_manufacturer_ref WHERE id = %s",
+                    (mfr_ref_id,),
+                )
+                row = cur.fetchone()
+                if not row:
+                    raise NotFoundError(f"Référence fabricant {mfr_ref_id} non trouvée")
+                part_id = str(row[0])
+
+                cur.execute(
+                    "UPDATE part_manufacturer_ref SET is_preferred = false WHERE part_id = %s",
+                    (part_id,),
+                )
+                cur.execute(
+                    "UPDATE part_manufacturer_ref SET is_preferred = true WHERE id = %s",
+                    (mfr_ref_id,),
+                )
+            conn.commit()
+            return self.get_by_id(part_id)
+        except NotFoundError:
+            raise
+        except Exception as e:
+            if conn:
+                conn.rollback()
+            raise_db_error(e, "définition référence fabricant préférée")
+        finally:
+            if conn:
+                release_connection(conn)
+
     def add_supplier_ref(self, mfr_ref_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
         """Ajoute une référence fournisseur à une référence fabricant"""
         conn = None
@@ -363,14 +592,13 @@ class PartRepository:
                     """
                     INSERT INTO part_supplier_ref
                         (part_manufacturer_ref_id, supplier_id, supplier_ref,
-                         unit_price, min_order_quantity, delivery_time_days, is_preferred, product_url)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                         min_order_quantity, delivery_time_days, is_preferred, product_url)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
                     """,
                     (
                         mfr_ref_id,
                         str(data["supplier_id"]),
                         data["supplier_ref"],
-                        data.get("unit_price"),
                         data.get("min_order_quantity", 1),
                         data.get("delivery_time_days"),
                         data.get("is_preferred", False),
@@ -385,6 +613,95 @@ class PartRepository:
             if conn:
                 conn.rollback()
             raise_db_error(e, "ajout référence fournisseur")
+        finally:
+            if conn:
+                release_connection(conn)
+
+    def update_supplier_ref(self, supplier_ref_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Met à jour une référence fournisseur (modification partielle)"""
+        conn = None
+        try:
+            conn = get_connection()
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT pmr.id AS mfr_ref_id, pmr.part_id FROM part_supplier_ref psr "
+                    "JOIN part_manufacturer_ref pmr ON pmr.id = psr.part_manufacturer_ref_id "
+                    "WHERE psr.id = %s",
+                    (supplier_ref_id,),
+                )
+                row = cur.fetchone()
+                if not row:
+                    raise NotFoundError(f"Référence fournisseur {supplier_ref_id} non trouvée")
+                mfr_ref_id, part_id = str(row[0]), str(row[1])
+
+                updatable = [
+                    "supplier_ref", "min_order_quantity", "delivery_time_days",
+                    "is_preferred", "product_url",
+                ]
+                set_clauses = []
+                params: List[Any] = []
+                for field in updatable:
+                    if field in data and data[field] is not None:
+                        set_clauses.append(f"{field} = %s")
+                        params.append(data[field])
+
+                if data.get("is_preferred"):
+                    cur.execute(
+                        "UPDATE part_supplier_ref SET is_preferred = false WHERE part_manufacturer_ref_id = %s",
+                        (mfr_ref_id,),
+                    )
+
+                if set_clauses:
+                    params.append(supplier_ref_id)
+                    cur.execute(
+                        f"UPDATE part_supplier_ref SET {', '.join(set_clauses)} WHERE id = %s",
+                        params,
+                    )
+            conn.commit()
+            return self.get_by_id(part_id)
+        except NotFoundError:
+            raise
+        except Exception as e:
+            if conn:
+                conn.rollback()
+            raise_db_error(e, "mise à jour référence fournisseur")
+        finally:
+            if conn:
+                release_connection(conn)
+
+    def set_preferred_supplier_ref(self, supplier_ref_id: str) -> Dict[str, Any]:
+        """Définit une référence fournisseur comme préférée (désélectionne les autres de la même ref fabricant)"""
+        conn = None
+        try:
+            conn = get_connection()
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT pmr.id AS mfr_ref_id, pmr.part_id FROM part_supplier_ref psr "
+                    "JOIN part_manufacturer_ref pmr ON pmr.id = psr.part_manufacturer_ref_id "
+                    "WHERE psr.id = %s",
+                    (supplier_ref_id,),
+                )
+                row = cur.fetchone()
+                if not row:
+                    raise NotFoundError(f"Référence fournisseur {supplier_ref_id} non trouvée")
+                mfr_ref_id, part_id = str(row[0]), str(row[1])
+
+                cur.execute(
+                    "UPDATE part_supplier_ref SET is_preferred = false WHERE part_manufacturer_ref_id = %s",
+                    (mfr_ref_id,),
+                )
+                cur.execute(
+                    "UPDATE part_supplier_ref SET is_preferred = true WHERE id = %s",
+                    (supplier_ref_id,),
+                )
+            conn.commit()
+            return self.get_by_id(part_id)
+        except NotFoundError:
+            raise
+        except Exception as e:
+            if conn:
+                conn.rollback()
+            raise_db_error(e, "définition référence fournisseur préférée")
         finally:
             if conn:
                 release_connection(conn)

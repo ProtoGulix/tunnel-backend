@@ -3,8 +3,8 @@ from typing import Optional
 
 from api.parts.repo import PartRepository
 from api.parts.schemas import (
-    PartCreate, PartDetail, PartListItem, PartManufacturerRefCreate,
-    PartSupplierRefCreate, PartUpdate,
+    PartCreate, PartDetail, PartListItem, PartManufacturerRefCreate, PartManufacturerRefUpdate,
+    PartSupplierRefCreate, PartSupplierRefListItem, PartSupplierRefUpdate, PartUpdate,
 )
 from api.auth.permissions import require_authenticated
 from api.utils.pagination import PaginatedResponse, SingleResponse
@@ -39,6 +39,22 @@ def list_parts(
         sub_family_code=sub_family_code,
         search=search,
     )
+    return paginated(items, total=total, offset=skip, limit=limit)
+
+
+@router.get("/supplier-refs", response_model=PaginatedResponse[PartSupplierRefListItem])
+def list_supplier_refs(
+    supplier_id: Optional[str] = Query(None, description="ID du fournisseur (optionnel — liste toutes les références si absent)"),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=500),
+    search: Optional[str] = Query(None, description="Recherche par ref interne, ref fabricant ou ref fournisseur"),
+):
+    """Liste les références fournisseur, avec pièce et référence fabricant liées, filtrables par fournisseur"""
+    repo = PartRepository()
+    items = repo.get_supplier_refs_by_supplier(
+        supplier_id, limit=limit, offset=skip, search=search,
+    )
+    total = repo.count_supplier_refs_by_supplier(supplier_id, search=search)
     return paginated(items, total=total, offset=skip, limit=limit)
 
 
@@ -77,6 +93,39 @@ def add_manufacturer_ref(part_id: str, data: PartManufacturerRefCreate):
     return single(repo.add_manufacturer_ref(part_id, data.model_dump()))
 
 
+@router.patch(
+    "/manufacturer-refs/{mfr_ref_id}",
+    response_model=SingleResponse[PartDetail],
+    response_model_exclude_none=True,
+)
+def update_manufacturer_ref(mfr_ref_id: str, data: PartManufacturerRefUpdate):
+    """Met à jour une référence fabricant (modification partielle)"""
+    repo = PartRepository()
+    return single(repo.update_manufacturer_ref(mfr_ref_id, data.model_dump(exclude_unset=True)))
+
+
+@router.delete(
+    "/manufacturer-refs/{mfr_ref_id}",
+    response_model=SingleResponse[PartDetail],
+    response_model_exclude_none=True,
+)
+def delete_manufacturer_ref(mfr_ref_id: str):
+    """Supprime une référence fabricant"""
+    repo = PartRepository()
+    return single(repo.delete_manufacturer_ref(mfr_ref_id))
+
+
+@router.post(
+    "/manufacturer-refs/{mfr_ref_id}/set-preferred",
+    response_model=SingleResponse[PartDetail],
+    response_model_exclude_none=True,
+)
+def set_preferred_manufacturer_ref(mfr_ref_id: str):
+    """Définit une référence fabricant comme préférée"""
+    repo = PartRepository()
+    return single(repo.set_preferred_manufacturer_ref(mfr_ref_id))
+
+
 @router.post(
     "/manufacturer-refs/{mfr_ref_id}/supplier-refs",
     response_model=SingleResponse[PartDetail],
@@ -87,6 +136,28 @@ def add_supplier_ref(mfr_ref_id: str, data: PartSupplierRefCreate):
     """Ajoute une référence fournisseur à une référence fabricant"""
     repo = PartRepository()
     return single(repo.add_supplier_ref(mfr_ref_id, data.model_dump()))
+
+
+@router.patch(
+    "/supplier-refs/{supplier_ref_id}",
+    response_model=SingleResponse[PartDetail],
+    response_model_exclude_none=True,
+)
+def update_supplier_ref(supplier_ref_id: str, data: PartSupplierRefUpdate):
+    """Met à jour une référence fournisseur (modification partielle)"""
+    repo = PartRepository()
+    return single(repo.update_supplier_ref(supplier_ref_id, data.model_dump(exclude_unset=True)))
+
+
+@router.post(
+    "/supplier-refs/{supplier_ref_id}/set-preferred",
+    response_model=SingleResponse[PartDetail],
+    response_model_exclude_none=True,
+)
+def set_preferred_supplier_ref(supplier_ref_id: str):
+    """Définit une référence fournisseur comme préférée"""
+    repo = PartRepository()
+    return single(repo.set_preferred_supplier_ref(supplier_ref_id))
 
 
 @router.delete(
