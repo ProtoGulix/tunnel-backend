@@ -69,6 +69,12 @@ class Settings(BaseSettings):
         "config/templates/logo.png"
     )
 
+    # Changelog utilisateur ("Nouveautés" au login)
+    FRONTEND_CHANGELOG_URL: str = os.getenv(
+        "FRONTEND_CHANGELOG_URL",
+        "http://localhost:8082/CHANGELOG.md"
+    )
+
     @property
     def CORS_ORIGINS(self) -> list[str]:
         """Liste des origines autorisées pour CORS"""
