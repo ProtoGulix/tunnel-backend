@@ -36,6 +36,7 @@ from api.stock_item_suppliers.routes import router as stock_item_supplier_router
 from api.manufacturer_items.routes import router as manufacturer_item_router
 from api.exports.routes import router as exports_router
 from api.users.routes import router as user_router
+from api.changelog.routes import router as changelog_router
 from api.intervention_requests.routes import router as intervention_request_router
 from api.services.routes import router as service_router
 from api.preventive_plans.routes import router as preventive_plans_router
@@ -156,6 +157,7 @@ app.include_router(stock_item_supplier_router)
 app.include_router(manufacturer_item_router)
 app.include_router(exports_router)
 app.include_router(user_router)
+app.include_router(changelog_router)
 app.include_router(intervention_request_router)
 app.include_router(service_router)
 app.include_router(preventive_plans_router)
