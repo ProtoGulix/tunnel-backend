@@ -2,6 +2,19 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [4.4.0] - 19 juillet 2026
+
+### Demandes d'achat — statut corrigé à la clôture d'un panier fournisseur
+
+- Dès qu'un panier fournisseur est clôturé avec sa ligne retenue, la demande d'achat liée passe désormais correctement au statut « Reçu », même si d'autres paniers concurrents (mode consultation) sont encore en cours de négociation
+- Auparavant, ce changement de statut ne se déclenchait que si tous les paniers liés étaient terminés, ce qui pouvait laisser une demande d'achat bloquée au statut « Commandé » alors que la pièce avait déjà été reçue
+
+### Demandes d'achat — filtres par statut
+
+- Un seul point d'entrée (`GET /purchase-requests/facets`) fournit désormais la liste complète des statuts avec leur nombre de demandes, y compris ceux à zéro ; l'ancien endpoint `/purchase-requests/statuses`, redondant, est supprimé
+- Nouveau statut virtuel « Terminé » regroupant les demandes reçues et rejetées
+- Correctif : filtrer sur le statut « Reçu » pouvait renvoyer une liste vide à tort si les résultats de cette page ne contenaient aucune demande reçue — le filtre est désormais appliqué avant la pagination
+
 ## [4.2.0] - 14 juillet 2026
 
 ### Références fournisseur — gestion complète (catalogue pièces V4)
