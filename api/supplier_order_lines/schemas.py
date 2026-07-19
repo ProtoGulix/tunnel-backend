@@ -13,7 +13,8 @@ class LinkedPurchaseRequest(BaseModel):
     quantity: int
     item_label: Optional[str] = Field(default=None)
     requester_name: Optional[str] = Field(default=None)
-    intervention_id: Optional[UUID] = Field(default=None)
+    intervention_request_id: Optional[UUID] = Field(default=None, description="DI d'origine, si la demande provient d'une intervention")
+    intervention_request_code: Optional[str] = Field(default=None, description="Code de la DI d'origine (ex: DI-2026-0042)")
     created_at: Optional[datetime] = Field(default=None)
 
     class Config:

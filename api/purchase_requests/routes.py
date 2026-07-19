@@ -14,12 +14,14 @@ from api.purchase_requests.schemas import (
     ImportResult,
 )
 from api.errors.exceptions import ValidationError
-from api.constants import DERIVED_STATUS_CONFIG
-from api.utils.response import single, referentiel
+from api.constants import DERIVED_STATUS_CONFIG, DONE_PR_STATUSES
+from api.utils.response import single
 
 logger = logging.getLogger(__name__)
 
-VALID_STATUSES = tuple(DERIVED_STATUS_CONFIG.keys())
+# DONE est un filtre virtuel (regroupe RECEIVED + REJECTED), pas un vrai statut dérivé —
+# accepté par /status/{status} et /statuses au même titre que les statuts réels.
+VALID_STATUSES = tuple(DERIVED_STATUS_CONFIG.keys()) + ('DONE',)
 
 from api.auth.permissions import require_authenticated
 
@@ -65,15 +67,6 @@ def _parse_csv_bytes(content_bytes: bytes) -> tuple[list[dict], str, int]:
 
 
 # ========== Endpoints optimisés v1.2.0 ==========
-
-@router.get("/statuses")
-def list_purchase_request_statuses():
-    """Retourne tous les statuts dérivés possibles avec leur label et couleur."""
-    return referentiel([
-        {"code": code, "label": cfg["label"], "color": cfg["color"]}
-        for code, cfg in DERIVED_STATUS_CONFIG.items()
-    ])
-
 
 @router.get("/stats")
 def get_purchase_requests_stats(
