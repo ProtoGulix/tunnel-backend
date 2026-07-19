@@ -112,16 +112,20 @@ class SupplierOrderLineRepository:
         return is_consultation, consultation_resolved
 
     def _get_linked_purchase_requests(self, line_id: str, conn) -> List[Dict[str, Any]]:
-        """Récupère les demandes d'achat liées à une ligne"""
+        """Récupère les demandes d'achat liées à une ligne, avec la DI d'origine si applicable"""
         try:
             cur = conn.cursor()
             cur.execute(
                 """
                 SELECT
                     solpr.id, solpr.purchase_request_id, solpr.quantity as quantity, solpr.created_at,
-                    pr.item_label, pr.requested_by AS requester_name
+                    pr.item_label, pr.requested_by AS requester_name,
+                    ir.id AS intervention_request_id, ir.code AS intervention_request_code
                 FROM supplier_order_line_purchase_request solpr
                 JOIN purchase_request pr ON solpr.purchase_request_id = pr.id
+                LEFT JOIN intervention_action_purchase_request iapr ON iapr.purchase_request_id = pr.id
+                LEFT JOIN intervention_action ia ON ia.id = iapr.intervention_action_id
+                LEFT JOIN intervention_request ir ON ir.intervention_id = ia.intervention_id
                 WHERE solpr.supplier_order_line_id = %s
                 ORDER BY solpr.created_at ASC
                 """,

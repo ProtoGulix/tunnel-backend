@@ -136,6 +136,16 @@ class SupplierOrderRepository:
                     (SELECT COUNT(*) FROM supplier_order_line_purchase_request
                      WHERE supplier_order_line_id = sol.id) as purchase_request_count,
                     (
+                        -- Demandes d'achat liées à cette ligne (pour lien direct vers la DA)
+                        SELECT json_agg(jsonb_build_object(
+                            'purchase_request_id', pr3.id,
+                            'item_label', pr3.item_label
+                        ) ORDER BY pr3.created_at)
+                        FROM supplier_order_line_purchase_request solpr3
+                        JOIN purchase_request pr3 ON pr3.id = solpr3.purchase_request_id
+                        WHERE solpr3.supplier_order_line_id = sol.id
+                    ) as linked_purchase_requests,
+                    (
                         -- Autres paniers fournisseur (lignes sœurs) portant sur la même DA :
                         -- c'est le principe de la consultation multi-fournisseurs.
                         SELECT json_agg(sib ORDER BY (sib->>'order_number'))
@@ -180,6 +190,7 @@ class SupplierOrderRepository:
                 line = self._convert_decimals(dict(zip(cols, row)))
                 line['competing_order_lines'] = line.get('competing_order_lines') or []
                 line['competing_orders_count'] = len(line['competing_order_lines'])
+                line['linked_purchase_requests'] = line.get('linked_purchase_requests') or []
                 line['is_consultation'] = line['competing_orders_count'] > 0
                 line['consultation_resolved'] = (
                     bool(line.get('is_selected'))

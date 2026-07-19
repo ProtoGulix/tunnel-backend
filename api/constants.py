@@ -32,6 +32,11 @@ DERIVED_STATUS_CONFIG = {
 # Statuts dérivés DA considérés comme "non dispatchés" (encore éditables/supprimables)
 NON_DISPATCHED_PR_STATUSES = {'TO_QUALIFY', 'NO_SUPPLIER_REF', 'PENDING_DISPATCH'}
 
+# Statuts dérivés DA considérés comme "terminés" (achat conclu, positivement ou non) —
+# regroupés sous le filtre virtuel DONE, qui n'est pas un vrai statut mais un raccourci
+# de filtrage pour l'UI (voir NON_DISPATCHED_PR_STATUSES pour le principe symétrique).
+DONE_PR_STATUSES = {'RECEIVED', 'REJECTED'}
+
 # Statuts des commandes fournisseur
 SUPPLIER_ORDER_STATUS_CONFIG = {
     'OPEN': {

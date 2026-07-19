@@ -7,7 +7,7 @@ import logging
 
 from api.db import get_connection, release_connection
 from api.errors.exceptions import DatabaseError, raise_db_error, NotFoundError, ValidationError
-from api.constants import DERIVED_STATUS_CONFIG, CLOSED_STATUS_CODE, SUPPLIER_ORDER_STATUS_CONFIG, NON_DISPATCHED_PR_STATUSES
+from api.constants import DERIVED_STATUS_CONFIG, CLOSED_STATUS_CODE, SUPPLIER_ORDER_STATUS_CONFIG, NON_DISPATCHED_PR_STATUSES, DONE_PR_STATUSES
 
 logger = logging.getLogger(__name__)
 
@@ -308,6 +308,12 @@ class PurchaseRequestRepository:
                 has_order_lines=False
             )
 
+        def order_status(line: Dict) -> Optional[str]:
+            """Le statut du panier peut être une string brute ou un objet {code, label, ...}
+            selon que la ligne a déjà été enrichie ou non — normalise vers le code."""
+            raw = line.get('supplier_order_status')
+            return raw.get('code') if isinstance(raw, dict) else raw
+
         quotes_count = sum(
             1 for line in order_lines if line.get('quote_received'))
         selected_count = sum(
@@ -320,20 +326,25 @@ class PurchaseRequestRepository:
         # Rejeté : toutes les lignes sont dans un panier terminal (CANCELLED/CLOSED) sans sélection
         terminal_statuses = ('CANCELLED', 'CLOSED')
         all_terminal = all(
-            line.get('supplier_order_status') in terminal_statuses
+            order_status(line) in terminal_statuses
             for line in order_lines
         )
         if all_terminal and selected_count == 0:
             return 'REJECTED'
 
-        # Reçu : toutes les lignes en panier terminal avec au moins une sélectionnée
-        # (panier CLOSED + sélection = commande livrée et clôturée)
-        if all_terminal and selected_count > 0:
+        # Reçu : dès qu'un panier lié est clôturé (CLOSED) avec sa ligne sélectionnée,
+        # l'achat est considéré validé — inutile d'attendre les autres paniers
+        # concurrents (consultation) encore ouverts.
+        has_closed_selected = any(
+            order_status(line) == 'CLOSED' and line.get('is_selected')
+            for line in order_lines
+        )
+        if has_closed_selected:
             return 'RECEIVED'
 
         # En chiffrage : le panier a quitté OPEN (SENT/ACK = devis demandé), pas encore de réponse
         has_locked_order = any(
-            line.get('supplier_order_status') in ('SENT', 'ACK')
+            order_status(line) in ('SENT', 'ACK')
             for line in order_lines
         )
         if has_locked_order and selected_count == 0 and quotes_count == 0:
@@ -404,6 +415,23 @@ class PurchaseRequestRepository:
                 )""")
                 search_pattern = f"%{search}%"
                 params.extend([search_pattern] * 4)
+
+            # Filtre par statut dérivé — DOIT être en SQL (pas après coup en Python) car
+            # la requête est bornée par LIMIT/OFFSET : filtrer après tronquerait le
+            # résultat avant même d'appliquer le filtre (statuts récents "consommant"
+            # la page alors que ceux recherchés existent plus loin, hors de la page).
+            if status == 'DONE':
+                placeholders = ','.join(['%s'] * len(DONE_PR_STATUSES))
+                where_clauses.append(f"prd.derived_status IN ({placeholders})")
+                params.extend(DONE_PR_STATUSES)
+            elif status:
+                where_clauses.append("prd.derived_status = %s")
+                params.append(status)
+
+            if exclude_statuses:
+                placeholders = ','.join(['%s'] * len(exclude_statuses))
+                where_clauses.append(f"prd.derived_status NOT IN ({placeholders})")
+                params.extend(exclude_statuses)
 
             where_sql = " AND ".join(where_clauses)
 
@@ -476,19 +504,12 @@ class PurchaseRequestRepository:
             rows = cur.fetchall()
             cols = [desc[0] for desc in cur.description]
 
+            # Le filtre par statut (status/DONE/exclude_statuses) est déjà appliqué en SQL
+            # ci-dessus, avant LIMIT/OFFSET — voir le commentaire sur where_clauses.
             results = []
             for row in rows:
                 item = dict(zip(cols, row))
                 status_code = item.pop('derived_status')
-
-                # Filtre par statut si demandé
-                if status and status_code != status:
-                    continue
-
-                # Exclut les statuts explicitement exclus
-                if exclude_statuses and status_code in exclude_statuses:
-                    continue
-
                 item['derived_status'] = self._map_derived_status(status_code)
                 results.append(item)
 
@@ -672,7 +693,30 @@ class PurchaseRequestRepository:
                     sis.supplier_ref as catalog_ref,
                     -- Fabricant depuis catalogue
                     mi.manufacturer_name as catalog_manufacturer,
-                    mi.manufacturer_ref as catalog_manufacturer_ref
+                    mi.manufacturer_ref as catalog_manufacturer_ref,
+                    -- Autres paniers fournisseur (lignes sœurs) portant sur la même DA :
+                    -- consultation multi-fournisseurs, même principe que côté panier fournisseur.
+                    (
+                        SELECT json_agg(sib ORDER BY (sib->>'order_number'))
+                        FROM (
+                            SELECT DISTINCT ON (sol2.id) json_build_object(
+                                'supplier_order_line_id', sol2.id,
+                                'supplier_order_id', so2.id,
+                                'order_number', so2.order_number,
+                                'supplier_name', s2.name,
+                                'is_selected', sol2.is_selected
+                            ) AS sib
+                            FROM supplier_order_line_purchase_request solpr2
+                            JOIN supplier_order_line sol2 ON sol2.id = solpr2.supplier_order_line_id
+                            JOIN supplier_order so2 ON so2.id = sol2.supplier_order_id
+                            LEFT JOIN supplier s2 ON s2.id = so2.supplier_id
+                            WHERE solpr2.purchase_request_id IN (
+                                SELECT purchase_request_id FROM supplier_order_line_purchase_request
+                                WHERE supplier_order_line_id = sol.id
+                            )
+                            AND sol2.id != sol.id
+                        ) siblings
+                    ) as competing_order_lines
                 FROM supplier_order_line_purchase_request solpr
                 JOIN supplier_order_line sol ON solpr.supplier_order_line_id = sol.id
                 JOIN supplier_order so ON sol.supplier_order_id = so.id
@@ -697,6 +741,11 @@ class PurchaseRequestRepository:
                 for key in ['unit_price', 'total_price', 'quote_price']:
                     if line.get(key) is not None and isinstance(line[key], Decimal):
                         line[key] = float(line[key])
+
+                # Consultation multi-fournisseurs : même logique que côté panier fournisseur
+                # (isConsultationLost côté front) — permet de griser la ligne perdante.
+                line['competing_order_lines'] = line.get('competing_order_lines') or []
+                line['is_consultation'] = len(line['competing_order_lines']) > 0
 
                 # Construit objet supplier
                 if line.get('supplier_id'):
@@ -791,7 +840,12 @@ class PurchaseRequestRepository:
             )
 
     def get_facets(self) -> Dict[str, Any]:
-        """Compteurs par statut dérivé en temps réel, sans filtre de date."""
+        """
+        Compteurs par statut dérivé en temps réel, sans filtre de date.
+        Référentiel exhaustif : inclut tous les statuts de DERIVED_STATUS_CONFIG même
+        à 0 résultat, plus le filtre virtuel DONE (RECEIVED + REJECTED) — source unique
+        pour peupler un sélecteur de statut avec compteurs (remplace l'ancien /statuses).
+        """
         conn = self._get_connection()
         try:
             cur = conn.cursor()
@@ -800,13 +854,19 @@ class PurchaseRequestRepository:
                 FROM purchase_request_derived_status
                 GROUP BY derived_status
             """)
+            counts = {row[0]: row[1] for row in cur.fetchall()}
+
             by_status = [
-                {'status': row[0], 'count': row[1], **DERIVED_STATUS_CONFIG.get(row[0], {})}
-                for row in cur.fetchall()
+                {'status': code, 'count': counts.get(code, 0), **cfg}
+                for code, cfg in DERIVED_STATUS_CONFIG.items()
             ]
-            pending_dispatch_count = next(
-                (s['count'] for s in by_status if s['status'] == 'PENDING_DISPATCH'), 0
-            )
+            done_count = sum(counts.get(code, 0) for code in DONE_PR_STATUSES)
+            by_status.append({
+                'status': 'DONE', 'count': done_count,
+                'label': 'Terminé', 'color': '#059669',
+            })
+
+            pending_dispatch_count = counts.get('PENDING_DISPATCH', 0)
             return {
                 'by_status': by_status,
                 'pending_dispatch_count': pending_dispatch_count,
