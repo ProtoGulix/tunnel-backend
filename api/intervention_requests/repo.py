@@ -299,7 +299,7 @@ class InterventionRequestRepository:
         self,
         limit: int = 50,
         offset: int = 0,
-        statut: Optional[str] = None,
+        statut: Optional[List[str]] = None,
         exclude_statuses: Optional[List[str]] = None,
         machine_id: Optional[str] = None,
         search: Optional[str] = None,
@@ -313,8 +313,9 @@ class InterventionRequestRepository:
             params: List[Any] = []
 
             if statut:
-                where.append("ir.statut = %s")
-                params.append(statut)
+                placeholders = ",".join(["%s"] * len(statut))
+                where.append(f"ir.statut IN ({placeholders})")
+                params.extend(statut)
             if exclude_statuses:
                 placeholders = ",".join(["%s"] * len(exclude_statuses))
                 where.append(f"ir.statut NOT IN ({placeholders})")
@@ -324,9 +325,10 @@ class InterventionRequestRepository:
                 params.append(machine_id)
             if search:
                 where.append(
-                    "(ir.code ILIKE %s OR ir.demandeur_nom ILIKE %s OR ir.description ILIKE %s)"
+                    "(ir.code ILIKE %s OR ir.demandeur_nom ILIKE %s OR ir.description ILIKE %s "
+                    "OR m.code ILIKE %s OR s.label ILIKE %s)"
                 )
-                params += [f"%{search}%", f"%{search}%", f"%{search}%"]
+                params += [f"%{search}%"] * 5
             if is_system is not None:
                 where.append("ir.is_system = %s")
                 params.append(is_system)
@@ -378,7 +380,7 @@ class InterventionRequestRepository:
 
     def count_list(
         self,
-        statut: Optional[str] = None,
+        statut: Optional[List[str]] = None,
         exclude_statuses: Optional[List[str]] = None,
         machine_id: Optional[str] = None,
         search: Optional[str] = None,
@@ -391,27 +393,37 @@ class InterventionRequestRepository:
             params: List[Any] = []
 
             if statut:
-                where.append("statut = %s")
-                params.append(statut)
+                placeholders = ",".join(["%s"] * len(statut))
+                where.append(f"ir.statut IN ({placeholders})")
+                params.extend(statut)
             if exclude_statuses:
                 placeholders = ",".join(["%s"] * len(exclude_statuses))
-                where.append(f"statut NOT IN ({placeholders})")
+                where.append(f"ir.statut NOT IN ({placeholders})")
                 params.extend(exclude_statuses)
             if machine_id:
-                where.append("machine_id = %s")
+                where.append("ir.machine_id = %s")
                 params.append(machine_id)
             if search:
                 where.append(
-                    "(code ILIKE %s OR demandeur_nom ILIKE %s OR description ILIKE %s)"
+                    "(ir.code ILIKE %s OR ir.demandeur_nom ILIKE %s OR ir.description ILIKE %s "
+                    "OR m.code ILIKE %s OR s.label ILIKE %s)"
                 )
-                params += [f"%{search}%", f"%{search}%", f"%{search}%"]
+                params += [f"%{search}%"] * 5
             if is_system is not None:
-                where.append("is_system = %s")
+                where.append("ir.is_system = %s")
                 params.append(is_system)
 
             where_sql = ("WHERE " + " AND ".join(where)) if where else ""
             cur.execute(
-                f"SELECT COUNT(*) FROM intervention_request {where_sql}", params)
+                f"""
+                SELECT COUNT(*)
+                FROM intervention_request ir
+                LEFT JOIN machine m ON ir.machine_id = m.id
+                LEFT JOIN service s ON ir.service_id = s.id
+                {where_sql}
+                """,
+                params,
+            )
             return cur.fetchone()[0]
         except Exception as e:
             raise DatabaseError("Erreur comptage demandes: %s" % str(e)) from e
@@ -435,9 +447,10 @@ class InterventionRequestRepository:
                 params.append(machine_id)
             if search:
                 where.append(
-                    "(ir.code ILIKE %s OR ir.demandeur_nom ILIKE %s OR ir.description ILIKE %s)"
+                    "(ir.code ILIKE %s OR ir.demandeur_nom ILIKE %s OR ir.description ILIKE %s "
+                    "OR m.code ILIKE %s OR s.label ILIKE %s)"
                 )
-                params += [f"%{search}%", f"%{search}%", f"%{search}%"]
+                params += [f"%{search}%"] * 5
 
             where_sql = ("WHERE " + " AND ".join(where)) if where else ""
 
@@ -446,6 +459,8 @@ class InterventionRequestRepository:
                 SELECT rs.code, rs.label, rs.color, rs.sort_order, COUNT(ir.id) AS count
                 FROM request_status_ref rs
                 LEFT JOIN intervention_request ir ON ir.statut = rs.code
+                LEFT JOIN machine m ON ir.machine_id = m.id
+                LEFT JOIN service s ON ir.service_id = s.id
                     {('AND ' + ' AND '.join(where)) if where else ''}
                 GROUP BY rs.code, rs.label, rs.color, rs.sort_order
                 ORDER BY rs.sort_order
@@ -593,6 +608,43 @@ class InterventionRequestRepository:
             release_connection(conn)
 
         return self.get_by_id(str(new_id))
+
+    # ──────────────────────────────────────────────────────────────
+    # Suppression (erreur de saisie, doublon)
+    # ──────────────────────────────────────────────────────────────
+
+    def delete(self, request_id: str) -> None:
+        """
+        Supprime définitivement une demande d'intervention.
+
+        Réservé aux erreurs de saisie / doublons : refuse la suppression si une
+        intervention est déjà liée (intervention_id non NULL), pour ne jamais
+        casser un historique déjà exploité par une intervention réelle.
+        """
+        existing = self.get_by_id(request_id)
+        if existing.get("intervention_id"):
+            raise ValidationError(
+                "Impossible de supprimer une demande liée à une intervention. "
+                "Utilisez le rejet ou la clôture."
+            )
+
+        conn = self._get_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute("DELETE FROM request_status_log WHERE request_id = %s", (request_id,))
+            cur.execute("DELETE FROM intervention_request WHERE id = %s", (request_id,))
+            if cur.rowcount == 0:
+                raise NotFoundError(f"Demande {request_id} non trouvée")
+            conn.commit()
+            logger.info("Demande d'intervention supprimée: %s", request_id)
+        except (NotFoundError, ValidationError):
+            conn.rollback()
+            raise
+        except Exception as e:
+            conn.rollback()
+            raise_db_error(e, "suppression demande")
+        finally:
+            release_connection(conn)
 
     # ──────────────────────────────────────────────────────────────
     # Transition de statut

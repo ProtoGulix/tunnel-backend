@@ -49,10 +49,10 @@ class InterventionRequestValidator:
                 f"Une demande ne peut être liée qu'à une seule intervention."
             )
 
-        # Motif obligatoire pour rejet
+        # Motif obligatoire pour rejet — porté par reason_text (raison d'audit), voir routes.py
         if status_to == "rejetee" and not (notes or "").strip():
             raise ValidationError(
-                "Un motif (notes) est obligatoire pour rejeter une demande"
+                "Un motif de rejet est obligatoire (reason_text)"
             )
 
         # Champs obligatoires pour acceptation (création intervention)

@@ -53,6 +53,7 @@ def _audit_task(cur, task_id: str, decision_type: str,
         except Exception:
             pass
 
+
 _TASK_SELECT = """
     SELECT
         it.id, it.intervention_id, it.label, it.origin, it.status,

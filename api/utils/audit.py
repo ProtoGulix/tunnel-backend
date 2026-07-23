@@ -1,9 +1,12 @@
-"""Utilitaire pour charger les règles d'audit d'une entité."""
+"""Utilitaire pour charger les règles d'audit d'une entité.
+
+Les règles routine/sensible sont administrables via /admin/audit-rules
+(table audit_rule), plus en dur dans ce fichier. Voir AuditRuleRepository.
+"""
 
 from typing import Any, Dict, List, Optional
 
 from api.audits.schemas import AuditRules, AuditRuleReason
-
 
 # Entités qui exigent un reason_code sur toute mutation
 _ENTITIES_WITH_REQUIRED_AUDIT = {
@@ -14,25 +17,40 @@ _ENTITIES_WITH_REQUIRED_AUDIT = {
     "action",
 }
 
-# Entités dont les mutations courantes sont silencieuses côté UX :
-# le front envoie _AUTO_REASON_CODE sans afficher de sélecteur.
-_SILENT_ENTITY_TYPES = {"task", "action",
-                        "request", "intervention", "purchase_request"}
 
-_AUTO_REASON_CODE = "ROUTINE"
+def resolve_reason_code(entity_type: str, fields: List[str]) -> Optional[Dict[str, Any]]:
+    """
+    Détermine la règle applicable pour un entity_type et les champs présents
+    dans le payload entrant (avant exécution de la route, donc avant diff réel).
 
-# Champs dont la modification est toujours silencieuse (pas de dialog raison)
-# Les autres champs modifiables déclencheront le dialog côté front.
-_SILENT_FIELDS_BY_ENTITY: Dict[str, List[str]] = {
-    "intervention": ["printed_fiche", "title"],
-    # status, sort_order, skip_reason : transitions courantes (tech valide/ignore une tâche)
-    # due_date, assigned_to : décisions explicites → dialog obligatoire
-    "task": ["status", "sort_order", "skip_reason"],
-}
+    Priorité : dès qu'un champ correspond à une règle non-routine, la mutation
+    exige une raison explicite (retourne None : pas d'injection automatique).
+    Si tous les champs présents (ou aucun, cas création) sont routine,
+    retourne la règle par défaut à auto-injecter.
+    """
+    # Import lazy pour éviter la circularité avec audits.repo
+    from api.audits.repo import AuditRuleRepository
+
+    repo = AuditRuleRepository()
+    rules = repo.get_rules_for_fields(entity_type, fields)
+    by_field = {r["field"]: r for r in rules}
+
+    default_rule = by_field.get(None)
+    applicable = [by_field[f] for f in fields if f in by_field] or (
+        [default_rule] if default_rule else []
+    )
+
+    if not applicable:
+        return None
+
+    if any(not r["is_routine"] for r in applicable):
+        return None
+
+    return default_rule
 
 
-def get_audit_rules(entity_type: str) -> AuditRules:
-    """Retourne les règles d'audit pour une entité.
+def get_audit_rules(entity_type: str, fields: Optional[List[str]] = None) -> AuditRules:
+    """Retourne les règles d'audit pour une entité (et optionnellement des champs).
 
     - Catégories manual + user → affichées dans le picker front
     - Catégorie auto            → envoyée silencieusement (jamais dans le picker)
@@ -42,7 +60,9 @@ def get_audit_rules(entity_type: str) -> AuditRules:
     from api.audits.repo import AuditRepository
 
     required = entity_type in _ENTITIES_WITH_REQUIRED_AUDIT
-    silent = entity_type in _SILENT_ENTITY_TYPES
+
+    routine_rule = resolve_reason_code(entity_type, fields or [])
+    silent = routine_rule is not None
 
     repo = AuditRepository()
     raw_reasons: List[Dict[str, Any]] = repo.get_all_reasons(
@@ -64,8 +84,8 @@ def get_audit_rules(entity_type: str) -> AuditRules:
     return AuditRules(
         required=required,
         silent=silent,
-        default_reason_code=_AUTO_REASON_CODE if silent else None,
-        silent_fields=_SILENT_FIELDS_BY_ENTITY.get(entity_type),
+        default_reason_code=routine_rule["default_reason_code"] if routine_rule else None,
+        silent_fields=None,
         # Les entités silencieuses n'exposent aucune raison au front :
         # il doit envoyer default_reason_code automatiquement sans afficher de sélecteur.
         reasons=[] if silent else reasons,

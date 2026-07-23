@@ -8,7 +8,8 @@ from fastapi import APIRouter, Depends, Query, Request
 
 from api.auth.permissions import require_authenticated
 from api.audits.repo import AuditRepository
-from api.audits.schemas import AuditLogCreate, AuditLogOut, AuditReasonOut, BriefingReport
+from api.audits.schemas import AuditLogCreate, AuditLogOut, AuditReasonOut, AuditRules, BriefingReport
+from api.utils.audit import get_audit_rules
 
 router = APIRouter(prefix="/audit", tags=["Audit"])
 
@@ -30,6 +31,20 @@ def list_reasons(
         category=category,
         entity_type=entity_type,
     )
+
+
+@router.get("/rules", response_model=AuditRules, dependencies=[Depends(require_authenticated)])
+def get_rules(
+    entity_type: str = Query(..., description="Type d'entité : intervention, request, task, action, purchase_request"),
+    field: Optional[List[str]] = Query(
+        None, description="Champ(s) que le front s'apprête à modifier — détermine si la mutation est routine"),
+):
+    """
+    Règle applicable pour une entité (et des champs optionnels) : indique si
+    la mutation est routine (default_reason_code à injecter silencieusement)
+    ou si elle nécessite un choix explicite (reasons non vide).
+    """
+    return get_audit_rules(entity_type, field or [])
 
 
 @router.get("/briefing", response_model=BriefingReport, dependencies=[Depends(require_authenticated)])

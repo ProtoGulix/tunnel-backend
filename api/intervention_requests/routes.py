@@ -45,10 +45,10 @@ def list_statuses():
 def list_requests(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=500),
-    statut: Optional[str] = Query(None),
+    statut: Optional[str] = Query(None, description="Statuts à inclure, séparés par virgule. Ex: cloturee,rejetee"),
     exclude_statuses: Optional[str] = Query(None, description="Statuts à exclure, séparés par virgule. Ex: rejetee,cloturee"),
     machine_id: Optional[UUID] = Query(None),
-    search: Optional[str] = Query(None),
+    search: Optional[str] = Query(None, description="Recherche libre : code DI, demandeur, description, code équipement, service"),
     is_system: Optional[bool] = Query(None, description="Filtrer les DI système (true) ou humaines (false)"),
 ) -> Dict[str, Any]:
     """
@@ -56,14 +56,15 @@ def list_requests(
     Retourne une réponse paginée.
     """
     machine_id_str = str(machine_id) if machine_id else None
+    statut_list = [s.strip() for s in statut.split(",") if s.strip()] if statut else None
     exclude_list = [s.strip() for s in exclude_statuses.split(",") if s.strip()] if exclude_statuses else None
     items = repo.get_list(
         limit=limit, offset=skip,
-        statut=statut, exclude_statuses=exclude_list, machine_id=machine_id_str, search=search,
+        statut=statut_list, exclude_statuses=exclude_list, machine_id=machine_id_str, search=search,
         is_system=is_system,
     )
     total = repo.count_list(
-        statut=statut, exclude_statuses=exclude_list, machine_id=machine_id_str, search=search,
+        statut=statut_list, exclude_statuses=exclude_list, machine_id=machine_id_str, search=search,
         is_system=is_system,
     )
     facets = repo.get_facets(machine_id=machine_id_str, search=search)
@@ -101,12 +102,13 @@ def transition_request_status(request_id: UUID, body: StatusTransitionIn):
     - rejetee → (aucune)
     - cloturee → (aucune)
 
-    Le motif (notes) est obligatoire pour le statut `rejetee`.
     Pour le statut `acceptee`, les champs `type_inter` et `tech_initials` sont obligatoires :
     ils servent à créer automatiquement l'intervention liée.
 
     **Audit obligatoire** : le champ `reason_code` est requis (voir `GET /audit/reasons`).
-    `reason_text` est obligatoire si `reason_code=OTHER`.
+    Pour le statut `rejetee`, le motif est porté par `reason_text` (pas de champ `notes`
+    séparé) : le motif de rejet EST la raison d'audit, saisie une seule fois via le picker
+    de raisons. `reason_text` est copié dans l'historique (request_status_log.notes).
     """
     intervention_data = None
     if body.status_to == "acceptee":
@@ -117,15 +119,32 @@ def transition_request_status(request_id: UUID, body: StatusTransitionIn):
             "reported_date": body.reported_date,
         }
 
+    # Le rejet n'a pas de champ notes dédié : reason_text (raison d'audit) en tient lieu,
+    # pour ne pas dupliquer la même justification via deux mécanismes distincts.
+    notes = body.notes
+    if body.status_to == "rejetee" and not notes:
+        notes = body.reason_text
+
     return single(repo.transition_status(
         request_id=str(request_id),
         status_to=body.status_to,
-        notes=body.notes,
+        notes=notes,
         changed_by=str(body.changed_by) if body.changed_by else None,
         intervention_data=intervention_data,
         reason_code=body.reason_code,
         reason_text=body.reason_text,
     ))
+
+
+@router.delete("/{request_id}", status_code=204)
+def delete_request(request_id: UUID):
+    """
+    Supprime définitivement une demande d'intervention.
+
+    Réservé aux erreurs de saisie ou doublons : refuse la suppression si une
+    intervention est déjà liée à la demande (voir `repo.delete`).
+    """
+    repo.delete(str(request_id))
 
 
 @router.post("/repair")

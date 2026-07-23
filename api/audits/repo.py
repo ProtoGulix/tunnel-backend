@@ -11,7 +11,7 @@ from uuid import UUID
 from psycopg2.extras import RealDictCursor
 
 from api.db import get_connection, release_connection
-from api.errors.exceptions import raise_db_error
+from api.errors.exceptions import raise_db_error, ValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -391,3 +391,174 @@ class AuditRepository:
                 "by_decision_type": by_decision,
             },
         }
+
+
+class AuditRuleRepository:
+    """Accès à la table audit_rule (règles routine/sensible par entité et champ)."""
+
+    def _get_connection(self):
+        return get_connection()
+
+    def list_rules(self, entity_type: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Liste les règles, filtrables par entity_type."""
+        conn = None
+        try:
+            conn = self._get_connection()
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                where_sql = "TRUE"
+                params: List[Any] = []
+                if entity_type:
+                    where_sql = "entity_type = %s"
+                    params.append(entity_type)
+
+                cur.execute(
+                    f"""
+                    SELECT id, entity_type, field, is_routine, default_reason_code
+                    FROM audit_rule
+                    WHERE {where_sql}
+                    ORDER BY entity_type, field NULLS FIRST
+                    """,
+                    params,
+                )
+                return [dict(row) for row in cur.fetchall()]
+        except Exception as e:
+            raise_db_error(e, "liste des règles d'audit")
+        finally:
+            if conn:
+                release_connection(conn)
+
+    def get_known_fields(self, entity_type: str) -> List[str]:
+        """
+        Liste les champs déjà observés pour une entité : union des champs
+        couverts par une règle (audit_rule.field) et des champs déjà modifiés
+        au moins une fois (audit_log.decision_type = '{field}_changed').
+        Sert à assister la saisie d'une nouvelle règle côté admin.
+        """
+        conn = None
+        try:
+            conn = self._get_connection()
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT field FROM audit_rule
+                    WHERE entity_type = %s AND field IS NOT NULL
+                    UNION
+                    SELECT substring(decision_type from '^(.+)_changed$') AS field
+                    FROM audit_log
+                    WHERE entity_type = %s AND decision_type LIKE '%%_changed'
+                    ORDER BY field
+                    """,
+                    (entity_type, entity_type),
+                )
+                return [row[0] for row in cur.fetchall() if row[0]]
+        except Exception as e:
+            raise_db_error(e, "liste des champs connus d'audit")
+        finally:
+            if conn:
+                release_connection(conn)
+
+    def get_rules_for_fields(self, entity_type: str, fields: List[str]) -> List[Dict[str, Any]]:
+        """
+        Retourne les règles applicables pour un entity_type et un ensemble de champs.
+        Inclut la règle par défaut (field IS NULL) si elle existe, utilisée en
+        fallback quand un champ du payload n'a pas de règle dédiée.
+        """
+        conn = None
+        try:
+            conn = self._get_connection()
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(
+                    """
+                    SELECT id, entity_type, field, is_routine, default_reason_code
+                    FROM audit_rule
+                    WHERE entity_type = %s AND (field IS NULL OR field = ANY(%s))
+                    """,
+                    (entity_type, fields),
+                )
+                return [dict(row) for row in cur.fetchall()]
+        except Exception as e:
+            raise_db_error(e, "récupération règles d'audit par champ")
+        finally:
+            if conn:
+                release_connection(conn)
+
+    def create_rule(
+        self,
+        entity_type: str,
+        field: Optional[str],
+        is_routine: bool,
+        default_reason_code: Optional[str],
+    ) -> Dict[str, Any]:
+        """Crée une règle d'audit. is_routine=True exige default_reason_code."""
+        if is_routine and not default_reason_code:
+            raise ValidationError("default_reason_code obligatoire si is_routine=True")
+
+        conn = None
+        try:
+            conn = self._get_connection()
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(
+                    """
+                    INSERT INTO audit_rule (entity_type, field, is_routine, default_reason_code)
+                    VALUES (%s, %s, %s, %s)
+                    RETURNING id, entity_type, field, is_routine, default_reason_code
+                    """,
+                    (entity_type, field, is_routine, default_reason_code),
+                )
+                row = cur.fetchone()
+            conn.commit()
+            return dict(row)
+        except Exception as e:
+            if conn:
+                conn.rollback()
+            raise_db_error(e, "création règle d'audit")
+        finally:
+            if conn:
+                release_connection(conn)
+
+    def update_rule(
+        self,
+        rule_id: int,
+        is_routine: Optional[bool] = None,
+        default_reason_code: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """Modifie partiellement une règle d'audit (is_routine et/ou default_reason_code)."""
+        sets: List[str] = []
+        params: List[Any] = []
+
+        if is_routine is not None:
+            sets.append("is_routine = %s")
+            params.append(is_routine)
+        if default_reason_code is not None:
+            sets.append("default_reason_code = %s")
+            params.append(default_reason_code)
+
+        if not sets:
+            raise ValidationError("Rien à mettre à jour")
+
+        sets.append("updated_at = now()")
+        params.append(rule_id)
+
+        conn = None
+        try:
+            conn = self._get_connection()
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(
+                    f"""
+                    UPDATE audit_rule
+                    SET {', '.join(sets)}
+                    WHERE id = %s
+                    RETURNING id, entity_type, field, is_routine, default_reason_code
+                    """,
+                    params,
+                )
+                row = cur.fetchone()
+            conn.commit()
+            return dict(row) if row else None
+        except Exception as e:
+            if conn:
+                conn.rollback()
+            raise_db_error(e, "modification règle d'audit")
+        finally:
+            if conn:
+                release_connection(conn)

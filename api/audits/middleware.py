@@ -28,8 +28,6 @@ from api.audits.repo import AuditRepository
 logger = logging.getLogger(__name__)
 
 # Entités tracées : préfixe URL → entity_type
-# intervention-tasks est exclu : l'audit est géré directement dans le repo
-# (créations, PATCH, suppressions, transitions de statut via action)
 _ENTITY_MAP: Dict[str, str] = {
     "interventions": "intervention",
     "intervention-requests": "request",
@@ -82,9 +80,7 @@ class AuditMiddleware(BaseHTTPMiddleware):
 
         entity_type, entity_id_str = entity_info  # entity_id_str peut être None pour les POST création
 
-        # ── Lecture et bufferisation du corps ────────────────────────────────
-        # Starlette ne permet de lire request.body() qu'une fois ;
-        # on le remet en place via un générateur pour que la route puisse le relire.
+        # ── Lecture du corps ──────────────────────────────────────────────────
         raw_body = await request.body()
 
         payload: Dict[str, Any] = {}
@@ -94,35 +90,44 @@ class AuditMiddleware(BaseHTTPMiddleware):
             except (json.JSONDecodeError, ValueError):
                 pass
 
-        # Reconstruit le corps lisible pour la route
-        async def receive():
-            return {"type": "http.request", "body": raw_body, "more_body": False}
-
-        request = Request(request.scope, receive)
-
         reason_code: Optional[str] = payload.get("reason_code")
         reason_text: Optional[str] = payload.get("reason_text")
 
         # ── Validation reason_code AVANT la route ────────────────────────────
         if request.method in ("PATCH", "POST", "PUT"):
+            from api.utils.audit import get_audit_rules, resolve_reason_code
+
+            payload_fields = [k for k in payload if k not in _DIFF_IGNORE]
+
             if not reason_code:
-                from api.utils.audit import get_audit_rules
-                audit_rules = get_audit_rules(entity_type)
-                return JSONResponse(
-                    status_code=400,
-                    content={
-                        "detail": "reason_code obligatoire pour cette mutation",
-                        "error_type": "ValidationError",
-                        "audit": audit_rules.model_dump(),
-                    },
-                )
-            repo = AuditRepository()
-            reason = repo.get_reason_by_code(reason_code)
-            if not reason or not reason.get("is_active"):
-                return JSONResponse(
-                    status_code=400,
-                    content={"detail": f"Raison '{reason_code}' inconnue ou inactive", "error_type": "ValidationError"},
-                )
+                routine_rule = resolve_reason_code(entity_type, payload_fields)
+                if routine_rule is None:
+                    audit_rules = get_audit_rules(entity_type, payload_fields)
+                    return JSONResponse(
+                        status_code=400,
+                        content={
+                            "detail": "reason_code obligatoire pour cette mutation",
+                            "error_type": "ValidationError",
+                            "audit": audit_rules.model_dump(),
+                        },
+                    )
+                reason_code = routine_rule["default_reason_code"]
+
+                # Répercute l'injection silencieuse dans le corps que la route va lire.
+                # BaseHTTPMiddleware.call_next() ignore l'objet Request qu'on lui passe :
+                # il relit toujours le corps via le cache interne (_body) du _CachedRequest
+                # original construit par Starlette. Reconstruire un nouveau Request/receive
+                # ici n'a donc aucun effet en aval — il faut muter ce cache directement.
+                payload["reason_code"] = reason_code
+                request._body = json.dumps(payload).encode("utf-8")
+            else:
+                repo = AuditRepository()
+                reason = repo.get_reason_by_code(reason_code)
+                if not reason or not reason.get("is_active"):
+                    return JSONResponse(
+                        status_code=400,
+                        content={"detail": f"Raison '{reason_code}' inconnue ou inactive", "error_type": "ValidationError"},
+                    )
 
         # ── Snapshot avant mutation (PATCH / PUT / DELETE avec UUID uniquement) ──
         old_state: Dict[str, Any] = {}

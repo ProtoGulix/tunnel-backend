@@ -96,7 +96,9 @@ def create_task(request: Request, data: InterventionTaskIn):
     Crée une tâche manuelle (origin `resp` ou `tech` uniquement).
 
     **Audit obligatoire** : le champ `reason_code` est requis (voir `GET /audit/reasons`).
-    `reason_text` est obligatoire si `reason_code=OTHER`.
+    Si la mutation est couverte par une règle routine, AuditMiddleware l'injecte
+    silencieusement — l'appelant peut alors omettre `reason_code`. `reason_text` est
+    obligatoire si `reason_code=OTHER`.
     """
     user_id = str(getattr(request.state, "user_id", None) or "")
     repo = InterventionTaskRepository()
@@ -115,7 +117,8 @@ def patch_task(request: Request, task_id: str, data: InterventionTaskPatch):
     (`POST /intervention-actions`).
 
     **Audit obligatoire** : le champ `reason_code` est requis (voir `GET /audit/reasons`).
-    `reason_text` est obligatoire si `reason_code=OTHER`.
+    Si les champs modifiés sont couverts par une règle routine, AuditMiddleware
+    l'injecte silencieusement. `reason_text` est obligatoire si `reason_code=OTHER`.
     """
     user_id = str(getattr(request.state, "user_id", None) or "")
     repo = InterventionTaskRepository()

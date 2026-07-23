@@ -100,6 +100,32 @@ class AuditRules(BaseModel):
     reasons: List[AuditRuleReason]
 
 
+class AuditRuleOut(BaseModel):
+    """Règle administrable routine/sensible pour un couple (entity_type, field)."""
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    entity_type: str
+    field: Optional[str] = None
+    is_routine: bool
+    default_reason_code: Optional[str] = None
+
+
+class AuditRuleCreate(BaseModel):
+    """Payload de création d'une règle d'audit."""
+    entity_type: str
+    field: Optional[str] = None
+    is_routine: bool
+    default_reason_code: Optional[str] = Field(
+        None, description="Obligatoire si is_routine=True")
+
+
+class AuditRuleUpdate(BaseModel):
+    """Payload de modification partielle d'une règle d'audit."""
+    is_routine: Optional[bool] = None
+    default_reason_code: Optional[str] = None
+
+
 class AuditLogCreate(BaseModel):
     """Payload pour créer manuellement une entrée d'audit (via API directe)."""
     entity_type: str = Field(

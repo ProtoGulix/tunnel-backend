@@ -21,6 +21,8 @@ from api.admin.schemas import (
     EmailDomainRuleCreate, EmailDomainRuleOut,
     MailSettingsOut,
 )
+from api.audits.repo import AuditRuleRepository
+from api.audits.schemas import AuditRuleOut, AuditRuleCreate, AuditRuleUpdate
 from api.auth.permissions import require_role
 from api.db import get_connection, release_connection
 from api.errors.exceptions import ValidationError, NotFoundError
@@ -624,3 +626,60 @@ async def test_mail(request: Request, _=_admin_only):
         logger.error("Erreur envoi mail test : %s", e)
         raise HTTPException(
             status_code=500, detail=f"Erreur envoi mail : {e}") from e
+
+
+# ------------------------------------------------------------------ #
+# Règles d'audit (routine vs sensible par entité et champ)            #
+# ------------------------------------------------------------------ #
+
+def _audit_rule_repo() -> AuditRuleRepository:
+    return AuditRuleRepository()
+
+
+@router.get("/audit-rules", response_model=List[AuditRuleOut], dependencies=[_resp_admin])
+def list_audit_rules(
+    entity_type: Optional[str] = Query(None),
+    repo: AuditRuleRepository = Depends(_audit_rule_repo),
+):
+    return repo.list_rules(entity_type=entity_type)
+
+
+@router.get("/audit-rules/known-fields", dependencies=[_resp_admin])
+def list_audit_known_fields(
+    entity_type: str = Query(..., description="Type d'entité : intervention, request, task, action, purchase_request"),
+    repo: AuditRuleRepository = Depends(_audit_rule_repo),
+):
+    """
+    Champs déjà observés pour une entité (règles existantes + historique des
+    modifications en base), pour assister la saisie d'une nouvelle règle.
+    """
+    return {"fields": repo.get_known_fields(entity_type)}
+
+
+@router.post("/audit-rules", response_model=AuditRuleOut, status_code=201, dependencies=[_admin_only])
+def create_audit_rule(
+    payload: AuditRuleCreate,
+    repo: AuditRuleRepository = Depends(_audit_rule_repo),
+):
+    return repo.create_rule(
+        entity_type=payload.entity_type,
+        field=payload.field,
+        is_routine=payload.is_routine,
+        default_reason_code=payload.default_reason_code,
+    )
+
+
+@router.patch("/audit-rules/{rule_id}", response_model=AuditRuleOut, dependencies=[_admin_only])
+def update_audit_rule(
+    rule_id: int,
+    payload: AuditRuleUpdate,
+    repo: AuditRuleRepository = Depends(_audit_rule_repo),
+):
+    rule = repo.update_rule(
+        rule_id,
+        is_routine=payload.is_routine,
+        default_reason_code=payload.default_reason_code,
+    )
+    if not rule:
+        raise NotFoundError("Règle d'audit introuvable")
+    return rule
