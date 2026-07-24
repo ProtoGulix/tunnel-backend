@@ -2,6 +2,21 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [4.5.0] - 24 juillet 2026
+
+### Audit — règles et raisons administrables
+
+- Les règles routine/sensible par entité et champ (`audit_rule`) sont maintenant administrables via `/admin/audit-rules`, en remplacement des règles codées en dur
+- Nouveau CRUD `/admin/audit-reasons` pour créer, modifier et activer/désactiver les raisons d'audit affichées dans le picker (auparavant limitées au seed de migration, sans gestion possible)
+
+### Demandes d'intervention — rejet bloqué à tort
+
+- Corrigé : le rejet d'une DI (`POST /intervention-requests/{id}/transition`) exigeait un motif texte libre (`reason_text`) quelle que soit la raison d'audit sélectionnée, alors que seule la raison « Autre raison » (`OTHER`) doit l'exiger — comportement désormais aligné avec `GET /audit/rules` et la règle système `fn_audit_log_decision()`
+
+### Demandes d'intervention — génération du code DI
+
+- Corrigé : `fn_generate_request_code()` calculait le prochain numéro via `COUNT(*)+1`, ce qui provoquait une collision de code après suppression d'une DI (le compteur retombait sur un numéro déjà attribué) ; remplacé par un calcul basé sur le numéro maximum déjà utilisé, insensible aux trous
+
 ## [4.4.0] - 19 juillet 2026
 
 ### Demandes d'achat — statut corrigé à la clôture d'un panier fournisseur
