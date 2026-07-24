@@ -11,7 +11,7 @@ from uuid import UUID
 from psycopg2.extras import RealDictCursor
 
 from api.db import get_connection, release_connection
-from api.errors.exceptions import raise_db_error, ValidationError
+from api.errors.exceptions import raise_db_error, ValidationError, ConflictError
 
 logger = logging.getLogger(__name__)
 
@@ -118,6 +118,150 @@ class AuditRepository:
                 return dict(row) if row else None
         except Exception as e:
             raise_db_error(e, "récupération raison audit")
+        finally:
+            if conn:
+                release_connection(conn)
+
+    def get_all_reasons_admin(self) -> List[Dict[str, Any]]:
+        """Liste complète des raisons (actives et inactives) pour la gestion en admin."""
+        conn = None
+        try:
+            conn = self._get_connection()
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(
+                    """
+                    SELECT id, code, label, category, entity_types, decision_types,
+                           color, description, is_active, created_at, updated_at
+                    FROM audit_reason_code
+                    ORDER BY category, label
+                    """
+                )
+                return [dict(row) for row in cur.fetchall()]
+        except Exception as e:
+            raise_db_error(e, "liste admin des raisons d'audit")
+        finally:
+            if conn:
+                release_connection(conn)
+
+    def create_reason(
+        self,
+        code: str,
+        label: str,
+        category: str,
+        entity_types: Optional[List[str]] = None,
+        decision_types: Optional[List[str]] = None,
+        color: Optional[str] = None,
+        description: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Crée une raison d'audit. Le code doit être unique (contrainte DB)."""
+        conn = None
+        try:
+            conn = self._get_connection()
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(
+                    """
+                    INSERT INTO audit_reason_code
+                        (code, label, category, entity_types, decision_types, color, description)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    RETURNING id, code, label, category, entity_types, decision_types,
+                              color, description, is_active, created_at, updated_at
+                    """,
+                    (code, label, category, entity_types, decision_types, color, description),
+                )
+                row = cur.fetchone()
+            conn.commit()
+            return dict(row)
+        except Exception as e:
+            if conn:
+                conn.rollback()
+            if "duplicate key" in str(e).lower() or "unique" in str(e).lower():
+                raise ConflictError(f"Une raison avec le code '{code}' existe déjà") from e
+            raise_db_error(e, "création raison d'audit")
+        finally:
+            if conn:
+                release_connection(conn)
+
+    def update_reason(
+        self,
+        reason_id: int,
+        label: Optional[str] = None,
+        category: Optional[str] = None,
+        entity_types: Optional[List[str]] = None,
+        decision_types: Optional[List[str]] = None,
+        color: Optional[str] = None,
+        description: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """Modifie partiellement une raison d'audit. Le code n'est pas modifiable."""
+        sets: List[str] = ["updated_at = now()"]
+        params: List[Any] = []
+
+        if label is not None:
+            sets.append("label = %s")
+            params.append(label)
+        if category is not None:
+            sets.append("category = %s")
+            params.append(category)
+        if entity_types is not None:
+            sets.append("entity_types = %s")
+            params.append(entity_types)
+        if decision_types is not None:
+            sets.append("decision_types = %s")
+            params.append(decision_types)
+        if color is not None:
+            sets.append("color = %s")
+            params.append(color)
+        if description is not None:
+            sets.append("description = %s")
+            params.append(description)
+
+        conn = None
+        try:
+            conn = self._get_connection()
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(
+                    f"""
+                    UPDATE audit_reason_code
+                    SET {", ".join(sets)}
+                    WHERE id = %s
+                    RETURNING id, code, label, category, entity_types, decision_types,
+                              color, description, is_active, created_at, updated_at
+                    """,
+                    (*params, reason_id),
+                )
+                row = cur.fetchone()
+            conn.commit()
+            return dict(row) if row else None
+        except Exception as e:
+            if conn:
+                conn.rollback()
+            raise_db_error(e, "modification raison d'audit")
+        finally:
+            if conn:
+                release_connection(conn)
+
+    def set_reason_active(self, reason_id: int, is_active: bool) -> Optional[Dict[str, Any]]:
+        """Active/désactive une raison. Une raison inactive n'apparaît plus dans le picker."""
+        conn = None
+        try:
+            conn = self._get_connection()
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(
+                    """
+                    UPDATE audit_reason_code
+                    SET is_active = %s, updated_at = now()
+                    WHERE id = %s
+                    RETURNING id, code, label, category, entity_types, decision_types,
+                              color, description, is_active, created_at, updated_at
+                    """,
+                    (is_active, reason_id),
+                )
+                row = cur.fetchone()
+            conn.commit()
+            return dict(row) if row else None
+        except Exception as e:
+            if conn:
+                conn.rollback()
+            raise_db_error(e, "activation/désactivation raison d'audit")
         finally:
             if conn:
                 release_connection(conn)

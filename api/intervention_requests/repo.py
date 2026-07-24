@@ -671,6 +671,7 @@ class InterventionRequestRepository:
             notes=notes,
             intervention_data=intervention_data,
             current_intervention_id=intervention_id,
+            reason_code=reason_code,
         )
 
         # Valider que status_to existe dans le référentiel

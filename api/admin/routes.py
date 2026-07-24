@@ -21,8 +21,11 @@ from api.admin.schemas import (
     EmailDomainRuleCreate, EmailDomainRuleOut,
     MailSettingsOut,
 )
-from api.audits.repo import AuditRuleRepository
-from api.audits.schemas import AuditRuleOut, AuditRuleCreate, AuditRuleUpdate
+from api.audits.repo import AuditRuleRepository, AuditRepository
+from api.audits.schemas import (
+    AuditRuleOut, AuditRuleCreate, AuditRuleUpdate,
+    AuditReasonAdminOut, AuditReasonCreate, AuditReasonUpdate, AuditReasonActivePatch,
+)
 from api.auth.permissions import require_role
 from api.db import get_connection, release_connection
 from api.errors.exceptions import ValidationError, NotFoundError
@@ -683,3 +686,69 @@ def update_audit_rule(
     if not rule:
         raise NotFoundError("Règle d'audit introuvable")
     return rule
+
+
+# ------------------------------------------------------------------ #
+# Raisons d'audit (référentiel affiché dans le picker de raisons)     #
+# ------------------------------------------------------------------ #
+
+def _audit_reason_repo() -> AuditRepository:
+    return AuditRepository()
+
+
+@router.get("/audit-reasons", response_model=List[AuditReasonAdminOut], dependencies=[_resp_admin])
+def list_audit_reasons_admin(
+    repo: AuditRepository = Depends(_audit_reason_repo),
+):
+    """Liste complète des raisons d'audit (actives et inactives) pour la gestion en admin."""
+    return repo.get_all_reasons_admin()
+
+
+@router.post("/audit-reasons", response_model=AuditReasonAdminOut, status_code=201, dependencies=[_admin_only])
+def create_audit_reason(
+    payload: AuditReasonCreate,
+    repo: AuditRepository = Depends(_audit_reason_repo),
+):
+    return repo.create_reason(
+        code=payload.code,
+        label=payload.label,
+        category=payload.category,
+        entity_types=payload.entity_types,
+        decision_types=payload.decision_types,
+        color=payload.color,
+        description=payload.description,
+    )
+
+
+@router.patch("/audit-reasons/{reason_id}", response_model=AuditReasonAdminOut, dependencies=[_admin_only])
+def update_audit_reason(
+    reason_id: int,
+    payload: AuditReasonUpdate,
+    repo: AuditRepository = Depends(_audit_reason_repo),
+):
+    reason = repo.update_reason(
+        reason_id,
+        label=payload.label,
+        category=payload.category,
+        entity_types=payload.entity_types,
+        decision_types=payload.decision_types,
+        color=payload.color,
+        description=payload.description,
+    )
+    if not reason:
+        raise NotFoundError("Raison d'audit introuvable")
+    return reason
+
+
+@router.patch("/audit-reasons/{reason_id}/active", response_model=AuditReasonAdminOut, dependencies=[_admin_only])
+def patch_audit_reason_active(
+    reason_id: int,
+    payload: AuditReasonActivePatch,
+    repo: AuditRepository = Depends(_audit_reason_repo),
+):
+    """Active/désactive une raison — une raison inactive disparaît du picker mais reste
+    référencée par les logs d'audit existants (pas de suppression physique)."""
+    reason = repo.set_reason_active(reason_id, payload.is_active)
+    if not reason:
+        raise NotFoundError("Raison d'audit introuvable")
+    return reason

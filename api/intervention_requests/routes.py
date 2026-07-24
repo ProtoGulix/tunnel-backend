@@ -109,6 +109,9 @@ def transition_request_status(request_id: UUID, body: StatusTransitionIn):
     Pour le statut `rejetee`, le motif est porté par `reason_text` (pas de champ `notes`
     séparé) : le motif de rejet EST la raison d'audit, saisie une seule fois via le picker
     de raisons. `reason_text` est copié dans l'historique (request_status_log.notes).
+    `reason_text` n'est obligatoire que si `reason_code=OTHER` (cohérent avec
+    `AuditRuleReason.requires_text` exposé par `GET /audit/rules`) — les autres raisons
+    du picker n'exigent pas de texte libre.
     """
     intervention_data = None
     if body.status_to == "acceptee":

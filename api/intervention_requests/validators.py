@@ -30,6 +30,7 @@ class InterventionRequestValidator:
         notes: Optional[str],
         intervention_data: Optional[Dict[str, Any]],
         current_intervention_id: Optional[Any] = None,
+        reason_code: Optional[str] = None,
     ) -> None:
         """
         Valide qu'une transition de statut est autorisée et que les données
@@ -49,10 +50,13 @@ class InterventionRequestValidator:
                 f"Une demande ne peut être liée qu'à une seule intervention."
             )
 
-        # Motif obligatoire pour rejet — porté par reason_text (raison d'audit), voir routes.py
-        if status_to == "rejetee" and not (notes or "").strip():
+        # Motif obligatoire pour rejet — porté par reason_text (raison d'audit), voir routes.py.
+        # Cohérent avec la règle système fn_audit_log_decision() / GET /audit/rules
+        # (AuditRuleReason.requires_text) : le texte libre n'est exigé que pour reason_code=OTHER,
+        # les autres raisons du picker se suffisent à elles-mêmes.
+        if status_to == "rejetee" and reason_code == "OTHER" and not (notes or "").strip():
             raise ValidationError(
-                "Un motif de rejet est obligatoire (reason_text)"
+                "Un motif de rejet est obligatoire (reason_text) lorsque la raison sélectionnée est 'Autre raison'"
             )
 
         # Champs obligatoires pour acceptation (création intervention)

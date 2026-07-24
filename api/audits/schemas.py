@@ -4,7 +4,11 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+# Catégories reconnues par fn_audit_log_decision() : 'system' réservé aux mutations
+# internes (is_system=True), 'manual'/'user' affichées dans le picker front.
+REASON_CATEGORIES = frozenset({"system", "manual", "user"})
 
 
 class AuditReasonOut(BaseModel):
@@ -16,6 +20,71 @@ class AuditReasonOut(BaseModel):
     category: str
     color: Optional[str] = None
     description: Optional[str] = None
+
+
+class AuditReasonAdminOut(BaseModel):
+    """Raison d'audit — vue complète pour la gestion en admin (inclut inactives)."""
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    code: str
+    label: str
+    category: str
+    entity_types: Optional[List[str]] = None
+    decision_types: Optional[List[str]] = None
+    color: Optional[str] = None
+    description: Optional[str] = None
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+
+
+class AuditReasonCreate(BaseModel):
+    """Payload de création d'une raison d'audit."""
+    code: str = Field(..., min_length=1, max_length=100,
+                       description="Identifiant unique, ex: CLIENT_REQUEST")
+    label: str = Field(..., min_length=1, max_length=255)
+    category: str = Field(..., description="system | manual | user")
+    entity_types: Optional[List[str]] = Field(
+        default=None,
+        description="Entités compatibles (intervention, request, task, action, purchase_request). "
+                    "None = toutes.")
+    decision_types: Optional[List[str]] = None
+    color: Optional[str] = Field(default=None, max_length=7)
+    description: Optional[str] = None
+
+    @field_validator("code")
+    @classmethod
+    def normalize_code(cls, v: str) -> str:
+        return v.strip().upper()
+
+    @field_validator("category")
+    @classmethod
+    def validate_category(cls, v: str) -> str:
+        if v not in REASON_CATEGORIES:
+            raise ValueError(f"category doit être l'une de : {sorted(REASON_CATEGORIES)}")
+        return v
+
+
+class AuditReasonUpdate(BaseModel):
+    """Payload de modification partielle d'une raison d'audit (code non modifiable)."""
+    label: Optional[str] = Field(default=None, min_length=1, max_length=255)
+    category: Optional[str] = None
+    entity_types: Optional[List[str]] = None
+    decision_types: Optional[List[str]] = None
+    color: Optional[str] = Field(default=None, max_length=7)
+    description: Optional[str] = None
+
+    @field_validator("category")
+    @classmethod
+    def validate_category(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and v not in REASON_CATEGORIES:
+            raise ValueError(f"category doit être l'une de : {sorted(REASON_CATEGORIES)}")
+        return v
+
+
+class AuditReasonActivePatch(BaseModel):
+    is_active: bool
 
 
 class AuditUserOut(BaseModel):
