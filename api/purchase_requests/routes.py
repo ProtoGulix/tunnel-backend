@@ -11,6 +11,8 @@ from api.purchase_requests.schemas import (
     PurchaseRequestDetail,
     PurchaseRequestStats,
     DispatchResult,
+    DispatchPreview,
+    DispatchIn,
     ImportResult,
 )
 from api.errors.exceptions import ValidationError
@@ -179,8 +181,19 @@ def get_purchase_request_facets():
     return single(repo.get_facets())
 
 
+@router.get("/dispatch/preview", response_model=DispatchPreview)
+def preview_dispatch():
+    """
+    Aperçu en lecture seule du dispatch : pour chaque demande PENDING_DISPATCH,
+    liste le ou les paniers fournisseurs qu'elle rejoindra si le dispatch est
+    confirmé (panier existant ou nouveau panier à créer). N'écrit rien en base.
+    """
+    repo = PurchaseRequestRepository()
+    return repo.preview_dispatch()
+
+
 @router.post("/dispatch")
-def dispatch_pending_requests():
+def dispatch_pending_requests(payload: Optional[DispatchIn] = None):
     """
     [v1.2.12] Dispatch automatique des demandes PENDING_DISPATCH.
 
@@ -190,9 +203,12 @@ def dispatch_pending_requests():
     - Crée une supplier_order_line liée à la demande
 
     Les demandes passent automatiquement de PENDING_DISPATCH à OPEN.
+    payload.excluded_ids : demandes explicitement exclues depuis l'écran de
+    prévisualisation — restent en PENDING_DISPATCH.
     """
     repo = PurchaseRequestRepository()
-    return single(repo.dispatch_all())
+    excluded_ids = payload.excluded_ids if payload else []
+    return single(repo.dispatch_all(excluded_ids=excluded_ids))
 
 
 @router.post("/import/headers", status_code=200)

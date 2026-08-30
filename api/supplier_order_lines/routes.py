@@ -7,6 +7,7 @@ from api.supplier_order_lines.schemas import (
     SupplierOrderLineIn,
     SupplierOrderLinePatch,
     SupplierOrderLineListItem,
+    SupplierOrderLineKeysByOrder,
     SupplierPriceStats,
     PurchaseRequestLink
 )
@@ -59,6 +60,19 @@ def get_lines_by_order(supplier_order_id: str):
     """Récupère toutes les lignes d'une commande avec détails complets"""
     repo = SupplierOrderLineRepository()
     return repo.get_by_order(supplier_order_id)
+
+
+@router.get("/by-orders/keys", response_model=SupplierOrderLineKeysByOrder)
+def get_lines_keys_by_orders(
+    ids: List[str] = Query(..., description="IDs de commandes fournisseur (répéter le paramètre)"),
+):
+    """Récupère les lignes de plusieurs commandes en un seul appel, version allégée
+    (id, part_id, stock_item_id, stock_item_ref/name) — pour le comparateur de paniers,
+    qui ne calcule que des clés de compatibilité d'articles et n'a pas besoin de
+    l'enrichissement complet (purchase_requests, is_consultation…) de get_by_order()."""
+    repo = SupplierOrderLineRepository()
+    by_order = repo.get_keys_by_orders(ids)
+    return {"by_order": by_order}
 
 
 @router.get("/{line_id}", )

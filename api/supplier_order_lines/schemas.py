@@ -11,6 +11,7 @@ class LinkedPurchaseRequest(BaseModel):
     id: UUID
     purchase_request_id: UUID
     quantity: int
+    code: Optional[str] = Field(default=None, description="Référence lisible DA-YYYY-NNNN")
     item_label: Optional[str] = Field(default=None)
     requester_name: Optional[str] = Field(default=None)
     intervention_request_id: Optional[UUID] = Field(default=None, description="DI d'origine, si la demande provient d'une intervention")
@@ -138,6 +139,23 @@ class SupplierPriceStats(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class SupplierOrderLineKey(BaseModel):
+    """Version allégée d'une ligne, pour le calcul de compatibilité d'articles (comparateur)"""
+    id: UUID
+    part_id: Optional[UUID] = Field(default=None)
+    stock_item_id: Optional[UUID] = Field(default=None)
+    stock_item_ref: Optional[str] = Field(default=None)
+    stock_item_name: Optional[str] = Field(default=None)
+
+    class Config:
+        from_attributes = True
+
+
+class SupplierOrderLineKeysByOrder(BaseModel):
+    """Lignes allégées groupées par commande fournisseur"""
+    by_order: dict[UUID, List[SupplierOrderLineKey]]
 
 
 class SupplierOrderLineListItem(BaseModel):

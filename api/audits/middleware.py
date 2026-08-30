@@ -34,6 +34,7 @@ _ENTITY_MAP: Dict[str, str] = {
     "purchase-requests": "purchase_request",
     "intervention-actions": "action",
     "intervention-tasks": "task",
+    "supplier-orders": "supplier_order",
 }
 
 # Pattern : /interventions ou /interventions/{uuid} ou /interventions/{uuid}/sous-ressource
@@ -233,6 +234,7 @@ async def _fetch_entity_state(entity_type: str, entity_id_str: str) -> Dict[str,
         "purchase_request": "purchase_request",
         "task": "intervention_task",
         "action": "intervention_action",
+        "supplier_order": "supplier_order",
     }
     table = _TABLE_MAP.get(entity_type)
     if not table:

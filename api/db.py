@@ -35,8 +35,8 @@ def init_pool(
     database_url: str,
     minconn: int = 2,
     maxconn: int = 10,
-    retries: int = 10,
-    retry_delay: float = 3.0,
+    retries: int = 20,
+    retry_delay: float = 5.0,
 ) -> None:
     """Initialise le pool au démarrage de l'application.
 
