@@ -4,6 +4,19 @@ Toutes les modifications importantes de l'API sont documentées ici.
 
 ## [4.6.0] - 30 août 2026
 
+### Demandes d'achat — référence lisible et responsables réels
+
+- Chaque demande d'achat reçoit désormais une référence lisible (DA-2026-0042), sur le même principe que les demandes d'intervention et les commandes fournisseurs
+- Demandeur et approbateur sont maintenant de vrais comptes utilisateurs liés à la demande, plutôt qu'un texte libre saisi à la main
+
+### Demandes d'achat — aperçu avant envoi groupé
+
+- Nouveau point d'API pour prévisualiser, avant confirmation, le détail d'un envoi groupé de demandes vers les fournisseurs (quel panier pour chaque demande, lesquelles peuvent être exclues)
+
+### Audit — suivi des paniers fournisseurs
+
+- Les modifications apportées à un panier fournisseur sont désormais tracées dans le journal d'audit, comme c'est déjà le cas pour les demandes d'achat et d'intervention
+
 ### Fiabilité — redémarrage du serveur
 
 - Le démarrage de l'API attend désormais que la base de données soit réellement disponible avant de se lancer, avec plusieurs tentatives espacées en cas de redémarrage simultané du serveur — corrige les cas où le service restait indisponible après un redémarrage alors que tout semblait actif
