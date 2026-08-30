@@ -21,6 +21,7 @@
 CREATE OR REPLACE VIEW purchase_request_derived_status AS
 SELECT
     pr.id,
+    pr.code,
     pr.stock_item_id,
     pr.item_label,
     pr.quantity,

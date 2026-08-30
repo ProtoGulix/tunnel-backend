@@ -111,9 +111,9 @@ class PurchaseRequestRepository:
                 """
                 INSERT INTO purchase_request
                 (id, status, part_id, item_label, quantity, unit,
-                 requested_by, urgency, reason, notes, workshop,
+                 requested_by, requested_by_id, approver_id, urgency, reason, notes, workshop,
                  created_at, updated_at)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     request_id,
@@ -123,6 +123,8 @@ class PurchaseRequestRepository:
                     data['quantity'],
                     data.get('unit'),
                     data.get('requested_by'),
+                    str(data['requested_by_id']) if data.get('requested_by_id') else None,
+                    str(data['approver_id']) if data.get('approver_id') else None,
                     data.get('urgency', 'normal'),
                     data.get('reason'),
                     data.get('notes'),
@@ -169,9 +171,9 @@ class PurchaseRequestRepository:
             # Champs modifiables (status supprimé car calculé automatiquement)
             updatable_fields = [
                 'stock_item_id', 'part_id', 'item_label', 'quantity', 'unit',
-                'requested_by', 'urgency', 'reason', 'notes', 'workshop',
+                'requested_by', 'requested_by_id', 'urgency', 'reason', 'notes', 'workshop',
                 'quantity_approved',
-                'approver_name', 'approved_at'
+                'approver_name', 'approver_id', 'approved_at'
             ]
 
             set_clauses = []
@@ -408,13 +410,14 @@ class PurchaseRequestRepository:
 
             if search:
                 where_clauses.append("""(
-                    prd.item_label ILIKE %s
+                    prd.code ILIKE %s
+                    OR prd.item_label ILIKE %s
                     OR si.ref ILIKE %s
                     OR si.name ILIKE %s
                     OR pt.internal_ref ILIKE %s
                 )""")
                 search_pattern = f"%{search}%"
-                params.extend([search_pattern] * 4)
+                params.extend([search_pattern] * 5)
 
             # Filtre par statut dérivé — DOIT être en SQL (pas après coup en Python) car
             # la requête est bornée par LIMIT/OFFSET : filtrer après tronquerait le
@@ -438,6 +441,7 @@ class PurchaseRequestRepository:
             query = f"""
                 SELECT
                     prd.id,
+                    prd.code,
                     COALESCE(prd.item_label, pt_pref.label, si.name) AS item_label,
                     prd.quantity,
                     prd.unit,
@@ -488,7 +492,7 @@ class PurchaseRequestRepository:
 
                 WHERE {where_sql}
 
-                GROUP BY prd.id, prd.item_label, prd.quantity, prd.unit, prd.stock_item_id,
+                GROUP BY prd.id, prd.code, prd.item_label, prd.quantity, prd.unit, prd.stock_item_id,
                          pr_base.part_id,
                          prd.derived_status, prd.quotes_count, prd.selected_count,
                          prd.total_allocated, prd.total_received, prd.requested_by, prd.urgency,
@@ -558,7 +562,10 @@ class PurchaseRequestRepository:
                     i.id as i_id, i.code as i_code, i.title as i_title,
                     i.priority as i_priority, i.status_actual as i_status_actual,
                     -- Équipement
-                    e.id as e_id, e.code as e_code, e.name as e_name
+                    e.id as e_id, e.code as e_code, e.name as e_name,
+                    -- Demandeur / approbateur réels
+                    ru.id as ru_id, ru.first_name as ru_first_name, ru.last_name as ru_last_name, ru.initial as ru_initial,
+                    au.id as au_id, au.first_name as au_first_name, au.last_name as au_last_name, au.initial as au_initial
                 FROM purchase_request pr
                 LEFT JOIN stock_item si ON pr.stock_item_id = si.id
                 LEFT JOIN part pt ON pr.part_id = pt.id
@@ -566,6 +573,8 @@ class PurchaseRequestRepository:
                 LEFT JOIN intervention_action ia ON ia.id = iapr.intervention_action_id
                 LEFT JOIN intervention i ON i.id = ia.intervention_id
                 LEFT JOIN machine e ON i.machine_id = e.id
+                LEFT JOIN tunnel_user ru ON pr.requested_by_id = ru.id
+                LEFT JOIN tunnel_user au ON pr.approver_id = au.id
                 WHERE pr.id = %s
                 """,
                 (request_id,)
@@ -631,9 +640,27 @@ class PurchaseRequestRepository:
             else:
                 data['intervention'] = None
 
+            # Construit demandeur / approbateur réels
+            if data.get('ru_id'):
+                data['requested_by_user'] = {
+                    'id': data['ru_id'], 'first_name': data['ru_first_name'],
+                    'last_name': data['ru_last_name'], 'initial': data['ru_initial'],
+                }
+            else:
+                data['requested_by_user'] = None
+
+            if data.get('au_id'):
+                data['approver_user'] = {
+                    'id': data['au_id'], 'first_name': data['au_first_name'],
+                    'last_name': data['au_last_name'], 'initial': data['au_initial'],
+                }
+            else:
+                data['approver_user'] = None
+
             # Nettoie les colonnes intermédiaires
             for key in list(data.keys()):
-                if key.startswith('si_') or key.startswith('pt_') or key.startswith('i_') or key.startswith('e_'):
+                if key.startswith('si_') or key.startswith('pt_') or key.startswith('i_') or key.startswith('e_') \
+                        or key.startswith('ru_') or key.startswith('au_'):
                     del data[key]
 
             # Récupère order_lines enrichis avec fournisseur
@@ -1367,7 +1394,121 @@ class PurchaseRequestRepository:
             'lines': lines,
         }
 
-    def dispatch_all(self) -> Dict[str, Any]:
+    def preview_dispatch(self) -> Dict[str, Any]:
+        """
+        Aperçu en lecture seule du dispatch : pour chaque demande PENDING_DISPATCH,
+        calcule les mêmes paniers cibles que dispatch_all() sans rien écrire en base.
+
+        Duplique volontairement la résolution fournisseur → panier de dispatch_all()
+        plutôt que de la factoriser avec écriture conditionnelle : le mode preview ne
+        doit jamais pouvoir déclencher une création de panier par effet de bord.
+        """
+        pending_requests = [
+            req for req in self.get_list(limit=1000, offset=0)
+            if req.get('derived_status', {}).get('code') == 'PENDING_DISPATCH'
+        ]
+
+        conn = self._get_connection()
+        try:
+            cur = conn.cursor()
+            existing_open_orders = {}  # supplier_id_str -> order_id (paniers OPEN déjà en base)
+            planned_new_orders = set()  # supplier_id_str dont un nouveau panier sera créé
+            items = []
+
+            for req in pending_requests:
+                req_id_str = str(req['id'])
+                stock_item_id = req.get('stock_item_id')
+                part_id = req.get('part_id')
+
+                if not stock_item_id and not part_id:
+                    items.append({
+                        'purchase_request_id': req_id_str,
+                        'code': req.get('code'),
+                        'item_label': req.get('item_label', ''),
+                        'target_orders': [],
+                        'error': "Pièce catalogue non liée — qualifier la demande d'abord",
+                    })
+                    continue
+
+                if part_id:
+                    cur.execute(
+                        """
+                        SELECT psr.supplier_id, s.name AS supplier_name
+                        FROM part_supplier_ref psr
+                        JOIN part_manufacturer_ref pmr ON pmr.id = psr.part_manufacturer_ref_id
+                        LEFT JOIN supplier s ON s.id = psr.supplier_id
+                        WHERE pmr.part_id = %s
+                        ORDER BY psr.is_preferred DESC, s.name ASC
+                        """,
+                        (str(part_id),)
+                    )
+                else:
+                    cur.execute(
+                        """
+                        SELECT sis.supplier_id, s.name AS supplier_name
+                        FROM stock_item_supplier sis
+                        LEFT JOIN supplier s ON s.id = sis.supplier_id
+                        WHERE sis.stock_item_id = %s
+                        ORDER BY sis.is_preferred DESC, s.name ASC
+                        """,
+                        (str(stock_item_id),)
+                    )
+                supplier_rows = cur.fetchall()
+
+                if not supplier_rows:
+                    items.append({
+                        'purchase_request_id': req_id_str,
+                        'code': req.get('code'),
+                        'item_label': req.get('item_label', ''),
+                        'target_orders': [],
+                        'error': 'Aucun fournisseur référencé pour cette pièce',
+                    })
+                    continue
+
+                target_orders = []
+                for supplier_id, supplier_name in supplier_rows:
+                    supplier_id_str = str(supplier_id)
+                    is_new = self._resolve_preview_order(
+                        cur, supplier_id_str, existing_open_orders, planned_new_orders
+                    )
+                    target_orders.append({
+                        'supplier_id': supplier_id_str,
+                        'supplier_name': supplier_name,
+                        'is_new_order': is_new,
+                    })
+
+                items.append({
+                    'purchase_request_id': req_id_str,
+                    'code': req.get('code'),
+                    'item_label': req.get('item_label', ''),
+                    'target_orders': target_orders,
+                    'error': None,
+                })
+
+            return {'items': items}
+        except Exception as e:
+            raise_db_error(e, "aperçu du dispatch")
+        finally:
+            release_connection(conn)
+
+    def _resolve_preview_order(self, cur, supplier_id_str, existing_open_orders, planned_new_orders) -> bool:
+        """Résout le panier cible pour un fournisseur sans écrire en base. Retourne is_new_order."""
+        if supplier_id_str in existing_open_orders or supplier_id_str in planned_new_orders:
+            return supplier_id_str in planned_new_orders
+
+        cur.execute(
+            "SELECT id FROM supplier_order WHERE supplier_id = %s AND status = 'OPEN' LIMIT 1",
+            (supplier_id_str,)
+        )
+        row = cur.fetchone()
+        if row:
+            existing_open_orders[supplier_id_str] = str(row[0])
+            return False
+
+        planned_new_orders.add(supplier_id_str)
+        return True
+
+    def dispatch_all(self, excluded_ids: Optional[List[str]] = None) -> Dict[str, Any]:
         """
         Dispatch toutes les demandes PENDING_DISPATCH vers des supplier_orders.
 
@@ -1376,12 +1517,17 @@ class PurchaseRequestRepository:
         - is_preferred n'influence que l'ordre de traitement, pas le nombre de paniers
         - Aucun fournisseur → erreur remontée dans errors[]
         - Invariant : une demande déjà liée à une supplier_order_line est ignorée
+
+        excluded_ids : demandes explicitement exclues par l'utilisateur depuis l'écran
+        de prévisualisation (cf. preview_dispatch) — restent en PENDING_DISPATCH.
         """
         logger.info("Starting dispatch_all for PENDING_DISPATCH requests")
+        excluded_set = {str(x) for x in (excluded_ids or [])}
 
         pending_requests = [
             req for req in self.get_list(limit=1000, offset=0)
             if req.get('derived_status', {}).get('code') == 'PENDING_DISPATCH'
+            and str(req['id']) not in excluded_set
         ]
 
         logger.info("Found %d requests to dispatch", len(pending_requests))

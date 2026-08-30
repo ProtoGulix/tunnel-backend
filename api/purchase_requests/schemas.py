@@ -8,6 +8,17 @@ from api.supplier_order_lines.schemas import ManufacturerInfo
 from api.supplier_orders.schemas import SupplierOrderStatusInfo
 
 
+class UserRefOut(BaseModel):
+    """Référence légère vers un utilisateur tunnel_user"""
+    id: UUID
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    initial: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
 # ========== Schémas optimisés v1.2.0 ==========
 
 class DerivedStatus(BaseModel):
@@ -23,6 +34,7 @@ class DerivedStatus(BaseModel):
 class PurchaseRequestListItem(BaseModel):
     """Schéma léger pour liste (tableau, pagination)"""
     id: UUID
+    code: str = Field(..., description="Référence lisible DA-YYYY-NNNN")
     item_label: str
     quantity: int
     unit: Optional[str] = Field(default=None)
@@ -147,6 +159,7 @@ class PartDetail(BaseModel):
 class PurchaseRequestDetail(BaseModel):
     """Schéma complet pour détails (modal, édition)"""
     id: UUID
+    code: str = Field(..., description="Référence lisible DA-YYYY-NNNN")
     item_label: str
     quantity: int
     unit: Optional[str] = Field(default=None)
@@ -168,8 +181,10 @@ class PurchaseRequestDetail(BaseModel):
         default_factory=list, description="Lignes avec fournisseurs")
 
     # Métadonnées demande
-    requested_by: Optional[str] = Field(default=None)
-    approver_name: Optional[str] = Field(default=None)
+    requested_by: Optional[str] = Field(default=None, description="Demandeur texte libre (legacy — CSV/formulaire public)")
+    requested_by_user: Optional[UserRefOut] = Field(default=None, description="Demandeur réel, si référencé")
+    approver_name: Optional[str] = Field(default=None, description="Approbateur texte libre (legacy)")
+    approver_user: Optional[UserRefOut] = Field(default=None, description="Approbateur réel, si référencé")
     approved_at: Optional[datetime] = Field(default=None)
     urgency: Optional[str] = Field(default=None)
     reason: Optional[str] = Field(default=None)
@@ -201,6 +216,43 @@ class DispatchError(BaseModel):
     item_label: Optional[str] = Field(default=None)
     error: str
     error_detail: Optional[str] = Field(default=None)
+
+
+class DispatchPreviewTargetOrder(BaseModel):
+    """Panier fournisseur qu'une demande rejoindra si le dispatch est confirmé"""
+    supplier_id: str
+    supplier_name: Optional[str] = Field(default=None)
+    is_new_order: bool = Field(
+        ..., description="True si aucun panier OPEN n'existe pour ce fournisseur : un nouveau sera créé")
+
+    class Config:
+        from_attributes = True
+
+
+class DispatchPreviewItem(BaseModel):
+    """Aperçu du dispatch pour une demande donnée, avant confirmation"""
+    purchase_request_id: str
+    code: Optional[str] = Field(default=None, description="Référence lisible DA-YYYY-NNNN")
+    item_label: str
+    target_orders: List[DispatchPreviewTargetOrder] = Field(default_factory=list)
+    error: Optional[str] = Field(
+        default=None, description="Si présent, cette demande ne pourra pas être dispatchée")
+
+    class Config:
+        from_attributes = True
+
+
+class DispatchPreview(BaseModel):
+    """Aperçu en lecture seule du dispatch — aucune écriture en base"""
+    items: List[DispatchPreviewItem] = Field(default_factory=list)
+
+    class Config:
+        from_attributes = True
+
+
+class DispatchIn(BaseModel):
+    """Demandes explicitement exclues du dispatch depuis l'écran de prévisualisation"""
+    excluded_ids: List[str] = Field(default_factory=list)
 
 
 class DispatchResult(BaseModel):
@@ -262,7 +314,11 @@ class PurchaseRequestIn(BaseModel):
     unit: Optional[str] = Field(
         default=None, max_length=50, description="Unité (pièce, kg, etc.)")
     requested_by: Optional[str] = Field(
-        default=None, description="Demandeur (identifiant)")
+        default=None, description="Demandeur texte libre (legacy — CSV/formulaire public sans utilisateur authentifié)")
+    requested_by_id: Optional[UUID] = Field(
+        default=None, description="Demandeur réel (tunnel_user.id) — prioritaire sur requested_by à l'affichage")
+    approver_id: Optional[UUID] = Field(
+        default=None, description="Approbateur réel (tunnel_user.id) — prioritaire sur approver_name à l'affichage")
     urgency: Optional[str] = Field(
         default="normal", description="Niveau d'urgence (normal, high, critical)")
     reason: Optional[str] = Field(

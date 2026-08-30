@@ -119,7 +119,7 @@ class SupplierOrderLineRepository:
                 """
                 SELECT
                     solpr.id, solpr.purchase_request_id, solpr.quantity as quantity, solpr.created_at,
-                    pr.item_label, pr.requested_by AS requester_name,
+                    pr.code, pr.item_label, pr.requested_by AS requester_name,
                     ir.id AS intervention_request_id, ir.code AS intervention_request_code
                 FROM supplier_order_line_purchase_request solpr
                 JOIN purchase_request pr ON solpr.purchase_request_id = pr.id
@@ -321,6 +321,48 @@ class SupplierOrderLineRepository:
                 results.append(line)
 
             return results
+        except Exception as e:
+            raise_db_error(e, "opération")
+        finally:
+            release_connection(conn)
+
+    def get_keys_by_orders(self, supplier_order_ids: List[str]) -> Dict[str, List[Dict[str, Any]]]:
+        """Récupère les lignes de plusieurs commandes en une seule requête groupée.
+
+        Version allégée de get_by_order() : ne retourne que les colonnes nécessaires
+        au calcul des clés d'articles côté comparateur (part_id, stock_item_id,
+        stock_item_ref/name), sans l'enrichissement complet (purchase_requests,
+        is_consultation…) qui coûte plusieurs requêtes SQL par ligne. Remplace un
+        appel HTTP + get_by_order() par commande candidate par un seul aller-retour.
+        """
+        if not supplier_order_ids:
+            return {}
+
+        conn = self._get_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                SELECT
+                    sol.supplier_order_id, sol.id, sol.part_id, sol.stock_item_id,
+                    si.ref AS stock_item_ref, si.name AS stock_item_name
+                FROM supplier_order_line sol
+                LEFT JOIN stock_item si ON sol.stock_item_id = si.id
+                WHERE sol.supplier_order_id = ANY(%s::uuid[])
+                ORDER BY sol.supplier_order_id, sol.created_at ASC
+                """,
+                (supplier_order_ids,)
+            )
+            rows = cur.fetchall()
+            cols = [desc[0] for desc in cur.description]
+
+            by_order: Dict[str, List[Dict[str, Any]]] = {str(oid): [] for oid in supplier_order_ids}
+            for row in rows:
+                line = dict(zip(cols, row))
+                order_id = str(line.pop('supplier_order_id'))
+                by_order.setdefault(order_id, []).append(line)
+
+            return by_order
         except Exception as e:
             raise_db_error(e, "opération")
         finally:

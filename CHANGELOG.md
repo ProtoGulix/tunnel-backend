@@ -2,6 +2,16 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [4.6.0] - 30 août 2026
+
+### Fiabilité — redémarrage du serveur
+
+- Le démarrage de l'API attend désormais que la base de données soit réellement disponible avant de se lancer, avec plusieurs tentatives espacées en cas de redémarrage simultané du serveur — corrige les cas où le service restait indisponible après un redémarrage alors que tout semblait actif
+
+### Paniers fournisseurs — comparateur de commandes
+
+- Le comparateur de paniers fournisseurs (onglet Demandes d'achat) charge désormais les commandes candidates en un seul appel groupé, au lieu d'un appel par commande — nettement plus rapide sur un grand nombre de commandes, et cela ne surcharge plus la base de données au point de faire échouer l'affichage
+
 ## [4.5.0] - 24 juillet 2026
 
 ### Audit — règles et raisons administrables

@@ -15,6 +15,7 @@ _ENTITIES_WITH_REQUIRED_AUDIT = {
     "purchase_request",
     "task",
     "action",
+    "supplier_order",
 }
 
 
