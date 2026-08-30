@@ -348,7 +348,7 @@ class SupplierOrderLineRepository:
                     si.ref AS stock_item_ref, si.name AS stock_item_name
                 FROM supplier_order_line sol
                 LEFT JOIN stock_item si ON sol.stock_item_id = si.id
-                WHERE sol.supplier_order_id = ANY(%s)
+                WHERE sol.supplier_order_id = ANY(%s::uuid[])
                 ORDER BY sol.supplier_order_id, sol.created_at ASC
                 """,
                 (supplier_order_ids,)
