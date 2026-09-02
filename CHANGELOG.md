@@ -2,6 +2,13 @@
 
 Toutes les modifications importantes de l'API sont documentées ici.
 
+## [4.6.1] - 2 septembre 2026
+
+### Recherche — insensible à la casse, aux accents et à l'ordre des mots
+
+- Les recherches (pièces, références fabricant/fournisseur, articles de stock, fournisseurs, équipements, interventions, demandes d'intervention, demandes d'achat, commandes fournisseurs, utilisateurs...) exigeaient jusqu'ici de taper les mots exactement dans l'ordre du libellé, avec les bons accents — par exemple, chercher « lame sauteuse » ne trouvait pas « lame scie sauteuse », et « secable » ne trouvait pas « sécable »
+- Corrigé : chaque mot tapé est désormais reconnu indépendamment de son ordre, de sa casse et de ses accents, sur l'ensemble des points de recherche de l'application
+
 ## [4.6.0] - 30 août 2026
 
 ### Demandes d'achat — référence lisible et responsables réels
