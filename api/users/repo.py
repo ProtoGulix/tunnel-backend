@@ -5,6 +5,7 @@ import bcrypt
 from api.errors.exceptions import DatabaseError, NotFoundError, ValidationError
 from api.db import get_connection, release_connection
 from api.utils.sanitizer import strip_html
+from api.utils.search import build_search_clause
 
 
 LIST_COLUMNS = "tu.id, tu.first_name, tu.last_name, tu.email, tu.initial, tu.is_active, tr.code AS role"
@@ -35,12 +36,13 @@ class UserRepository:
                     where_clauses.append("tu.is_active = %s")
                     params.append(status == "active")
 
-                if search is not None:
-                    where_clauses.append(
-                        "(tu.first_name ILIKE %s OR tu.last_name ILIKE %s OR tu.email ILIKE %s)"
+                if search:
+                    clause, search_params = build_search_clause(
+                        search,
+                        ["tu.first_name ILIKE %s", "tu.last_name ILIKE %s", "tu.email ILIKE %s"],
                     )
-                    like = f"%{search}%"
-                    params.extend([like, like, like])
+                    where_clauses.append(clause)
+                    params.extend(search_params)
 
                 where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
 

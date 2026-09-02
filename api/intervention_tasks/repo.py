@@ -11,6 +11,7 @@ from api.constants import CLOSED_STATUS_CODE
 from api.db import get_connection, release_connection
 from api.errors.exceptions import ConflictError, NotFoundError, ValidationError, raise_db_error
 from api.intervention_tasks.schemas import InterventionTaskIn, InterventionTaskPatch
+from api.utils.search import build_search_clause
 
 logger = logging.getLogger(__name__)
 
@@ -566,9 +567,12 @@ class InterventionTaskRepository:
                 task_where.append("i.machine_id = %s")
                 params.append(machine_id)
             if q and q.strip():
-                like = f"%{q}%"
-                task_where.append("(it.label ILIKE %s OR i.title ILIKE %s OR i.code ILIKE %s)")
-                params.extend([like, like, like])
+                clause, search_params = build_search_clause(
+                    q,
+                    ["it.label ILIKE %s", "i.title ILIKE %s", "i.code ILIKE %s"],
+                )
+                task_where.append(clause)
+                params.extend(search_params)
 
             # Exclure les tâches orphelines (intervention_id NULL — données incohérentes)
             task_where.append("it.intervention_id IS NOT NULL")

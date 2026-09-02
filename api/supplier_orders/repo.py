@@ -9,6 +9,7 @@ from api.settings import settings
 from api.db import get_connection, release_connection
 from api.errors.exceptions import DatabaseError, raise_db_error, NotFoundError
 from api.supplier_orders.validators import SupplierOrderValidator
+from api.utils.search import build_search_clause
 
 logger = logging.getLogger(__name__)
 
@@ -261,9 +262,12 @@ class SupplierOrderRepository:
                 params.append(supplier_id)
 
             if search:
-                where_clauses.append("(so.order_number ILIKE %s OR s.name ILIKE %s)")
-                search_pattern = f"%{search}%"
-                params.extend([search_pattern] * 2)
+                clause, search_params = build_search_clause(
+                    search,
+                    ["so.order_number ILIKE %s", "s.name ILIKE %s"],
+                )
+                where_clauses.append(clause)
+                params.extend(search_params)
 
             where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
             join_supplier_sql = "LEFT JOIN supplier s ON so.supplier_id = s.id" if search else ""

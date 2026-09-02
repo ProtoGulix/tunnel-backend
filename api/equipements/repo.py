@@ -7,6 +7,7 @@ from uuid import uuid4
 from api.db import get_connection, release_connection
 from api.errors.exceptions import DatabaseError, raise_db_error, NotFoundError
 from api.constants import PRIORITY_TYPES, CLOSED_STATUS_CODE, INTERVENTION_TYPES_MAP
+from api.utils.search import build_search_clause
 
 logger = logging.getLogger(__name__)
 
@@ -32,10 +33,12 @@ class EquipementRepository:
         conditions = []
         params: list = []
         if search:
-            like = f"%{search}%"
-            conditions.append(
-                "(m.code ILIKE %s OR m.name ILIKE %s OR m.affectation ILIKE %s)")
-            params.extend([like, like, like])
+            clause, search_params = build_search_clause(
+                search,
+                ["m.code ILIKE %s", "m.name ILIKE %s", "m.affectation ILIKE %s"],
+            )
+            conditions.append(clause)
+            params.extend(search_params)
         if select_mere:
             conditions.append("m.equipement_mere = %s")
             params.append(select_mere)
