@@ -7,6 +7,7 @@ import bcrypt
 from api.db import get_connection, release_connection
 from api.errors.exceptions import DatabaseError, NotFoundError, ConflictError
 from api.utils.sanitizer import strip_html
+from api.utils.search import build_search_clause
 
 logger = logging.getLogger(__name__)
 
@@ -27,11 +28,12 @@ class AdminUserRepository:
             conn = get_connection()
             wheres, params = [], []
             if search:
-                wheres.append(
-                    "(tu.email ILIKE %s OR tu.first_name ILIKE %s OR tu.last_name ILIKE %s)"
+                clause, search_params = build_search_clause(
+                    search,
+                    ["tu.email ILIKE %s", "tu.first_name ILIKE %s", "tu.last_name ILIKE %s"],
                 )
-                like = f"%{search}%"
-                params += [like, like, like]
+                wheres.append(clause)
+                params += search_params
             if is_active is not None:
                 wheres.append("tu.is_active = %s")
                 params.append(is_active)

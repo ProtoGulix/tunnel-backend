@@ -8,6 +8,7 @@ import logging
 from api.db import get_connection, release_connection
 from api.errors.exceptions import DatabaseError, raise_db_error, NotFoundError, ValidationError
 from api.constants import DERIVED_STATUS_CONFIG, CLOSED_STATUS_CODE, SUPPLIER_ORDER_STATUS_CONFIG, NON_DISPATCHED_PR_STATUSES, DONE_PR_STATUSES
+from api.utils.search import build_search_clause
 
 logger = logging.getLogger(__name__)
 
@@ -409,15 +410,18 @@ class PurchaseRequestRepository:
                 params.extend(ids)
 
             if search:
-                where_clauses.append("""(
-                    prd.code ILIKE %s
-                    OR prd.item_label ILIKE %s
-                    OR si.ref ILIKE %s
-                    OR si.name ILIKE %s
-                    OR pt.internal_ref ILIKE %s
-                )""")
-                search_pattern = f"%{search}%"
-                params.extend([search_pattern] * 5)
+                clause, search_params = build_search_clause(
+                    search,
+                    [
+                        "prd.code ILIKE %s",
+                        "prd.item_label ILIKE %s",
+                        "si.ref ILIKE %s",
+                        "si.name ILIKE %s",
+                        "pt.internal_ref ILIKE %s",
+                    ],
+                )
+                where_clauses.append(clause)
+                params.extend(search_params)
 
             # Filtre par statut dérivé — DOIT être en SQL (pas après coup en Python) car
             # la requête est bornée par LIMIT/OFFSET : filtrer après tronquerait le

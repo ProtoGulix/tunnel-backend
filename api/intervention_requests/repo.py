@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Optional
 from api.db import get_connection, release_connection
 from api.errors.exceptions import ConflictError, DatabaseError, NotFoundError, ValidationError, raise_db_error
 from api.constants import CLOSED_STATUS_CODE, IN_PROGRESS_STATUS_CODE
+from api.utils.search import build_search_clause
 from api.intervention_requests.validators import InterventionRequestValidator
 
 # Sous-requête réutilisable pour l'ID du statut fermé
@@ -324,11 +325,18 @@ class InterventionRequestRepository:
                 where.append("ir.machine_id = %s")
                 params.append(machine_id)
             if search:
-                where.append(
-                    "(ir.code ILIKE %s OR ir.demandeur_nom ILIKE %s OR ir.description ILIKE %s "
-                    "OR m.code ILIKE %s OR s.label ILIKE %s)"
+                clause, search_params = build_search_clause(
+                    search,
+                    [
+                        "ir.code ILIKE %s",
+                        "ir.demandeur_nom ILIKE %s",
+                        "ir.description ILIKE %s",
+                        "m.code ILIKE %s",
+                        "s.label ILIKE %s",
+                    ],
                 )
-                params += [f"%{search}%"] * 5
+                where.append(clause)
+                params += search_params
             if is_system is not None:
                 where.append("ir.is_system = %s")
                 params.append(is_system)
@@ -404,11 +412,18 @@ class InterventionRequestRepository:
                 where.append("ir.machine_id = %s")
                 params.append(machine_id)
             if search:
-                where.append(
-                    "(ir.code ILIKE %s OR ir.demandeur_nom ILIKE %s OR ir.description ILIKE %s "
-                    "OR m.code ILIKE %s OR s.label ILIKE %s)"
+                clause, search_params = build_search_clause(
+                    search,
+                    [
+                        "ir.code ILIKE %s",
+                        "ir.demandeur_nom ILIKE %s",
+                        "ir.description ILIKE %s",
+                        "m.code ILIKE %s",
+                        "s.label ILIKE %s",
+                    ],
                 )
-                params += [f"%{search}%"] * 5
+                where.append(clause)
+                params += search_params
             if is_system is not None:
                 where.append("ir.is_system = %s")
                 params.append(is_system)
@@ -446,11 +461,18 @@ class InterventionRequestRepository:
                 where.append("ir.machine_id = %s")
                 params.append(machine_id)
             if search:
-                where.append(
-                    "(ir.code ILIKE %s OR ir.demandeur_nom ILIKE %s OR ir.description ILIKE %s "
-                    "OR m.code ILIKE %s OR s.label ILIKE %s)"
+                clause, search_params = build_search_clause(
+                    search,
+                    [
+                        "ir.code ILIKE %s",
+                        "ir.demandeur_nom ILIKE %s",
+                        "ir.description ILIKE %s",
+                        "m.code ILIKE %s",
+                        "s.label ILIKE %s",
+                    ],
                 )
-                params += [f"%{search}%"] * 5
+                where.append(clause)
+                params += search_params
 
             where_sql = ("WHERE " + " AND ".join(where)) if where else ""
 

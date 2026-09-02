@@ -3,6 +3,7 @@ from typing import Any, Dict, List, Optional
 from api.db import get_connection, release_connection
 from api.errors.exceptions import NotFoundError, raise_db_error
 from api.utils.sanitizer import strip_html
+from api.utils.search import build_search_clause
 
 
 class PartRepository:
@@ -33,11 +34,16 @@ class PartRepository:
                     params.append(sub_family_code)
 
                 if search:
-                    where_clauses.append(
-                        "(p.internal_ref ILIKE %s OR pmr.manufacturer_ref ILIKE %s OR pmr.label ILIKE %s)"
+                    clause, search_params = build_search_clause(
+                        search,
+                        [
+                            "p.internal_ref ILIKE %s",
+                            "pmr.manufacturer_ref ILIKE %s",
+                            "pmr.label ILIKE %s",
+                        ],
                     )
-                    pattern = f"%{search}%"
-                    params.extend([pattern, pattern, pattern])
+                    where_clauses.append(clause)
+                    params.extend(search_params)
 
                 where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
 
@@ -95,11 +101,16 @@ class PartRepository:
                     params.append(sub_family_code)
 
                 if search:
-                    where_clauses.append(
-                        "(p.internal_ref ILIKE %s OR pmr.manufacturer_ref ILIKE %s OR pmr.label ILIKE %s)"
+                    clause, search_params = build_search_clause(
+                        search,
+                        [
+                            "p.internal_ref ILIKE %s",
+                            "pmr.manufacturer_ref ILIKE %s",
+                            "pmr.label ILIKE %s",
+                        ],
                     )
-                    pattern = f"%{search}%"
-                    params.extend([pattern, pattern, pattern])
+                    where_clauses.append(clause)
+                    params.extend(search_params)
 
                 where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
 
@@ -145,11 +156,16 @@ class PartRepository:
                     params.append(supplier_id)
 
                 if search:
-                    where_clauses.append(
-                        "(p.internal_ref ILIKE %s OR pmr.manufacturer_ref ILIKE %s OR psr.supplier_ref ILIKE %s)"
+                    clause, search_params = build_search_clause(
+                        search,
+                        [
+                            "p.internal_ref ILIKE %s",
+                            "pmr.manufacturer_ref ILIKE %s",
+                            "psr.supplier_ref ILIKE %s",
+                        ],
                     )
-                    pattern = f"%{search}%"
-                    params.extend([pattern, pattern, pattern])
+                    where_clauses.append(clause)
+                    params.extend(search_params)
 
                 where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
 
@@ -207,11 +223,16 @@ class PartRepository:
                     params.append(supplier_id)
 
                 if search:
-                    where_clauses.append(
-                        "(p.internal_ref ILIKE %s OR pmr.manufacturer_ref ILIKE %s OR psr.supplier_ref ILIKE %s)"
+                    clause, search_params = build_search_clause(
+                        search,
+                        [
+                            "p.internal_ref ILIKE %s",
+                            "pmr.manufacturer_ref ILIKE %s",
+                            "psr.supplier_ref ILIKE %s",
+                        ],
                     )
-                    pattern = f"%{search}%"
-                    params.extend([pattern, pattern, pattern])
+                    where_clauses.append(clause)
+                    params.extend(search_params)
 
                 where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
 

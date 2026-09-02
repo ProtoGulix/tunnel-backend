@@ -8,6 +8,7 @@ from api.errors.exceptions import DatabaseError, NotFoundError, ValidationError
 from api.stock_families.schemas import StockFamilyListItem, StockFamilyDetail, StockFamilyIn
 from api.stock_items.template_schemas import StockSubFamily
 from api.stock_items.template_service import TemplateService
+from api.utils.search import build_search_clause
 
 logger = logging.getLogger(__name__)
 
@@ -98,9 +99,12 @@ class StockFamilyRepository:
             params = [family_code]
 
             if search:
-                query += " AND (code ILIKE %s OR label ILIKE %s)"
-                search_pattern = f"%{search}%"
-                params.extend([search_pattern, search_pattern])
+                clause, search_params = build_search_clause(
+                    search,
+                    ["code ILIKE %s", "label ILIKE %s"],
+                )
+                query += f" AND {clause}"
+                params.extend(search_params)
 
             query += " ORDER BY code"
 

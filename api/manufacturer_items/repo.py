@@ -5,6 +5,7 @@ from uuid import uuid4
 
 from api.db import get_connection, release_connection
 from api.errors.exceptions import DatabaseError, raise_db_error, NotFoundError
+from api.utils.search import build_search_clause
 
 logger = logging.getLogger(__name__)
 
@@ -23,8 +24,16 @@ class ManufacturerItemRepository:
             params = []
             where = ""
             if search:
-                where = "WHERE manufacturer_name ILIKE %s OR manufacturer_ref ILIKE %s"
-                params = [f"%{search}%", f"%{search}%"]
+                clause, search_params = build_search_clause(
+                    search,
+                    [
+                        "manufacturer_name ILIKE %s",
+                        "manufacturer_ref ILIKE %s",
+                        "designation ILIKE %s",
+                    ],
+                )
+                where = f"WHERE {clause}"
+                params = list(search_params)
             params += [limit, offset]
             cur.execute(
                 f"""
@@ -52,9 +61,17 @@ class ManufacturerItemRepository:
         try:
             cur = conn.cursor()
             if search:
+                clause, search_params = build_search_clause(
+                    search,
+                    [
+                        "manufacturer_name ILIKE %s",
+                        "manufacturer_ref ILIKE %s",
+                        "designation ILIKE %s",
+                    ],
+                )
                 cur.execute(
-                    "SELECT COUNT(*) FROM manufacturer_item WHERE manufacturer_name ILIKE %s OR manufacturer_ref ILIKE %s",
-                    (f"%{search}%", f"%{search}%")
+                    f"SELECT COUNT(*) FROM manufacturer_item WHERE {clause}",
+                    search_params
                 )
             else:
                 cur.execute("SELECT COUNT(*) FROM manufacturer_item")

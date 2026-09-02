@@ -5,6 +5,7 @@ from uuid import uuid4
 from api.settings import settings
 from api.db import get_connection, release_connection
 from api.errors.exceptions import DatabaseError, raise_db_error, NotFoundError
+from api.utils.search import build_search_clause
 
 
 class StockItemRepository:
@@ -35,20 +36,24 @@ class StockItemRepository:
             params.append(sub_family_code)
 
         if search:
-            search_pattern = f"%{search}%"
-            where_clauses.append(
-                f"({a}name ILIKE %s OR {a}ref ILIKE %s"
-                f" OR EXISTS ("
-                f"SELECT 1 FROM stock_item_supplier sis2"
-                f" WHERE sis2.stock_item_id = {a}id AND sis2.supplier_ref ILIKE %s"
-                f")"
-                f" OR EXISTS ("
-                f"SELECT 1 FROM stock_item_supplier sis3"
-                f" JOIN manufacturer_item mi ON mi.id = sis3.manufacturer_item_id"
-                f" WHERE sis3.stock_item_id = {a}id AND mi.manufacturer_ref ILIKE %s"
-                f"))"
+            clause, search_params = build_search_clause(
+                search,
+                [
+                    f"{a}name ILIKE %s",
+                    f"{a}ref ILIKE %s",
+                    (
+                        f"EXISTS (SELECT 1 FROM stock_item_supplier sis2"
+                        f" WHERE sis2.stock_item_id = {a}id AND sis2.supplier_ref ILIKE %s)"
+                    ),
+                    (
+                        f"EXISTS (SELECT 1 FROM stock_item_supplier sis3"
+                        f" JOIN manufacturer_item mi ON mi.id = sis3.manufacturer_item_id"
+                        f" WHERE sis3.stock_item_id = {a}id AND mi.manufacturer_ref ILIKE %s)"
+                    ),
+                ],
             )
-            params.extend([search_pattern, search_pattern, search_pattern, search_pattern])
+            where_clauses.append(clause)
+            params.extend(search_params)
 
         if has_supplier is True:
             where_clauses.append(
@@ -192,20 +197,24 @@ class StockItemRepository:
             where_sql = ""
 
             if search:
-                search_pattern = f"%{search}%"
-                where_sql = (
-                    "WHERE (si.name ILIKE %s OR si.ref ILIKE %s"
-                    " OR EXISTS ("
-                    "SELECT 1 FROM stock_item_supplier sis2"
-                    " WHERE sis2.stock_item_id = si.id AND sis2.supplier_ref ILIKE %s"
-                    ")"
-                    " OR EXISTS ("
-                    "SELECT 1 FROM stock_item_supplier sis3"
-                    " JOIN manufacturer_item mi ON mi.id = sis3.manufacturer_item_id"
-                    " WHERE sis3.stock_item_id = si.id AND mi.manufacturer_ref ILIKE %s"
-                    "))"
+                clause, search_params = build_search_clause(
+                    search,
+                    [
+                        "si.name ILIKE %s",
+                        "si.ref ILIKE %s",
+                        (
+                            "EXISTS (SELECT 1 FROM stock_item_supplier sis2"
+                            " WHERE sis2.stock_item_id = si.id AND sis2.supplier_ref ILIKE %s)"
+                        ),
+                        (
+                            "EXISTS (SELECT 1 FROM stock_item_supplier sis3"
+                            " JOIN manufacturer_item mi ON mi.id = sis3.manufacturer_item_id"
+                            " WHERE sis3.stock_item_id = si.id AND mi.manufacturer_ref ILIKE %s)"
+                        ),
+                    ],
                 )
-                params.extend([search_pattern, search_pattern, search_pattern, search_pattern])
+                where_sql = f"WHERE {clause}"
+                params.extend(search_params)
 
             query = f"""
                 SELECT

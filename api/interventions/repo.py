@@ -7,6 +7,7 @@ from api.settings import settings
 from api.db import get_connection, release_connection
 from api.errors.exceptions import DatabaseError, ValidationError, raise_db_error, NotFoundError
 from api.constants import PRIORITY_TYPES, CLOSED_STATUS_CODE
+from api.utils.search import build_search_clause
 
 from api.intervention_actions.repo import InterventionActionRepository
 from api.intervention_status_log.repo import InterventionStatusLogRepository
@@ -97,10 +98,12 @@ class InterventionRepository:
         joins = []
 
         if search:
-            like = f"%{search}%"
-            where_clauses.append(
-                "(i.code ILIKE %s OR i.title ILIKE %s OR m.code ILIKE %s OR m.name ILIKE %s)")
-            params.extend([like, like, like, like])
+            clause, search_params = build_search_clause(
+                search,
+                ["i.code ILIKE %s", "i.title ILIKE %s", "m.code ILIKE %s", "m.name ILIKE %s"],
+            )
+            where_clauses.append(clause)
+            params.extend(search_params)
 
         if equipement_id:
             where_clauses.append("i.machine_id = %s")
@@ -417,10 +420,12 @@ class InterventionRepository:
         params: List[Any] = []
 
         if search:
-            like = f"%{search}%"
-            where_clauses.append(
-                "(i.code ILIKE %s OR i.title ILIKE %s OR m.code ILIKE %s OR m.name ILIKE %s)")
-            params.extend([like, like, like, like])
+            clause, search_params = build_search_clause(
+                search,
+                ["i.code ILIKE %s", "i.title ILIKE %s", "m.code ILIKE %s", "m.name ILIKE %s"],
+            )
+            where_clauses.append(clause)
+            params.extend(search_params)
 
         if equipement_id:
             where_clauses.append("i.machine_id = %s")

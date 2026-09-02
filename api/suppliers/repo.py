@@ -4,6 +4,7 @@ from uuid import uuid4
 from api.settings import settings
 from api.db import get_connection, release_connection
 from api.errors.exceptions import DatabaseError, raise_db_error, NotFoundError
+from api.utils.search import build_search_clause
 
 
 class SupplierRepository:
@@ -34,10 +35,12 @@ class SupplierRepository:
                 params.append(is_active)
 
             if search:
-                where_clauses.append(
-                    "(name ILIKE %s OR code ILIKE %s OR contact_name ILIKE %s)")
-                search_pattern = f"%{search}%"
-                params.extend([search_pattern, search_pattern, search_pattern])
+                clause, search_params = build_search_clause(
+                    search,
+                    ["name ILIKE %s", "code ILIKE %s", "contact_name ILIKE %s"],
+                )
+                where_clauses.append(clause)
+                params.extend(search_params)
 
             where_sql = ("WHERE " + " AND ".join(where_clauses)
                          ) if where_clauses else ""
