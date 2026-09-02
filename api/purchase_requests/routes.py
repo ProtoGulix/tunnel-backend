@@ -104,7 +104,9 @@ def list_purchase_requests_optimized(
         None, description="Filtrer par intervention"),
     urgency: Optional[str] = Query(None, description="Filtrer par urgence"),
     search: Optional[str] = Query(
-        None, description="Recherche texte (article, référence, intervention)")
+        None, description="Recherche texte (article, référence, intervention)"),
+    site: Optional[str] = Query(
+        None, description="Code de la machine racine (site) de l'équipement lié, ex: VLT, SML"),
 ) -> Dict[str, Any]:
     """
     [v1.2.0] Liste optimisée légère pour tableaux.
@@ -122,7 +124,8 @@ def list_purchase_requests_optimized(
         intervention_id=intervention_id,
         urgency=urgency,
         exclude_statuses=exclude_list,
-        search=search
+        search=search,
+        site=site,
     )
     return single(data, audit_entity="purchase_request")
 

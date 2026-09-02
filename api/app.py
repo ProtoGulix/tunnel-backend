@@ -44,6 +44,7 @@ from api.preventive_occurrences.routes import router as preventive_occurrences_r
 from api.intervention_tasks.routes import router as intervention_tasks_router
 from api.dashboard.routes import router as dashboard_router
 from api.admin.routes import router as admin_router
+from api.home_view.routes import router as home_view_router
 from api.api_keys.routes import router as api_keys_router
 from api.audits.routes import router as audit_router
 from api.audits.middleware import AuditMiddleware
@@ -166,6 +167,7 @@ app.include_router(intervention_tasks_router)
 app.include_router(dashboard_router)
 app.include_router(auth_router)
 app.include_router(admin_router)
+app.include_router(home_view_router)
 app.include_router(api_keys_router)
 app.include_router(audit_router)
 

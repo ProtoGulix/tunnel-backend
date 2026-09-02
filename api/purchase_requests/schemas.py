@@ -51,6 +51,12 @@ class PurchaseRequestListItem(BaseModel):
         default=None, description="Nom article")
     intervention_code: Optional[str] = Field(
         default=None, description="Code intervention")
+    intervention_id: Optional[UUID] = Field(
+        default=None, description="UUID intervention liée")
+    intervention_request_id: Optional[UUID] = Field(
+        default=None, description="UUID de la DI d'origine, si l'intervention a été créée depuis une DI")
+    intervention_request_code: Optional[str] = Field(
+        default=None, description="Code de la DI d'origine (ex: DI-2026-0042)")
     requester_name: Optional[str] = Field(default=None)
     urgency: Optional[str] = Field(default=None)
 

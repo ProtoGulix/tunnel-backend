@@ -9,6 +9,10 @@ from api.intervention_requests.schemas import (
     InterventionRequestListItem,
     InterventionRequestDetail,
     RequestStatusRef,
+    RequestTypeRef,
+    AmeliorationCategoryRef,
+    AmeliorationSousStatutRef,
+    AmeliorationPatch,
     StatusTransitionIn,
     RepairResult,
 )
@@ -41,6 +45,24 @@ def list_statuses():
     return referentiel(repo.get_statuses())
 
 
+@router.get("/types", response_model=List[RequestTypeRef])
+def list_types():
+    """Référentiel des types de DI (standard, amelioration)"""
+    return referentiel(repo.get_types())
+
+
+@router.get("/amelioration-categories", response_model=List[AmeliorationCategoryRef])
+def list_amelioration_categories():
+    """Référentiel des catégories d'idées d'amélioration"""
+    return referentiel(repo.get_amelioration_categories())
+
+
+@router.get("/amelioration-sous-statuts", response_model=List[AmeliorationSousStatutRef])
+def list_amelioration_sous_statuts():
+    """Référentiel des sous-statuts d'idées d'amélioration"""
+    return referentiel(repo.get_amelioration_sous_statuts())
+
+
 @router.get("")
 def list_requests(
     skip: int = Query(0, ge=0),
@@ -50,6 +72,9 @@ def list_requests(
     machine_id: Optional[UUID] = Query(None),
     search: Optional[str] = Query(None, description="Recherche libre : code DI, demandeur, description, code équipement, service"),
     is_system: Optional[bool] = Query(None, description="Filtrer les DI système (true) ou humaines (false)"),
+    type: Optional[str] = Query(None, description="Types à inclure, séparés par virgule. Ex: amelioration"),
+    sous_statut: Optional[str] = Query(None, description="Sous-statuts à inclure (idées d'amélioration), séparés par virgule"),
+    site: Optional[str] = Query(None, description="Code de la machine racine (site), ex: VLT, SML"),
 ) -> Dict[str, Any]:
     """
     Liste les demandes d'intervention avec filtres.
@@ -58,14 +83,16 @@ def list_requests(
     machine_id_str = str(machine_id) if machine_id else None
     statut_list = [s.strip() for s in statut.split(",") if s.strip()] if statut else None
     exclude_list = [s.strip() for s in exclude_statuses.split(",") if s.strip()] if exclude_statuses else None
+    type_list = [t.strip() for t in type.split(",") if t.strip()] if type else None
+    sous_statut_list = [s.strip() for s in sous_statut.split(",") if s.strip()] if sous_statut else None
     items = repo.get_list(
         limit=limit, offset=skip,
         statut=statut_list, exclude_statuses=exclude_list, machine_id=machine_id_str, search=search,
-        is_system=is_system,
+        is_system=is_system, type=type_list, sous_statut=sous_statut_list, site=site,
     )
     total = repo.count_list(
         statut=statut_list, exclude_statuses=exclude_list, machine_id=machine_id_str, search=search,
-        is_system=is_system,
+        is_system=is_system, type=type_list, sous_statut=sous_statut_list, site=site,
     )
     facets = repo.get_facets(machine_id=machine_id_str, search=search)
     return paginated(items, total=total, offset=skip, limit=limit, facets={"statut": facets}, audit_entity="request")
@@ -136,6 +163,21 @@ def transition_request_status(request_id: UUID, body: StatusTransitionIn):
         intervention_data=intervention_data,
         reason_code=body.reason_code,
         reason_text=body.reason_text,
+    ))
+
+
+@router.patch("/{request_id}/amelioration")
+def patch_amelioration(request_id: UUID, body: AmeliorationPatch):
+    """
+    Modifie partiellement les champs propres à une idée d'amélioration
+    (catégorie, priorité, sous_statut, porteur, deadline).
+
+    Seuls les champs envoyés dans le payload sont modifiés. Ne touche jamais
+    au `statut` générique du workflow DI (nouvelle/en_attente/acceptee/…) —
+    utiliser `POST /{request_id}/transition` pour ça.
+    """
+    return single(repo.patch_amelioration(
+        str(request_id), body.model_dump(exclude_unset=True)
     ))
 
 

@@ -85,6 +85,16 @@ PRIORITY_TYPES = [
     {'id': 'urgent', 'title': 'Urgent', 'color': 'purple'},
 ]
 
+# Priorité des idées d'amélioration (intervention_request.priorite) — distincte
+# de PRIORITY_TYPES (intervention.priority) : pas de table de référence SQL,
+# même pattern de validation applicative légère.
+AMELIORATION_PRIORITY_TYPES = [
+    {'id': 'basse', 'title': 'Basse', 'color': 'gray'},
+    {'id': 'moyenne', 'title': 'Moyenne', 'color': 'amber'},
+    {'id': 'haute', 'title': 'Haute', 'color': 'red'},
+]
+AMELIORATION_PRIORITY_IDS = [p['id'] for p in AMELIORATION_PRIORITY_TYPES]
+
 # Types d'intervention avec leurs propriétés visuelles
 INTERVENTION_TYPES = [
     {'id': 'CUR', 'title': 'Curatif', 'color': 'red'},

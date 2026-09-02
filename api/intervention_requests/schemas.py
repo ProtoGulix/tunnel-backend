@@ -7,11 +7,41 @@ from uuid import UUID
 
 from api.equipements.schemas import EquipementListItem
 from api.services.schemas import ServiceOut
-from api.constants import INTERVENTION_TYPE_IDS
+from api.constants import INTERVENTION_TYPE_IDS, AMELIORATION_PRIORITY_IDS
 from api.intervention_tasks.schemas import InterventionTaskOut
 
 
 class RequestStatusRef(BaseModel):
+    code: str
+    label: str
+    color: str
+    sort_order: int
+
+    class Config:
+        from_attributes = True
+
+
+class RequestTypeRef(BaseModel):
+    code: str
+    label: str
+    color: str
+    sort_order: int
+
+    class Config:
+        from_attributes = True
+
+
+class AmeliorationCategoryRef(BaseModel):
+    code: str
+    label: str
+    color: str
+    sort_order: int
+
+    class Config:
+        from_attributes = True
+
+
+class AmeliorationSousStatutRef(BaseModel):
     code: str
     label: str
     color: str
@@ -31,6 +61,10 @@ class InterventionRequestIn(BaseModel):
     is_system: bool = Field(default=False, description="DI créée par le système (ex: maintenance préventive)")
     suggested_type_inter: Optional[str] = Field(
         default=None, description="Type d'intervention suggéré (pré-remplit l'acceptation)")
+    type: str = Field(
+        default="standard",
+        description="Type de DI : 'standard' (défaut) ou 'amelioration'. Voir GET /intervention-requests/types.",
+    )
     reason_code: str = Field(
         ...,
         description="Code raison obligatoire pour l'audit (ex: CLIENT_REQUEST, OTHER). Voir GET /audit/reasons.",
@@ -66,6 +100,17 @@ class StatusLogEntry(BaseModel):
         from_attributes = True
 
 
+class RequestPorteurOut(BaseModel):
+    """Porteur d'une idée d'amélioration (tunnel_user restreint)."""
+    id: UUID
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    initial: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
 class InterventionRequestListItem(BaseModel):
     id: UUID
     code: str
@@ -83,6 +128,18 @@ class InterventionRequestListItem(BaseModel):
     tasks: List[InterventionTaskOut] = []
     is_system: bool = False
     suggested_type_inter: Optional[str] = None
+    type: str = "standard"
+    type_label: Optional[str] = None
+    type_color: Optional[str] = None
+    categorie: Optional[str] = None
+    categorie_label: Optional[str] = None
+    categorie_color: Optional[str] = None
+    priorite: Optional[str] = None
+    sous_statut: Optional[str] = None
+    sous_statut_label: Optional[str] = None
+    sous_statut_color: Optional[str] = None
+    porteur: Optional[RequestPorteurOut] = None
+    deadline: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
@@ -127,6 +184,25 @@ class StatusTransitionIn(BaseModel):
             if not self.tech_id and not self.tech_initials:
                 raise ValueError("tech_id ou tech_initials requis pour acceptee")
         return self
+
+
+class AmeliorationPatch(BaseModel):
+    """PATCH partiel d'une idée d'amélioration : seuls les champs envoyés sont modifiés.
+    Ne touche jamais à `statut` / au workflow générique (voir POST .../transition) —
+    uniquement les champs propres aux idées d'amélioration.
+    """
+    categorie: Optional[str] = Field(default=None, description="Code catégorie (voir GET /intervention-requests/amelioration-categories)")
+    priorite: Optional[str] = Field(default=None, description="basse | moyenne | haute")
+    sous_statut: Optional[str] = Field(default=None, description="Code sous-statut (voir GET /intervention-requests/amelioration-sous-statuts)")
+    porteur_id: Optional[UUID] = Field(default=None, description="UUID du porteur (tunnel_user)")
+    deadline: Optional[str] = Field(default=None, description="Date limite (YYYY-MM-DD)")
+
+    @field_validator("priorite")
+    @classmethod
+    def validate_priorite(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and v not in AMELIORATION_PRIORITY_IDS:
+            raise ValueError(f"Priorité invalide : {v}")
+        return v
 
 
 class RepairResult(BaseModel):

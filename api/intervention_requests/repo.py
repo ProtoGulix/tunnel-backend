@@ -33,6 +33,33 @@ _SERVICE_COLS = """
     s.is_active AS service_is_active
 """
 
+# Colonnes type / catégorie / sous-statut / porteur — spécifiques aux idées
+# d'amélioration mais présentes (nullables sauf type) sur toute DI.
+_AMELIORATION_COLS = """
+    ir.type,
+    rt.label    AS type_label,
+    rt.color    AS type_color,
+    ir.categorie,
+    acr.label   AS categorie_label,
+    acr.color   AS categorie_color,
+    ir.priorite,
+    ir.sous_statut,
+    asr.label   AS sous_statut_label,
+    asr.color   AS sous_statut_color,
+    ir.deadline,
+    pu.id       AS porteur_id,
+    pu.first_name AS porteur_first_name,
+    pu.last_name  AS porteur_last_name,
+    pu.initial    AS porteur_initial
+"""
+
+_AMELIORATION_JOINS = """
+    LEFT JOIN request_type_ref rt ON ir.type = rt.code
+    LEFT JOIN amelioration_category_ref acr ON ir.categorie = acr.code
+    LEFT JOIN amelioration_sous_statut_ref asr ON ir.sous_statut = asr.code
+    LEFT JOIN tunnel_user pu ON ir.porteur_id = pu.id
+"""
+
 # Colonnes intervention liée (premier niveau, sans tâches — celles-ci sont portées par di_tasks)
 _INTERVENTION_COLS = """
     iv.id              AS iv_id,
@@ -271,6 +298,22 @@ class InterventionRequestRepository:
             "is_active": row.pop("service_is_active"),
         }
 
+    @staticmethod
+    def _build_porteur(row: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Construit l'objet porteur (RequestPorteurOut) depuis les colonnes préfixées porteur_."""
+        porteur_id = row.pop("porteur_id", None)
+        first_name = row.pop("porteur_first_name", None)
+        last_name = row.pop("porteur_last_name", None)
+        initial = row.pop("porteur_initial", None)
+        if not porteur_id:
+            return None
+        return {
+            "id": porteur_id,
+            "first_name": first_name,
+            "last_name": last_name,
+            "initial": initial,
+        }
+
     # ──────────────────────────────────────────────────────────────
     # Référentiel statuts
     # ──────────────────────────────────────────────────────────────
@@ -291,6 +334,105 @@ class InterventionRequestRepository:
         finally:
             release_connection(conn)
 
+    def get_types(self) -> List[Dict[str, Any]]:
+        conn = self._get_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT code, label, color, sort_order FROM request_type_ref ORDER BY sort_order"
+            )
+            rows = cur.fetchall()
+            cols = [d[0] for d in cur.description]
+            return [dict(zip(cols, r)) for r in rows]
+        except Exception as e:
+            raise DatabaseError("Erreur récupération types: %s" % str(e)) from e
+        finally:
+            release_connection(conn)
+
+    def get_amelioration_categories(self) -> List[Dict[str, Any]]:
+        conn = self._get_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT code, label, color, sort_order FROM amelioration_category_ref ORDER BY sort_order"
+            )
+            rows = cur.fetchall()
+            cols = [d[0] for d in cur.description]
+            return [dict(zip(cols, r)) for r in rows]
+        except Exception as e:
+            raise DatabaseError("Erreur récupération catégories: %s" % str(e)) from e
+        finally:
+            release_connection(conn)
+
+    def get_amelioration_sous_statuts(self) -> List[Dict[str, Any]]:
+        conn = self._get_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT code, label, color, sort_order FROM amelioration_sous_statut_ref ORDER BY sort_order"
+            )
+            rows = cur.fetchall()
+            cols = [d[0] for d in cur.description]
+            return [dict(zip(cols, r)) for r in rows]
+        except Exception as e:
+            raise DatabaseError("Erreur récupération sous-statuts: %s" % str(e)) from e
+        finally:
+            release_connection(conn)
+
+    # ──────────────────────────────────────────────────────────────
+    # Idées d'amélioration — édition en place (catégorie/priorité/sous_statut/porteur/deadline)
+    # ──────────────────────────────────────────────────────────────
+
+    def patch_amelioration(self, request_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Met à jour partiellement les champs propres aux idées d'amélioration.
+        Ne touche jamais à `statut` (workflow générique, voir transition_status) —
+        seuls categorie/priorite/sous_statut/porteur_id/deadline sont modifiables ici.
+        """
+        sets: List[str] = []
+        params: List[Any] = []
+
+        if "categorie" in data:
+            sets.append("categorie = %s")
+            params.append(data["categorie"])
+        if "priorite" in data:
+            sets.append("priorite = %s")
+            params.append(data["priorite"])
+        if "sous_statut" in data:
+            sets.append("sous_statut = %s")
+            params.append(data["sous_statut"])
+        if "porteur_id" in data:
+            sets.append("porteur_id = %s")
+            params.append(str(data["porteur_id"]) if data["porteur_id"] else None)
+        if "deadline" in data:
+            sets.append("deadline = %s")
+            params.append(data["deadline"])
+
+        if not sets:
+            raise ValidationError("Rien à mettre à jour")
+
+        sets.append("updated_at = now()")
+        params.append(request_id)
+
+        conn = self._get_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                f"UPDATE intervention_request SET {', '.join(sets)} WHERE id = %s RETURNING id",
+                params,
+            )
+            if cur.fetchone() is None:
+                raise NotFoundError(f"Demande {request_id} non trouvée")
+            conn.commit()
+            return self.get_by_id(request_id)
+        except (NotFoundError, ValidationError):
+            conn.rollback()
+            raise
+        except Exception as e:
+            conn.rollback()
+            raise_db_error(e, "mise à jour idée d'amélioration")
+        finally:
+            release_connection(conn)
+
     # ──────────────────────────────────────────────────────────────
     # Liste
     # ──────────────────────────────────────────────────────────────
@@ -304,35 +446,18 @@ class InterventionRequestRepository:
         machine_id: Optional[str] = None,
         search: Optional[str] = None,
         is_system: Optional[bool] = None,
+        type: Optional[List[str]] = None,
+        sous_statut: Optional[List[str]] = None,
+        site: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         limit = min(limit, 500)
         conn = self._get_connection()
         try:
             cur = conn.cursor()
-            where = []
-            params: List[Any] = []
-
-            if statut:
-                placeholders = ",".join(["%s"] * len(statut))
-                where.append(f"ir.statut IN ({placeholders})")
-                params.extend(statut)
-            if exclude_statuses:
-                placeholders = ",".join(["%s"] * len(exclude_statuses))
-                where.append(f"ir.statut NOT IN ({placeholders})")
-                params.extend(exclude_statuses)
-            if machine_id:
-                where.append("ir.machine_id = %s")
-                params.append(machine_id)
-            if search:
-                where.append(
-                    "(ir.code ILIKE %s OR ir.demandeur_nom ILIKE %s OR ir.description ILIKE %s "
-                    "OR m.code ILIKE %s OR s.label ILIKE %s)"
-                )
-                params += [f"%{search}%"] * 5
-            if is_system is not None:
-                where.append("ir.is_system = %s")
-                params.append(is_system)
-
+            where, params = self._build_where(
+                statut=statut, exclude_statuses=exclude_statuses, machine_id=machine_id,
+                search=search, is_system=is_system, type=type, sous_statut=sous_statut, site=site,
+            )
             where_sql = ("WHERE " + " AND ".join(where)) if where else ""
 
             cur.execute(
@@ -347,16 +472,20 @@ class InterventionRequestRepository:
                     ir.created_at, ir.updated_at,
                     {_EQUIPEMENT_COLS},
                     {_SERVICE_COLS},
+                    {_AMELIORATION_COLS},
                     {_INTERVENTION_COLS},
                     {_DI_TASKS_COLS}
                 FROM intervention_request ir
                 LEFT JOIN request_status_ref rs ON ir.statut = rs.code
                 {_EQUIPEMENT_JOINS}
+                {_AMELIORATION_JOINS}
                 {where_sql}
                 GROUP BY ir.id, rs.label, rs.color, m.id, pm.id, pm.code, pm.name, ec.id, s.id,
                          iv.id, ivs.label, ivs.color,
                          iv_stats.action_count, iv_stats.total_time, iv_stats.avg_complexity, iv_stats.purchase_count,
-                         di_tasks.tasks_json::text
+                         di_tasks.tasks_json::text,
+                         rt.label, rt.color, acr.label, acr.color, asr.label, asr.color,
+                         pu.id, pu.first_name, pu.last_name, pu.initial
                 ORDER BY ir.created_at DESC
                 LIMIT %s OFFSET %s
                 """,
@@ -371,12 +500,76 @@ class InterventionRequestRepository:
                 r["service"] = self._build_service(r)
                 r["intervention"] = self._build_intervention(r)
                 r["tasks"] = self._build_tasks(r)
+                r["porteur"] = self._build_porteur(r)
                 result.append(r)
             return result
         except Exception as e:
             raise DatabaseError("Erreur liste demandes: %s" % str(e)) from e
         finally:
             release_connection(conn)
+
+    @staticmethod
+    def _build_where(
+        statut: Optional[List[str]] = None,
+        exclude_statuses: Optional[List[str]] = None,
+        machine_id: Optional[str] = None,
+        search: Optional[str] = None,
+        is_system: Optional[bool] = None,
+        type: Optional[List[str]] = None,
+        sous_statut: Optional[List[str]] = None,
+        site: Optional[str] = None,
+    ) -> "tuple[List[str], List[Any]]":
+        """Construit la clause WHERE partagée par get_list/count_list.
+        `site` filtre sur le code de la machine racine (équipement mère ultime) —
+        remontée récursive via equipement_mere, la hiérarchie machine n'étant pas
+        bornée à un niveau fixe.
+        """
+        where: List[str] = []
+        params: List[Any] = []
+
+        if statut:
+            placeholders = ",".join(["%s"] * len(statut))
+            where.append(f"ir.statut IN ({placeholders})")
+            params.extend(statut)
+        if exclude_statuses:
+            placeholders = ",".join(["%s"] * len(exclude_statuses))
+            where.append(f"ir.statut NOT IN ({placeholders})")
+            params.extend(exclude_statuses)
+        if machine_id:
+            where.append("ir.machine_id = %s")
+            params.append(machine_id)
+        if search:
+            where.append(
+                "(ir.code ILIKE %s OR ir.demandeur_nom ILIKE %s OR ir.description ILIKE %s "
+                "OR m.code ILIKE %s OR s.label ILIKE %s)"
+            )
+            params += [f"%{search}%"] * 5
+        if is_system is not None:
+            where.append("ir.is_system = %s")
+            params.append(is_system)
+        if type:
+            placeholders = ",".join(["%s"] * len(type))
+            where.append(f"ir.type IN ({placeholders})")
+            params.extend(type)
+        if sous_statut:
+            placeholders = ",".join(["%s"] * len(sous_statut))
+            where.append(f"ir.sous_statut IN ({placeholders})")
+            params.extend(sous_statut)
+        if site:
+            where.append("""
+                ir.machine_id IN (
+                    WITH RECURSIVE root AS (
+                        SELECT id, code, equipement_mere, id AS orig_id FROM machine
+                        UNION ALL
+                        SELECT m2.id, m2.code, m2.equipement_mere, r.orig_id
+                        FROM machine m2 JOIN root r ON m2.id = r.equipement_mere
+                    )
+                    SELECT orig_id FROM root WHERE equipement_mere IS NULL AND code = %s
+                )
+            """)
+            params.append(site)
+
+        return where, params
 
     def count_list(
         self,
@@ -385,34 +578,17 @@ class InterventionRequestRepository:
         machine_id: Optional[str] = None,
         search: Optional[str] = None,
         is_system: Optional[bool] = None,
+        type: Optional[List[str]] = None,
+        sous_statut: Optional[List[str]] = None,
+        site: Optional[str] = None,
     ) -> int:
         conn = self._get_connection()
         try:
             cur = conn.cursor()
-            where = []
-            params: List[Any] = []
-
-            if statut:
-                placeholders = ",".join(["%s"] * len(statut))
-                where.append(f"ir.statut IN ({placeholders})")
-                params.extend(statut)
-            if exclude_statuses:
-                placeholders = ",".join(["%s"] * len(exclude_statuses))
-                where.append(f"ir.statut NOT IN ({placeholders})")
-                params.extend(exclude_statuses)
-            if machine_id:
-                where.append("ir.machine_id = %s")
-                params.append(machine_id)
-            if search:
-                where.append(
-                    "(ir.code ILIKE %s OR ir.demandeur_nom ILIKE %s OR ir.description ILIKE %s "
-                    "OR m.code ILIKE %s OR s.label ILIKE %s)"
-                )
-                params += [f"%{search}%"] * 5
-            if is_system is not None:
-                where.append("ir.is_system = %s")
-                params.append(is_system)
-
+            where, params = self._build_where(
+                statut=statut, exclude_statuses=exclude_statuses, machine_id=machine_id,
+                search=search, is_system=is_system, type=type, sous_statut=sous_statut, site=site,
+            )
             where_sql = ("WHERE " + " AND ".join(where)) if where else ""
             cur.execute(
                 f"""
@@ -495,16 +671,20 @@ class InterventionRequestRepository:
                     ir.created_at, ir.updated_at,
                     {_EQUIPEMENT_COLS},
                     {_SERVICE_COLS},
+                    {_AMELIORATION_COLS},
                     {_INTERVENTION_COLS},
                     {_DI_TASKS_COLS}
                 FROM intervention_request ir
                 LEFT JOIN request_status_ref rs ON ir.statut = rs.code
                 {_EQUIPEMENT_JOINS}
+                {_AMELIORATION_JOINS}
                 WHERE ir.id = %s
                 GROUP BY ir.id, rs.label, rs.color, m.id, pm.id, pm.code, pm.name, ec.id, s.id,
                          iv.id, ivs.label, ivs.color,
                          iv_stats.action_count, iv_stats.total_time, iv_stats.avg_complexity, iv_stats.purchase_count,
-                         di_tasks.tasks_json::text
+                         di_tasks.tasks_json::text,
+                         rt.label, rt.color, acr.label, acr.color, asr.label, asr.color,
+                         pu.id, pu.first_name, pu.last_name, pu.initial
                 """,
                 (CLOSED_STATUS_CODE, CLOSED_STATUS_CODE, request_id),
             )
@@ -517,6 +697,7 @@ class InterventionRequestRepository:
             result["service"] = self._build_service(result)
             result["intervention"] = self._build_intervention(result)
             result["tasks"] = self._build_tasks(result)
+            result["porteur"] = self._build_porteur(result)
 
             # Log des transitions
             cur.execute(
@@ -558,6 +739,7 @@ class InterventionRequestRepository:
         service_id = data.get("service_id")
         is_system = bool(data.get("is_system", False))
         suggested_type_inter = data.get("suggested_type_inter") or None
+        request_type = data.get("type") or "standard"
 
         conn = self._get_connection()
         try:
@@ -566,8 +748,8 @@ class InterventionRequestRepository:
                 """
                 INSERT INTO intervention_request
                     (machine_id, demandeur_nom, service_id, description,
-                     is_system, suggested_type_inter, code, statut)
-                VALUES (%s, %s, %s, %s, %s, %s, 'PLACEHOLDER', 'nouvelle')
+                     is_system, suggested_type_inter, type, code, statut)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, 'PLACEHOLDER', 'nouvelle')
                 RETURNING id
                 """,
                 (
@@ -577,6 +759,7 @@ class InterventionRequestRepository:
                     description,
                     is_system,
                     suggested_type_inter,
+                    request_type,
                 ),
             )
             new_id = cur.fetchone()[0]

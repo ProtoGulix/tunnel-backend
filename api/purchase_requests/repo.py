@@ -372,7 +372,8 @@ class PurchaseRequestRepository:
         urgency: Optional[str] = None,
         ids: Optional[List[str]] = None,
         exclude_statuses: Optional[List[str]] = None,
-        search: Optional[str] = None
+        search: Optional[str] = None,
+        site: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """
         Liste optimisée avec statut dérivé et compteurs agrégés.
@@ -436,6 +437,29 @@ class PurchaseRequestRepository:
                 where_clauses.append(f"prd.derived_status NOT IN ({placeholders})")
                 params.extend(exclude_statuses)
 
+            if site:
+                # Site = machine racine (équipement mère ultime) de l'équipement
+                # de l'intervention liée à la DA (via son action → intervention →
+                # DI → machine). Remontée récursive car la hiérarchie machine
+                # n'est pas bornée à un niveau fixe (voir intervention_requests.repo).
+                where_clauses.append("""EXISTS (
+                    WITH RECURSIVE root AS (
+                        SELECT id, code, equipement_mere, id AS orig_id FROM machine
+                        UNION ALL
+                        SELECT m2.id, m2.code, m2.equipement_mere, r.orig_id
+                        FROM machine m2 JOIN root r ON m2.id = r.equipement_mere
+                    )
+                    SELECT 1
+                    FROM intervention_action_purchase_request iapr_site
+                    JOIN intervention_action ia_site ON ia_site.id = iapr_site.intervention_action_id
+                    JOIN intervention iv_site ON iv_site.id = ia_site.intervention_id
+                    JOIN intervention_request ir_site ON ir_site.intervention_id = iv_site.id
+                    JOIN root r_site ON r_site.orig_id = ir_site.machine_id AND r_site.equipement_mere IS NULL
+                    WHERE iapr_site.purchase_request_id = prd.id
+                      AND r_site.code = %s
+                )""")
+                params.append(site)
+
             where_sql = " AND ".join(where_clauses)
 
             query = f"""
@@ -460,6 +484,9 @@ class PurchaseRequestRepository:
                     pt.internal_ref AS part_internal_ref,
                     pt_pref.label AS part_display_name,
                     pr_intervention.code AS intervention_code,
+                    pr_intervention.id AS intervention_id,
+                    pr_intervention.request_id AS intervention_request_id,
+                    pr_intervention.request_code AS intervention_request_code,
                     prd.requested_by AS requester_name,
                     prd.urgency,
                     COUNT(DISTINCT so.supplier_id) AS suppliers_count,
@@ -479,10 +506,14 @@ class PurchaseRequestRepository:
                     LIMIT 1
                 ) pt_pref ON true
                 LEFT JOIN LATERAL (
-                    SELECT i.code
+                    SELECT
+                        i.id, i.code,
+                        ir.id   AS request_id,
+                        ir.code AS request_code
                     FROM intervention_action_purchase_request iapr2
                     JOIN intervention_action ia2 ON ia2.id = iapr2.intervention_action_id
                     JOIN intervention i ON i.id = ia2.intervention_id
+                    LEFT JOIN intervention_request ir ON ir.intervention_id = i.id
                     WHERE iapr2.purchase_request_id = prd.id
                     LIMIT 1
                 ) pr_intervention ON true
@@ -497,7 +528,9 @@ class PurchaseRequestRepository:
                          prd.derived_status, prd.quotes_count, prd.selected_count,
                          prd.total_allocated, prd.total_received, prd.requested_by, prd.urgency,
                          prd.created_at, prd.updated_at,
-                         si.ref, si.name, pt.internal_ref, pt_pref.label, pr_intervention.code
+                         si.ref, si.name, pt.internal_ref, pt_pref.label,
+                         pr_intervention.code, pr_intervention.id,
+                         pr_intervention.request_id, pr_intervention.request_code
 
                 ORDER BY prd.created_at DESC
                 LIMIT %s OFFSET %s
